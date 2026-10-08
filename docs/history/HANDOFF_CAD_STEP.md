@@ -170,7 +170,6 @@ VERIFY_SHARD=i/16 python3 verify_dataset.py      # writes _control/packaging/ver
 - Deleting from the dataset, changing the shared worker, or terminating boxes we didn't launch needs Dhiren's explicit OK.
 - Laptop uplink is ~0.3–0.8 MB/s: do heavy S3 work on an in-region box (SSM `AWS-RunShellScript`), not locally.
 - Treat IFC/DB1 extents >1e10 mm as broken; very large but finite extents are usually real georeferencing.
-- Other projects in this workspace (illusion-backend, Adobe, StudioBench, Darwin, Diffraction) have their own memory notes; `feedback_no_illusion_changes.md` = illusion is strictly read-only.
 
 ---
 
