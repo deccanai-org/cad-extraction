@@ -1,0 +1,717 @@
+#!/usr/bin/env python3
+"""General CAD packaging core (projpkg4, class-1 STEP only).  Disk-agnostic; disks plug in through adapters/.
+
+  plan   adapter + common conversion index -> per-project plan (read-only: GET/HEAD/LIST only)
+  apply  plan -> server-side copies (CopyObject with ChecksumAlgorithm=SHA256: S3 computes the SHA-256 of every copied
+         file, compared with the expected digest) + SDS2 job zips + manifest.jsonl + project.json   [FLEET ONLY]
+  verify project prefix vs manifest vs project.json vs shipped set (sizes, ETags, S3-stored SHA-256, invariants)
+  ledger per-project ledger parts (written after verify passes) -> compacted ledger.jsonl + ledger_index.json
+  delta  shipped set - ledger -> package jobs; STEP ETag/key change -> refresh; left the shipped set -> removals queue
+
+Format = projpkg4 as published in cad-disk-extract/dataset/main (pkg_final.py vocabulary), plus: real sha256 on every row,
+STEP provenance fields, model/sds2/<job>.zip for SDS2 job folders, steps_not_shipped / native_steps_not_graded in project.json.
+ADDITIVE ONLY: never deletes. Removals are queued for the owner.
+"""
+from __future__ import annotations
+import base64, collections, gzip, hashlib, io, json, os, re, threading, time, zipfile
+from concurrent.futures import ThreadPoolExecutor
+
+VERSION = 'pkg-2026-10-02b'      # b: reserved PII fields (rows + project.json)
+PII_EMPTY = {'method': None, 'verified': None, 'original_sha256': None, 'redacted_at': None}
+BUCKET = os.environ.get('PKG_BUCKET', 'bim-proprietary-data')
+DATASET = os.environ.get('PKG_DATASET', 'cad-disk-extract/dataset/packages')
+ROUTE = '3d'
+PSTATE = os.environ.get('PKG_STATE', 'cad-disk-extract/_state/packaging')
+MAX_PID = 200
+
+# ---------------------------------------------------------------- projpkg4 vocabulary (pkg_final.py + documented additions)
+MODEL = {'.step': 'model/step', '.stp': 'model/step', '.ifc': 'model/ifc', '.db1': 'model/db1', '.db2': 'model/db2',
+         '.sat': 'model/sat', '.obj': 'model/obj', '.stl': 'model/stl', '.gltf': 'model/gltf', '.glb': 'model/glb',
+         '.ifczip': 'model/ifc', '.ifcxml': 'model/ifc'}            # + ifczip/ifcxml: IFC sources of shipped STEP
+DRAW = {'.pdf': 'drawings/pdf', '.dwg': 'drawings/dwg', '.dxf': 'drawings/dxf', '.dg': 'drawings/dg', '.dpm': 'drawings/dpm'}
+FAB = {'.nc1': 'fab/nc1'}
+TABLE = {'.xls': 'tables/bom', '.xlsx': 'tables/bom', '.csv': 'tables/bom',
+         '.kis': 'tables/kiss', '.kiss': 'tables/kiss', '.kss': 'tables/kiss'}  # + .kss: SDS/2 KISS (lead package_cad.py)
+STEP_EXT = ('.step', '.stp')
+SLOTS = ['model_step', 'model_ifc', 'model_db1', 'model_db2', 'model_sds2', 'drawings', 'fab_nc1', 'bom', 'abm', 'kiss',
+         'drawing_index']
+ROW_KEYS = ['project_id', 'relpath', 'modality', 'role', 'bytes', 'sha256', 'parser_ok', 'units', 'supersedes', 'etag',
+            'source_key']                                           # pkg_final.py order; extras follow
+DEFAULT_POLICY = {
+    'require_verified': ['db1', 'sds2'],   # index field verified == True (build_index verify_merge) for these pipelines
+    'ship_verify_held': False,             # rows whose verifier FAIL/WARN codes are only "held" (V_SDS2_HOLD) do not ship
+    'native_step_mode': 'list',            # list: archive STEP files are listed (not graded, not shipped); ship: model/step
+    'sds2_zip': True,
+    'zip_inline_members_max': 1000,
+    'sds2_zip_require_complete': True,     # every file of the job folder resolved, else the SDS2 STEP is not placed
+}
+
+
+def now():
+    return time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+
+
+def ext_of(name: str) -> str:
+    low = name.rsplit('/', 1)[-1].lower(); d = low.rfind('.')
+    return low if d == 0 else (low[d:] if d > 0 else '')
+
+
+def classify(name: str, ctx: str):
+    """-> (channel, modality, role) exactly as pkg_final.py (ctx = archive folder + '/' + member path)."""
+    e = ext_of(name); p = ctx.lower()
+    if e in MODEL:
+        return MODEL[e], e.lstrip('.'), 'steel_model'
+    if e in FAB:
+        return FAB[e], 'nc1', 'part_cnc'
+    if e in TABLE:
+        ch = TABLE[e]
+        if 'abm' in p or 'advanced bill' in p: ch = 'tables/abm'
+        elif 'kiss' in p: ch = 'tables/kiss'
+        elif 'index' in p: ch = 'tables/drawing_index'
+        return ch, e.lstrip('.'), 'table'
+    if e in DRAW:
+        if 'shop' in p: role = 'shop'
+        elif 'erect' in p or 'erection' in p or 'general' in p: role = 'ga'
+        else: role = 'shop' if e == '.pdf' else 'ga'
+        return DRAW[e], e.lstrip('.'), role
+    return None, None, None
+
+
+def flat_name(name: str, srckey: str, taken: set) -> str:
+    """pkg_final.py collision rule: bare name first, else <stem>-<sha256(srckey)[:6]>.<ext> (reproducible)."""
+    if name not in taken:
+        taken.add(name); return name
+    stem, dot, ext = name.rpartition('.')
+    if not dot: stem, ext = name, ''
+    h = hashlib.sha256(srckey.encode('utf-8', 'surrogateescape')).hexdigest()[:6]
+    cand = f'{stem}-{h}{dot}{ext}' if dot else f'{stem}-{h}'
+    i = 0
+    while cand in taken:
+        i += 1
+        h2 = hashlib.sha256(f'{srckey}#{i}'.encode('utf-8', 'surrogateescape')).hexdigest()[:6]
+        cand = f'{stem}-{h2}{dot}{ext}' if dot else f'{stem}-{h2}'
+    taken.add(cand); return cand
+
+
+def project_id(disk: str, tag: str) -> str:
+    pid = f'{disk}__{tag}'
+    if len(pid) > MAX_PID:   # pkg_final.py cut at 200 (collision-prone); keep 193 + '-' + 6 hex of the full id
+        pid = pid[:MAX_PID - 7] + '-' + hashlib.sha256(pid.encode('utf-8', 'surrogateescape')).hexdigest()[:6]
+    return pid
+
+
+def b64_to_hex(b):
+    return base64.b64decode(b).hex() if b else None
+
+
+def hex_to_b64(h):
+    return base64.b64encode(bytes.fromhex(h)).decode() if h else None
+
+
+# ---------------------------------------------------------------- shipping policy (one auditable function)
+def ship_decision(row: dict, policy: dict = None):
+    """-> (shipped: bool, reason).  row = common conversion-index row (see SPEC.md 'common index schema')."""
+    pol = dict(DEFAULT_POLICY, **(policy or {}))
+    if row.get('class') != 1:
+        return False, f"class {row.get('class')}"
+    if row.get('grader_class') is not None and row.get('grader_class') != 1:
+        return False, f"grader_class {row.get('grader_class')}"
+    if not row.get('step_key'):
+        return False, 'no step_key'
+    if row.get('status') not in (None, 'converted'):
+        return False, f"status {row.get('status')}"
+    if row['pipeline'] in pol['require_verified']:
+        if row.get('verified') is not True:
+            return False, f"not verified ({row.get('verify_verdict')})"
+        held = row.get('verify_held') or []
+        if held and not pol['ship_verify_held']:
+            return False, 'verify_held:' + ','.join(held)
+        if row.get('verify_verdict') not in ('PASS', 'WARN') and not (held and pol['ship_verify_held']):
+            return False, f"verify_verdict {row.get('verify_verdict')}"
+    return True, 'shipped'
+
+
+# ---------------------------------------------------------------- S3 helpers (thread-local clients)
+_tl = threading.local()
+
+
+def s3c():
+    c = getattr(_tl, 'c', None)
+    if c is None:
+        import boto3
+        from botocore.config import Config
+        c = boto3.client('s3', region_name='ap-south-1', config=Config(
+            max_pool_connections=int(os.environ.get('PKG_POOL', '64')), retries={'max_attempts': 12, 'mode': 'standard'},
+            connect_timeout=30, read_timeout=300))
+        _tl.c = c
+    return c
+
+
+def get_bytes(b, k):
+    from botocore.exceptions import ClientError
+    try:
+        return s3c().get_object(Bucket=b, Key=k)['Body'].read()
+    except ClientError as e:
+        if e.response.get('Error', {}).get('Code') in ('NoSuchKey', '404', 'NotFound'):
+            return None
+        raise
+
+
+def get_json(b, k):
+    d = get_bytes(b, k)
+    if d is None:
+        return None
+    if d[:2] == b'\x1f\x8b':
+        d = gzip.decompress(d)
+    return json.loads(d)
+
+
+def head(b, k, checksum=False):
+    from botocore.exceptions import ClientError
+    try:
+        kw = {'ChecksumMode': 'ENABLED'} if checksum else {}
+        return s3c().head_object(Bucket=b, Key=k, **kw)
+    except ClientError as e:
+        if e.response.get('Error', {}).get('Code') in ('NoSuchKey', '404', 'NotFound'):
+            return None
+        raise
+
+
+def list_keys(b, prefix, cap=None):
+    out = []; tok = None
+    while True:
+        kw = {'Bucket': b, 'Prefix': prefix, 'MaxKeys': 1000}
+        if tok: kw['ContinuationToken'] = tok
+        r = s3c().list_objects_v2(**kw)
+        for o in r.get('Contents') or []:
+            out.append((o['Key'], int(o.get('Size') or 0), (o.get('ETag') or '').strip('"')))
+        if cap and len(out) >= cap: break
+        if not r.get('IsTruncated'): break
+        tok = r['NextContinuationToken']
+    return out
+
+
+def put_json(b, k, obj, gz=False, if_none_match=False, if_match=None):
+    body = json.dumps(obj, indent=None if gz else 1, sort_keys=False).encode()
+    kw = {}
+    if gz:
+        body = gzip.compress(body); kw['ContentEncoding'] = 'gzip'
+    if if_none_match: kw['IfNoneMatch'] = '*'
+    if if_match: kw['IfMatch'] = if_match
+    return s3c().put_object(Bucket=b, Key=k, Body=body, ContentType='application/json', **kw)
+
+
+def sha256_stream(b, k):
+    h = hashlib.sha256(); n = 0
+    body = s3c().get_object(Bucket=b, Key=k)['Body']
+    for chunk in iter(lambda: body.read(1 << 22), b''):
+        h.update(chunk); n += len(chunk)
+    return h.hexdigest(), n
+
+
+# ---------------------------------------------------------------- PLAN
+def plan_project(adapter, proj: dict, shipped: list, notshipped: list, policy: dict = None, step_heads: dict = None,
+                 existing: list = None, index_ref: dict = None, existing_pj: dict = None):
+    """proj = adapter project ref; shipped / notshipped = common rows whose source_paths touch this project.
+    existing = current manifest rows (incremental update keeps every existing relpath unchanged).
+    Returns the plan dict (no writes)."""
+    pol = dict(DEFAULT_POLICY, **(policy or {}))
+    pid = proj['project_id']; base = f"{DATASET}/{ROUTE}/{pid}"
+    files = sorted(adapter.files(proj), key=lambda r: r['path'].encode('utf-8', 'surrogateescape'))
+    taken = collections.defaultdict(set); have_rel = {}
+    items = []; seen = {}; dup = 0; excluded = 0; zero = 0; natives = []
+    if existing:                                      # incremental: existing file rows and relpaths never change
+        for r in existing:
+            ch = r['relpath'].rsplit('/', 1)[0]; taken[ch].add(r['relpath'].rsplit('/', 1)[1]); have_rel[r['relpath']] = r
+            if r.get('sha256'): seen.setdefault((ch, r['sha256']), r['relpath'])
+    for f in files:
+        name = f['path'].rsplit('/', 1)[-1]
+        if not name:
+            continue
+        e = ext_of(name)
+        if e in STEP_EXT and pol['native_step_mode'] != 'ship':
+            natives.append({'path': f['path'], 'bytes': f['size'], 'sha256': f['sha256']})
+            continue
+        if existing:
+            continue
+        ch, modality, role = classify(name, proj['tag'] + '/' + f['path'])
+        if ch is None:
+            excluded += 1; continue
+        if f['size'] == 0: zero += 1
+        ident = (ch, f['sha256'])
+        if ident in seen:
+            dup += 1; continue
+        fn = flat_name(name, proj['source_prefix'] + f['path'], taken[ch])
+        rel = f'{ch}/{fn}'; seen[ident] = rel
+        it = {'kind': 'file', 'relpath': rel, 'channel': ch, 'modality': modality, 'role': role, 'bytes': f['size'],
+              'sha256': f['sha256'], 'source_path': proj['source_prefix'] + f['path'], 'raw_key': f.get('key'),
+              'dedup': f.get('dedup')}
+        if e in STEP_EXT:
+            it.update(modality='step', step_source='native', graded=False)
+        if name.lower() == 'xslib.db1':
+            it['component_library'] = True            # Tekla component library, not a model (kept for parity, tagged)
+        items.append(it)
+    if existing and existing_pj:
+        excluded = existing_pj.get('excluded_non_asset_files', 0); dup = existing_pj.get('duplicates_collapsed', 0)
+        zero = existing_pj.get('zero_byte_files', 0)
+    if not existing:
+        adapter.resolve(proj, items)
+    unresolved = [it for it in items if it['kind'] == 'file' and not it.get('src_key') and it['bytes'] > 0]
+    items = [it for it in items if it not in unresolved]
+    rel_of_sha = {}
+    for (ch, sha), rel in seen.items():
+        if ch.startswith('model/') and ch != 'model/step':
+            rel_of_sha.setdefault(sha, rel)
+    unres_rel = {it['relpath'] for it in unresolved}
+    # ---- shipped STEP + SDS2 zips
+    steps = []; zips = []; not_placed = []
+    for m in sorted(shipped, key=lambda r: (r['pipeline'], r['id'])):
+        members_here = [mp for a, mp in m['source_paths'] if adapter.project_of(a) == pid]
+        if not members_here:
+            continue
+        hd = (step_heads or {}).get(m['step_key'])
+        if hd is None:
+            hd = head(m.get('step_bucket') or BUCKET, m['step_key'])
+        if not hd:
+            not_placed.append(dict(_ns(m, 'step object missing'))); continue
+        if m['pipeline'] in ('ifc', 'db1'):
+            src_rel = rel_of_sha.get(m['source_sha256'])
+            if not src_rel or src_rel in unres_rel:
+                not_placed.append(dict(_ns(m, 'source file not resolvable in this project'))); continue
+            stem = members_here[0].rsplit('/', 1)[-1].rsplit('.', 1)[0]
+            zipit = None
+        else:                                        # sds2: job folder -> model/sds2/<job>.zip
+            root = members_here[0]
+            job = root.rstrip('/').rsplit('/', 1)[-1] or 'job'
+            stem = job
+            ez = next((r for r in existing or [] if r.get('modality') == 'sds2' and
+                       r.get('source_path') == proj['source_prefix'] + root), None)
+            if ez:                                   # update: the job zip is already in the project
+                zipit = None; src_rel = ez['relpath']
+            else:
+                zipit = plan_sds2_zip(adapter, proj, files, root, job, taken, pol, m)
+                if zipit.get('error'):
+                    not_placed.append(dict(_ns(m, zipit['error']))); continue
+                src_rel = zipit['relpath']
+        prior = _existing_step(existing, m)
+        if prior:                                    # already in the project: refresh only when the STEP changed
+            if prior.get('step_key') == m['step_key'] and prior.get('etag_source') == hd['ETag'].strip('"'):
+                continue
+            rel = prior['relpath']; mode = 'refresh'
+        else:
+            rel = 'model/step/' + flat_name(stem + '.step', m['step_key'], taken['model/step']); mode = 'add'
+        if zipit and not any(z['relpath'] == zipit['relpath'] for z in zips) and zipit['relpath'] not in have_rel:
+            zips.append(zipit)
+        steps.append(_step_item(m, rel, src_rel, hd, mode, members_here))
+    ns = [_ns(r, ship_reason(r, pol)) for r in notshipped] + not_placed
+    ns.sort(key=lambda x: (x['pipeline'], str(x['model_id'])))
+    st = collections.Counter(i['channel'] for i in items)
+    plan = {'project_id': pid, 'disk': adapter.disk, 'source': f"{adapter.disk}/{proj['tag']}",
+            'source_archive': proj['source_key'], 'kind': proj.get('kind', 'archive'), 'tag': proj['tag'],
+            'bucket': BUCKET, 'dest_prefix': base + '/', 'route': ROUTE, 'mode': 'update' if existing else 'create',
+            'planned_at': now(), 'packager': VERSION, 'policy': pol, 'index_ref': index_ref,
+            'items': items, 'steps': steps, 'sds2_zips': zips,
+            'steps_not_shipped': ns, 'native_steps_not_graded': natives,
+            'unresolved_files': ([{'path': i['source_path'], 'bytes': i['bytes'], 'sha256': i['sha256'], 'dedup': i.get('dedup'),
+                                   'raw_key': i.get('raw_key'), 'why': i.get('src_how')} for i in unresolved]
+                                 if not existing else list((existing_pj or {}).get('unresolved_files') or [])),
+            'excluded_non_asset_files': excluded, 'duplicates_collapsed': dup, 'zero_byte_files': zero,
+            'stats': {'files': len(items), 'bytes': sum(i['bytes'] for i in items), 'channels': dict(st),
+                      'steps': len(steps), 'step_bytes': sum(s['bytes'] for s in steps),
+                      'zips': len(zips), 'zip_member_bytes': sum(z['members_bytes'] for z in zips),
+                      'unresolved': len(unresolved), 'unresolved_bytes': sum(i['bytes'] for i in unresolved),
+                      'resolved_by': dict(collections.Counter(i.get('src_how') for i in items))}}
+    plan['status'] = 'ok' if steps or existing else 'skip_no_shipped_step'
+    return plan
+
+
+def ship_reason(r, pol):
+    return ship_decision(r, pol)[1]
+
+
+def _ns(r, reason):
+    return {'model_id': r['id'], 'pipeline': r['pipeline'], 'class': r.get('class'), 'reason': reason,
+            'reasons': (r.get('reasons') or r.get('issues') or [])[:3], 'step_key': r.get('step_key')}
+
+
+def _existing_step(existing, m):
+    for r in existing or []:
+        if r.get('modality') == 'step' and r.get('model_id') == m['id'] and r.get('step_source') == m['pipeline']:
+            return r
+    return None
+
+
+def _step_item(m, rel, src_rel, hd, mode, members_here):
+    return {'kind': 'step', 'mode': mode, 'relpath': rel, 'channel': 'model/step', 'modality': 'step',
+            'role': 'steel_model', 'bytes': int(hd['ContentLength']), 'sha256': None,
+            'src_bucket': m.get('step_bucket') or BUCKET, 'src_key': m['step_key'], 'src_how': 'conversion',
+            'etag_source': hd['ETag'].strip('"'),
+            'step_source': m['pipeline'], 'converted_from': src_rel, 'model_id': m['id'], 'model_key': m['model_key'],
+            'step_key': m['step_key'], 'source_paths_in_project': members_here[:20],
+            'converter': {'code': m.get('converter_code'), 'version': m.get('converter')},
+            'class': 1, 'grader': {k: m.get(k) for k in ('grader_class', 'graded_by', 'corpus', 'domain', 'coverage_all',
+                                                           'parts_source', 'parts_step', 'solids', 'invalid_solids',
+                                                           'schema', 'reused', 'rerun_pending') if m.get(k) is not None},
+            'verify_verdict': m.get('verify_verdict'), 'verify_evidence': m.get('verify_evidence'),
+            'verify_codes': m.get('verify_codes'), 'verify_held': m.get('verify_held'),
+            'sds2_primary': m.get('sds2_primary'), 'older_revision_of': m.get('older_revision_of'),
+            'source_sha256': m.get('source_sha256'), 'fpc': m.get('fpc')}
+
+
+def plan_sds2_zip(adapter, proj, files, root, job, taken, pol, m):
+    """model/sds2/<job>.zip = every file under the job folder, stored (no compression), exact bytes, sorted names."""
+    mem = [f for f in files if f['path'].startswith(root)]
+    if not mem:
+        return {'error': 'sds2 job folder not in manifest'}
+    items = [{'relpath': None, 'bytes': f['size'], 'sha256': f['sha256'], 'raw_key': f.get('key'), 'dedup': f.get('dedup'),
+              'rel': f['path'][len(root):], 'source_path': proj['source_prefix'] + f['path'], 'kind': 'member'} for f in mem]
+    adapter.resolve(proj, items, sds2_fpc=m.get('fpc'))
+    miss = [i for i in items if not i.get('src_key') and i['bytes'] > 0]
+    model_miss = [i for i in miss if i['rel'].split('/', 1)[0].lower() in ('main', 'mem', 'subm')]
+    if model_miss:
+        return {'error': f'sds2 converter inputs unresolved ({len(model_miss)} files)'}
+    if miss and pol.get('sds2_zip_require_complete', True):
+        return {'error': f'sds2 job folder incomplete: {len(miss)} of {len(items)} files unresolved (e.g. {miss[0]["rel"]})',
+                'members_missing': [i['rel'] for i in miss][:50]}
+    keep = [i for i in items if i not in miss]
+    lines = ''.join(f"{i['rel']}\t{i['bytes']}\t{i['sha256']}\n" for i in sorted(keep, key=lambda i: i['rel']))
+    rel = 'model/sds2/' + flat_name(job + '.zip', proj['source_prefix'] + root, taken['model/sds2'])
+    return {'kind': 'sds2zip', 'relpath': rel, 'channel': 'model/sds2', 'modality': 'sds2', 'role': 'steel_model',
+            'job': job, 'job_root': proj['source_prefix'] + root, 'fpc': m.get('fpc'), 'jsetup_sha256': m.get('jsetup_sha256'),
+            'members_count': len(keep), 'members_bytes': sum(i['bytes'] for i in keep),
+            'members_digest': hashlib.sha256(lines.encode('utf-8', 'surrogateescape')).hexdigest(),
+            'members_missing': [i['rel'] for i in miss][:200], 'members_missing_count': len(miss),
+            'members': [{'p': i['rel'], 'bytes': i['bytes'], 'sha256': i['sha256'], 'src_bucket': i.get('src_bucket'),
+                         'src_key': i.get('src_key'), 'how': i.get('src_how')} for i in sorted(keep, key=lambda i: i['rel'])]}
+
+
+# ---------------------------------------------------------------- APPLY (fleet only)
+class ApplyError(Exception):
+    pass
+
+
+def _copy(it, dst_b, dst_k):
+    """server-side copy with an S3-computed SHA-256; returns (sha256_hex, etag)."""
+    c = s3c(); size = it['bytes']
+    src = {'Bucket': it.get('src_bucket') or BUCKET, 'Key': it['src_key']}
+    if size == 0 and not it.get('src_key'):
+        r = c.put_object(Bucket=dst_b, Key=dst_k, Body=b'', ChecksumAlgorithm='SHA256')
+        return b64_to_hex(r.get('ChecksumSHA256')), r['ETag'].strip('"')
+    if size <= 5 * 1024 ** 3:
+        r = c.copy_object(Bucket=dst_b, Key=dst_k, CopySource=src, MetadataDirective='COPY', TaggingDirective='REPLACE',
+                          ChecksumAlgorithm='SHA256')
+        cr = r['CopyObjectResult']
+        return b64_to_hex(cr.get('ChecksumSHA256')), cr['ETag'].strip('"')
+    part = 512 * 1024 ** 2
+    mpu = c.create_multipart_upload(Bucket=dst_b, Key=dst_k, ChecksumAlgorithm='SHA256')
+    uid = mpu['UploadId']
+    try:
+        parts = []; pos = 0; n = 0
+        while pos < size:
+            last = min(pos + part, size) - 1; n += 1
+            r = c.upload_part_copy(Bucket=dst_b, Key=dst_k, UploadId=uid, PartNumber=n, CopySource=src,
+                                   CopySourceRange=f'bytes={pos}-{last}')
+            parts.append({'ETag': r['CopyPartResult']['ETag'], 'PartNumber': n,
+                          'ChecksumSHA256': r['CopyPartResult'].get('ChecksumSHA256')})
+            pos = last + 1
+        r = c.complete_multipart_upload(Bucket=dst_b, Key=dst_k, UploadId=uid, MultipartUpload={'Parts': parts})
+    except Exception:
+        try: c.abort_multipart_upload(Bucket=dst_b, Key=dst_k, UploadId=uid)
+        except Exception: pass
+        raise
+    h, n = sha256_stream(dst_b, dst_k)            # composite checksum -> full digest by streaming (in-region)
+    if n != size:
+        raise ApplyError(f'size {n} != {size} after multipart copy')
+    return h, r['ETag'].strip('"')
+
+
+def _existing_ok(dst_b, dst_k, sha):
+    h = head(dst_b, dst_k, checksum=True)
+    if h and sha and b64_to_hex(h.get('ChecksumSHA256')) == sha and h.get('ChecksumType', 'FULL_OBJECT') == 'FULL_OBJECT':
+        return h['ETag'].strip('"')
+    return None
+
+
+def build_zip(z, workdir):
+    """download members (sha256-checked while streaming) into a stored zip; returns (path, sha256, size)."""
+    os.makedirs(workdir, exist_ok=True)
+    path = os.path.join(workdir, hashlib.sha1(z['relpath'].encode()).hexdigest() + '.zip')
+    with zipfile.ZipFile(path, 'w', compression=zipfile.ZIP_STORED, allowZip64=True) as zf:
+        for m in z['members']:
+            zi = zipfile.ZipInfo(z['job'] + '/' + m['p'], date_time=(1980, 1, 1, 0, 0, 0))
+            zi.compress_type = zipfile.ZIP_STORED; zi.external_attr = 0o644 << 16
+            h = hashlib.sha256()
+            with zf.open(zi, 'w', force_zip64=m['bytes'] >= 2 ** 31) as w:
+                if m['bytes'] > 0:
+                    body = s3c().get_object(Bucket=m.get('src_bucket') or BUCKET, Key=m['src_key'])['Body']
+                    for chunk in iter(lambda: body.read(1 << 22), b''):
+                        h.update(chunk); w.write(chunk)
+            if h.hexdigest() != m['sha256']:
+                raise ApplyError(f"zip member sha mismatch {m['p']} ({m['src_key']})")
+    hz = hashlib.sha256(); n = 0
+    with open(path, 'rb') as f:
+        for chunk in iter(lambda: f.read(1 << 22), b''):
+            hz.update(chunk); n += len(chunk)
+    return path, hz.hexdigest(), n
+
+
+def apply_plan(plan: dict, workdir='/tmp/pkgwork', threads=48, log=print):
+    """Execute one project plan.  Returns the apply record; raises nothing for per-file failures (they are recorded)."""
+    B = plan['bucket']; base = plan['dest_prefix'].rstrip('/')
+    rec = {'project_id': plan['project_id'], 'started': now(), 'copied': 0, 'skipped_existing': 0, 'failed': [], 'host': os.uname()[1]}
+    rows = []
+    existing = read_manifest(B, base) if plan['mode'] == 'update' else []
+    present = {k[len(base) + 1:] for k, _, _ in list_keys(B, base + '/')}     # retry: only these need a HEAD
+    lock = threading.Lock()
+
+    def one(it):
+        dst = f"{base}/{it['relpath']}"
+        try:
+            et = _existing_ok(B, dst, it['sha256']) if it['kind'] == 'file' and it['relpath'] in present else None
+            if et:
+                sha = it['sha256']; rec_key = 'skipped_existing'
+            else:
+                sha, et = _copy(it, B, dst); rec_key = 'copied'
+                if it['kind'] == 'file' and sha != it['sha256']:
+                    raise ApplyError(f"sha256 mismatch: S3 computed {sha}, manifest {it['sha256']} (source {it['src_key']})")
+            row = make_row(plan, it, sha, et)
+            with lock:
+                rec[rec_key] += 1; rows.append(row)
+        except Exception as e:
+            with lock:
+                rec['failed'].append({'relpath': it['relpath'], 'error': f'{type(e).__name__}: {str(e)[:300]}'})
+    with ThreadPoolExecutor(threads) as tp:                # STEP first: a create with no STEP landed copies nothing else
+        list(tp.map(one, plan['steps']))
+    if plan['mode'] == 'create' and not any(r.get('modality') == 'step' for r in rows):
+        rec['status'] = 'no_step_placed'; rec['finished'] = now()
+        return rec
+    for z in plan['sds2_zips']:
+        try:
+            path, sha, n = build_zip(z, workdir)
+            put_json(B, f"{PSTATE}/sds2_members/{plan['project_id']}/{z['relpath'].rsplit('/', 1)[-1]}.json.gz",
+                     {'relpath': z['relpath'], 'job_root': z['job_root'], 'zip_sha256': sha, 'members': z['members']}, gz=True)
+            dst = f"{base}/{z['relpath']}"
+            s3c().upload_file(path, B, dst, ExtraArgs={'ChecksumAlgorithm': 'SHA256', 'ContentType': 'application/zip',
+                                                        'Metadata': {'sha256': sha, 'members-digest': z['members_digest']}})
+            et = head(B, dst)['ETag'].strip('"')
+            rows.append(make_row(plan, z, sha, et, size=n)); rec['copied'] += 1
+            os.remove(path)
+        except Exception as e:
+            rec['failed'].append({'relpath': z['relpath'], 'error': f'{type(e).__name__}: {str(e)[:300]}'})
+    with ThreadPoolExecutor(threads) as tp:
+        list(tp.map(one, plan['items']))
+    # STEP rows whose converted_from failed are dropped (never ship a STEP without its source)
+    ok_rel = {r['relpath'] for r in rows} | {r['relpath'] for r in existing}
+    for r in list(rows):
+        if r.get('modality') == 'step' and r.get('converted_from') and r['converted_from'] not in ok_rel:
+            rows.remove(r); rec['failed'].append({'relpath': r['relpath'], 'error': 'converted_from missing'})
+    merged = {r['relpath']: r for r in existing}
+    for r in rows:
+        if r['relpath'] in merged and r.get('modality') == 'step':
+            r['refreshed_at'] = now(); r['placed_at'] = merged[r['relpath']].get('placed_at') or r['placed_at']
+        merged[r['relpath']] = r
+    man = [merged[k] for k in sorted(merged)]
+    if not any(r.get('modality') == 'step' and r.get('step_source') in ('ifc', 'db1', 'sds2') for r in man):
+        rec['status'] = 'no_step_placed'; rec['finished'] = now()
+        return rec                                  # nothing written beyond copied files; verify will report them
+    body = ('\n'.join(json.dumps(r, ensure_ascii=False) for r in man) + '\n').encode('utf-8', 'surrogateescape')
+    s3c().put_object(Bucket=B, Key=f'{base}/manifest.jsonl', Body=body, ContentType='application/x-ndjson')
+    pj = project_json(plan, man, rec)
+    s3c().put_object(Bucket=B, Key=f'{base}/project.json', Body=json.dumps(pj, indent=1, ensure_ascii=False).encode(),
+                     ContentType='application/json')
+    rec['status'] = 'ok' if not rec['failed'] else 'partial'; rec['files'] = len(man); rec['finished'] = now()
+    return rec
+
+
+def make_row(plan, it, sha, etag, size=None):
+    row = {'project_id': plan['project_id'], 'relpath': it['relpath'], 'modality': it['modality'], 'role': it['role'],
+           'bytes': size if size is not None else it['bytes'], 'sha256': sha, 'parser_ok': True, 'units': 'mm',
+           'supersedes': None, 'etag': etag,
+           'source_key': it.get('src_key') if it['kind'] != 'sds2zip' else None,
+           'pii_redacted': False, 'pii': dict(PII_EMPTY)}
+    if it['kind'] == 'file':
+        row.update(source_path=it['source_path'], source_bucket=it.get('src_bucket'), resolved_by=it.get('src_how'))
+        if it.get('step_source') == 'native':
+            row.update(step_source='native', graded=False)
+        if it.get('component_library'):
+            row['component_library'] = True
+    elif it['kind'] == 'step':
+        for k in ('step_source', 'converted_from', 'model_id', 'step_key', 'converter', 'class', 'grader', 'verify_verdict',
+                  'verify_evidence', 'verify_codes', 'verify_held', 'sds2_primary', 'older_revision_of', 'source_paths_in_project',
+                  'etag_source'):
+            if it.get(k) is not None:
+                row[k] = it[k]
+        row['source_bucket'] = it.get('src_bucket'); row['placed_at'] = now()
+    elif it['kind'] == 'sds2zip':
+        row.update(job=it['job'], source_path=it['job_root'], fpc=it.get('fpc'), jsetup_sha256=it.get('jsetup_sha256'),
+                   zip_store='stored (no compression), members byte-exact, names <job>/<path below the job folder>',
+                   members_count=it['members_count'], members_bytes=it['members_bytes'], members_digest=it['members_digest'],
+                   members_missing_count=it['members_missing_count'], members_missing=it['members_missing'][:50],
+                   members_list_key=f"{PSTATE}/sds2_members/{plan['project_id']}/{it['relpath'].rsplit('/', 1)[-1]}.json.gz")
+        if it['members_count'] <= plan['policy'].get('zip_inline_members_max', 1000):
+            row['members'] = [{'p': m['p'], 'bytes': m['bytes'], 'sha256': m['sha256']} for m in it['members']]
+    return row
+
+
+def project_json(plan, man, rec=None):
+    slots = collections.Counter(r['relpath'].rsplit('/', 1)[0] for r in man)
+    got = {'model_step': slots.get('model/step', 0), 'model_ifc': slots.get('model/ifc', 0), 'model_db1': slots.get('model/db1', 0),
+           'model_db2': slots.get('model/db2', 0), 'model_sds2': slots.get('model/sds2', 0),
+           'drawings': sum(v for k, v in slots.items() if k.startswith('drawings/')), 'fab_nc1': slots.get('fab/nc1', 0),
+           'bom': slots.get('tables/bom', 0), 'abm': slots.get('tables/abm', 0), 'kiss': slots.get('tables/kiss', 0),
+           'drawing_index': slots.get('tables/drawing_index', 0)}
+    mfmt = collections.Counter(r['modality'] for r in man if r['relpath'].startswith('model/'))
+    dfmt = collections.Counter(r['modality'] for r in man if r['relpath'].startswith('drawings/'))
+    steps = [r for r in man if r.get('modality') == 'step']
+    by_src = collections.Counter(r.get('step_source') for r in steps)
+    conv = {}
+    for r in steps:
+        if r.get('step_source') in ('ifc', 'db1', 'sds2'):
+            c = conv.setdefault(r['step_source'], {'step_added': 0, 'converter': [], 'added_at': None})
+            c['step_added'] += 1
+            code = (r.get('converter') or {}).get('code')
+            if code and code not in c['converter']: c['converter'].append(code)
+            c['added_at'] = max(filter(None, [c['added_at'], r.get('refreshed_at') or r.get('placed_at')]), default=None)
+    unres = plan.get('unresolved_files') or []
+    warnings = ['drawing role (shop/ga) inferred from source path keywords',
+                'only class-1 STEP (graded; verified where a verifier exists) ship in model/step; see steps_not_shipped']
+    if plan.get('native_steps_not_graded'):
+        warnings.append(f"{len(plan['native_steps_not_graded'])} STEP file(s) from the archive are not graded: listed in "
+                        "native_steps_not_graded, not shipped")
+    if unres:
+        warnings.append(f'{len(unres)} asset file(s) could not be resolved to a stored object: listed in unresolved_files, not shipped')
+    failed = (rec or {}).get('failed') or []
+    return {'id': plan['project_id'], 'source': plan['source'], 'units': 'mm', 'domain': 'structural_steel', 'year': None,
+            'status': 'complete' if not unres and not failed else 'partial', 'route': ROUTE, 'slots': got,
+            'model_formats': dict(mfmt), 'drawing_formats': dict(dfmt),
+            'missing': [k for k in SLOTS if not got.get(k)], 'warnings': warnings, 'skipped_files': [f['relpath'] for f in failed][:200],
+            'model_step_schemas': {}, 'files': len(man), 'bytes': sum(r['bytes'] for r in man),
+            'excluded_non_asset_files': plan['excluded_non_asset_files'], 'duplicates_collapsed': plan['duplicates_collapsed'],
+            'zero_byte_files': plan.get('zero_byte_files', 0),
+            'packaged_at': now(), 'packaged_by': os.uname()[1],
+            # --- general packager additions
+            'disk': plan['disk'], 'source_archive': plan['source_archive'], 'source_kind': plan.get('kind'),
+            'packager': VERSION, 'sha256': 'computed for every row (S3 SHA-256 checksum on copy; zips hashed at build)',
+            'conversions': conv, 'model_step_by_source': dict(by_src),
+            'steps_not_shipped': plan['steps_not_shipped'][:500], 'steps_not_shipped_count': len(plan['steps_not_shipped']),
+            'native_steps_not_graded': plan['native_steps_not_graded'][:500],
+            'native_steps_not_graded_count': len(plan['native_steps_not_graded']),
+            'unresolved_files': unres[:200], 'unresolved_files_count': len(unres),
+            'index_ref': plan.get('index_ref'), 'policy': plan.get('policy'), 'pii': pii_block(man)}
+
+
+def pii_block(man):
+    n = sum(1 for r in man if r.get('pii_redacted'))
+    return {'status': 'not_redacted' if n == 0 else 'partially_redacted', 'files_redacted': n}
+
+
+def read_manifest(B, base):
+    d = get_bytes(B, f'{base}/manifest.jsonl')
+    if not d:
+        return []
+    return [json.loads(l) for l in d.decode('utf-8', 'surrogateescape').splitlines() if l.strip()]
+
+
+# ---------------------------------------------------------------- VERIFY
+def verify_project(B, pid, shipped_keys: dict = None, full_hash=False, threads=32):
+    """Checks (all must be 0): missing_object, orphan_object, size_mismatch, etag_mismatch, sha_mismatch, sha_unverified,
+    step_not_shipped, step_key_changed, converted_from_missing, dup_content, dup_relpath, pj_files, pj_bytes, pj_slots_step,
+    pj_route_id.  shipped_keys = {model_id: step_key} of the shipped set (None = skip shipped checks)."""
+    base = f'{DATASET}/{ROUTE}/{pid}'
+    objs = {k[len(base) + 1:]: (sz, et) for k, sz, et in list_keys(B, base + '/')}
+    man = read_manifest(B, base)
+    pj = get_json(B, f'{base}/project.json') or {}
+    chk = collections.Counter(); ex = collections.defaultdict(list); info = collections.Counter()
+
+    def bad(c, x):
+        chk[c] += 1
+        if len(ex[c]) < 5: ex[c].append(x)
+    rels = [r['relpath'] for r in man]
+    for r in [x for x, n in collections.Counter(rels).items() if n > 1]:
+        bad('dup_relpath', r)
+    rowset = set(rels)
+    for k in objs:
+        if k not in rowset and k not in ('project.json', 'manifest.jsonl'):
+            bad('orphan_object', k)
+    seen = {}
+
+    def shacheck(r):
+        k = f"{base}/{r['relpath']}"
+        h = head(B, k, checksum=True)
+        cs = b64_to_hex(h.get('ChecksumSHA256')) if h else None
+        if h and cs and h.get('ChecksumType', 'FULL_OBJECT') == 'FULL_OBJECT':
+            return r, ('ok' if cs == r['sha256'] else 'mismatch')
+        if h and h.get('Metadata', {}).get('sha256') and not full_hash:
+            return r, ('ok' if h['Metadata']['sha256'] == r['sha256'] else 'mismatch')
+        if full_hash and h:
+            return r, ('ok' if sha256_stream(B, k)[0] == r['sha256'] else 'mismatch')
+        return r, ('deferred' if h else 'unverified')     # composite (multipart) checksum: run with full_hash
+    present = []
+    for r in man:
+        o = objs.get(r['relpath'])
+        if o is None:
+            bad('missing_object', r['relpath']); continue
+        if o[0] != r['bytes']: bad('size_mismatch', r['relpath'])
+        if r.get('etag') and o[1] != r['etag']: bad('etag_mismatch', r['relpath'])
+        if not r.get('sha256'): bad('sha_unverified', r['relpath'])
+        if 'pii_redacted' not in r: bad('pii_fields_missing', r['relpath'])
+        if not r.get('source_key') and r.get('modality') != 'sds2' and r['bytes'] > 0: bad('source_key_missing', r['relpath'])
+        else: present.append(r)
+        ck = (r['relpath'].rsplit('/', 1)[0], r.get('sha256'))
+        if r.get('sha256') and ck in seen: bad('dup_content', r['relpath'])
+        seen[ck] = r['relpath']
+        if r.get('modality') == 'step' and r.get('step_source') in ('ifc', 'db1', 'sds2'):
+            if not r.get('converted_from') or r['converted_from'] not in rowset: bad('converted_from_missing', r['relpath'])
+            if shipped_keys is not None:
+                sk = shipped_keys.get(r.get('model_id'))
+                if sk is None: bad('step_not_shipped', r['relpath'])
+                elif sk != r.get('step_key'): bad('step_key_changed', r['relpath'])
+        elif r.get('modality') == 'step' and r.get('step_source') == 'native' and shipped_keys is not None:
+            pass                                       # native STEP only present when native_step_mode=ship (graded=false)
+    with ThreadPoolExecutor(threads) as tp:
+        for r, v in tp.map(shacheck, present):
+            if v == 'mismatch': bad('sha_mismatch', r['relpath'])
+            elif v == 'unverified': bad('sha_unverified', r['relpath'])
+            elif v == 'deferred': info['sha_deferred_full_hash'] += 1
+    if pj.get('files') != len(man): bad('pj_files', f"{pj.get('files')} vs {len(man)}")
+    if pj.get('bytes') != sum(r['bytes'] for r in man): bad('pj_bytes', pj.get('bytes'))
+    nstep = sum(1 for r in man if r['relpath'].startswith('model/step/'))
+    if (pj.get('slots') or {}).get('model_step') != nstep: bad('pj_slots_step', f"{(pj.get('slots') or {}).get('model_step')} vs {nstep}")
+    if pj.get('route') != ROUTE or pj.get('id') != pid: bad('pj_route_id', f"{pj.get('route')} {pj.get('id')}")
+    if (pj.get('pii') or {}).get('files_redacted') != sum(1 for r in man if r.get('pii_redacted')): bad('pj_pii', pj.get('pii'))
+    if not any(r.get('step_source') in ('ifc', 'db1', 'sds2') for r in man): bad('no_shipped_step', pid)
+    return {'project_id': pid, 'checked_at': now(), 'rows': len(man), 'objects': len(objs), 'ok': sum(chk.values()) == 0,
+            'checks': dict(chk), 'info': dict(info), 'examples': dict(ex)}
+
+
+# ---------------------------------------------------------------- LEDGER / DELTA
+def ledger_part(plan, man, verify):
+    pl = {}
+    for r in man:
+        if r.get('modality') == 'step' and r.get('step_source') in ('ifc', 'db1', 'sds2'):
+            mk = f"{plan['disk']}:{r['step_source']}:{r['model_id']}"
+            pl[mk] = {'step_key': r['step_key'], 'step_etag': r.get('etag_source'), 'step_sha256': r['sha256'],
+                      'relpath': r['relpath'], 'converted_from': r.get('converted_from'), 'placed_at': r.get('placed_at'),
+                      'refreshed_at': r.get('refreshed_at')}
+    return {'project_id': plan['project_id'], 'disk': plan['disk'], 'updated': now(), 'verify_ok': verify['ok'],
+            'packager': VERSION, 'placements': pl}
+
+
+def compact_ledger(B, write=True):
+    """merge ledger_parts/<pid>.json -> ledger.jsonl + ledger_index.json (single writer: the coordinator)."""
+    parts = [k for k, _, _ in list_keys(B, f'{PSTATE}/ledger_parts/') if k.endswith('.json')]
+    with ThreadPoolExecutor(32) as tp:
+        docs = list(tp.map(lambda k: get_json(B, k), parts))
+    rows = []; idx = {}
+    for d in filter(None, docs):
+        for mk, p in d['placements'].items():
+            rows.append(dict(model_key=mk, project_id=d['project_id'], **p))
+            e = idx.setdefault(mk, {'step_key': p['step_key'], 'step_etag': p['step_etag'], 'step_sha256': p['step_sha256'],
+                                    'projects': [], 'first_placed': p.get('placed_at'), 'last': p.get('refreshed_at') or p.get('placed_at')})
+            e['projects'].append(d['project_id'])
+    rows.sort(key=lambda r: (r['model_key'], r['project_id']))
+    if write:
+        s3c().put_object(Bucket=B, Key=f'{PSTATE}/ledger.jsonl', Body=('\n'.join(json.dumps(r) for r in rows) + '\n').encode(),
+                         ContentType='application/x-ndjson')
+        put_json(B, f'{PSTATE}/ledger_index.json', {'updated': now(), 'models': len(idx), 'placements': len(rows), 'index': idx})
+    return rows, idx

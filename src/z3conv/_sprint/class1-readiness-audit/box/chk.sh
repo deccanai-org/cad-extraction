@@ -1,0 +1,1 @@
+cd /work/agentwork/class1-readiness-audit; tail -5 aud_k.log; uptime; ps -eo pid,pcpu,rss,etime,args | grep "class1-readiness\|kit_k/convert_one" | grep -v grep | awk '{print $1,$2,int($3/1e6)"G",$4,substr($0,index($0,$9),0)}' | head -20; ps -eo pid,etime,rss,args | grep kit_k/convert_one | grep -v grep | sed 's/.*src\///' | cut -c1-20 | head -14

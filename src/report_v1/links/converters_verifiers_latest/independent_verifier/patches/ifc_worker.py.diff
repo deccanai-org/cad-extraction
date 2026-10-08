@@ -1,0 +1,50 @@
+--- orig/ifc_worker.py	2026-10-02 13:51:25
++++ new/ifc_worker.py	2026-10-02 13:51:45
+@@ -63,7 +63,7 @@
+ THREADS = os.environ.get('IFC_THREADS', '2')
+ FILES = ('worker.py', 'convfleet.py', 'ifc2step5.py', 'ifc2step5_guard.py', 'ifc_concat_fix.py', 'ifc_crash_bisect.py',
+          'ifc_exclude.py', 'step_check.py', 'ifc_census.py', 'grade_join.py', 'ifc2step6.py', 'ifc2step6_guard.py', 'ifcxml2spf.py', 'step_verify_big.py',
+-         'cis2step.py')
++         'cis2step.py', 'ifc_attrib.py')
+ XML2SPF = os.path.join(HERE, 'ifcxml2spf.py')          # ifcXML (ISO 10303-28 / IFC4 ifcXML) -> SPF, validated converter
+ CIS2 = os.path.join(HERE, 'cis2step.py')               # CIS/2 LPM6 manufacturing model -> exact STEP (ifc-residue item 4)
+ if os.path.exists(XML2SPF):
+@@ -353,6 +353,21 @@
+         except Exception as e:
+             return {'error': f'read-back rc {rc}; converter read-back unusable ({type(e).__name__})', 'rc': rc, 'streamed': True}
+     return {'error': f'read-back rc {rc}', 'rc': rc, 'streamed': True}
++
++
++def attrib(fl, jid, py, src, cparts, sparts, d, rec):
++    """[z3v rules 1-3] cause attribution of the problem parts after the join (ifc_attrib.py, ported from ifc-step-verifier): surface
++    parts -> source state of the IFC element (surface model / open faceted shell = source), missing parts -> fully voided by an
++    own opening (source) or not. Only when the join shows surface parts or missing parts; build_index reads rec['attrib']."""
++    j = rec.get('join') or {}
++    if j.get('mode') != 'gid' or not (j.get('surface_parts') or ((j.get('coverage') or {}).get('all') or 1) < 1):
++        return
++    ap_ = os.path.join(d, 'attrib.json')
++    rc = fl.run(jid, [py, os.path.join(HERE, 'ifc_attrib.py'), src, cparts, sparts, ap_, '--unpack-dir', d], os.path.join(d, 'attrib.log'), 2 * 3600, mem_frac=0.85)
++    try:
++        rec['attrib'] = json.load(open(ap_))
++    except Exception:
++        rec['attrib'] = {'error': f'attrib rc {rc}', 'log': tail_of(os.path.join(d, 'attrib.log'), 300)}
+ 
+ 
+ def tail_of(logf, n=1500):
+@@ -599,6 +614,7 @@
+             rec['join'] = grade_join.join(grade_join.load(cparts), grade_join.load(sparts))
+         except Exception as e:
+             rec['join'] = {'error': f'{type(e).__name__}: {str(e)[:200]}'}
++        attrib(fl, jid, py_c, census_src, cparts, sparts, d, rec)
+     # uploads
+     fl.upload(stp, rec['out_key'], 'application/step')
+     if os.path.exists(stp + '.stats.json'):
+@@ -607,7 +623,7 @@
+         fl.upload(chk, rec['out_key'] + '.check.json', 'application/json')
+     if os.path.exists(png):
+         fl.upload(png, f'{OUT}/{jid}{VSUF}.png', 'image/png'); rec['render_key'] = f'{OUT}/{jid}{VSUF}.png'
+-    for fpath, nm in ((cj, 'census.json'), (cparts, 'src_parts.jsonl.gz'), (sparts, 'step_parts.jsonl.gz')):
++    for fpath, nm in ((cj, 'census.json'), (cparts, 'src_parts.jsonl.gz'), (sparts, 'step_parts.jsonl.gz'), (os.path.join(d, 'attrib.json'), 'attrib.json')):
+         if os.path.exists(fpath):
+             fl.upload(fpath, f'{DET}/{jid}{VSUF}.{nm}')
+     if os.path.exists(stp + '.parts.json'):

@@ -1,0 +1,15 @@
+--- src/db1dec.py.bak_gate	2026-09-24 22:54:19
++++ src/db1dec.py	2026-09-24 22:54:19
+@@ -850,7 +850,11 @@
+         Cv = db.I(recs + lay['csys'])
+         ok = (np.all(np.isfinite(X), 1) & (X[:, 3] > 0) & (np.abs(X[:, :3]) < 1e8).all(1)
+               & np.all(np.isfinite(p1), 1) & np.all(np.isfinite(p2), 1) & inkeys(ckeys, Cv))
+-        if ok.mean() < 0.5: continue
++        if ok.mean() < 0.5:
++            # a run mixing parts with other objects (drawing-heavy models): keep only records
++            # whose reference points also give the stored length (|p2-p1| == L)
++            ok &= np.abs(np.linalg.norm(p2 - p1, axis=1) - X[:, 3]) < 1.0
++            if ok.sum() < 3: continue
+         A = db.I(recs + lay['attr']) if lay.get('attr') is not None else None
+         for i in np.nonzero(ok)[0]:
+             off = int(recs[i])

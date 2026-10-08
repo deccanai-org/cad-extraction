@@ -1,0 +1,9 @@
+{
+ "zip": "sds2-step-pipeline-v5.5.11-rc4.zip",
+ "sha256": "b7cab51182265690377fd4df052103e7ea188429fae726ddcf55e95cd45252c5",
+ "label": "v5.5.11",
+ "redo_labels": [
+  "v4"
+ ],
+ "note": "v5.5.11 (= rc4, lead GO 00:45Z): converter duplicates removed and listed (header-main rule), source duplicate placements and twin members kept and listed, bent bars with bends, SSMA thin-walled C, stock-weighed plates out of the steel ratio, hole-cut empty-compound fallback (Nantucket); kit: steel_weight_mismatch judged on ratio_without_outliers; best-of"
+}

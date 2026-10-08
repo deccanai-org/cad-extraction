@@ -1,0 +1,13 @@
+--- a/coord/build_index.py	2026-10-01 15:39:22
++++ b/coord/build_index.py	2026-10-01 15:39:22
+@@ -900,7 +900,9 @@
+         elif t == 'holes_not_cut':
+             add(f'{n} pieces without their holes', n, 'hole cutting for those pieces', CF, f'{p} holes')
+         elif t in ('concrete_prism', 'concrete_as_prism'):
+-            add(f'{n} concrete parts as L x W x T prisms', n, 'concrete shapes are not in the job data', SDA, 'concrete shapes')
++            # the shapes ARE in the job: each Conc piece file holds a closed B-rep whose volume x 150 pcf = SDS2's weight
++            # (BAHAMAR 7.135 35/35, WLCSC 7.331 7/7); the prism is a converter choice, not missing source data
++            add(f'{n} concrete parts as L x W x T prisms', n, "exact concrete solids from the piece files' B-rep", CF, f'{p} concrete exact geometry')
+         elif t == 'pieces_without_bolt_holes':
+             continue                                           # covered by the bolt-group need
+         elif t.startswith('section_'):

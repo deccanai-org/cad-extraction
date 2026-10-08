@@ -1,0 +1,65 @@
+"""apply the eng-fork writer changes (attr-link overrule, empty-model statuses) to a db1step.py; no fittings/cuts"""
+import sys
+src, dst = sys.argv[1:3]
+s = open(src).read()
+def rep(old, new, count=1):
+    global s
+    n = s.count(old)
+    assert n >= 1, ('anchor not found', old[:80])
+    s = s.replace(old, new, count)
+rep("""    if cols >= 20 and cv / cols < 0.7:
+        st['status'] = 'suspect_attr_link'
+        return st
+""", """    if cols >= 20 and cv / cols < 0.7:
+        # v2 (eng): the COLUMN-name heuristic misfires on railing / stair models that name horizontal rails COLUMN (Tekla IFC
+        # of one such model: 54 of 68 COLUMN-named parts horizontal). Hold back only when the naming-independent checks do
+        # not confirm the link (contour-plate names own their outlines; ANTIMATERIAL parts are cut-relation children).
+        import attrlink
+        db.find_cut_links(M)
+        ev = attrlink.evidence(db, lay, M); st['attr_link_evidence'] = ev
+        if not attrlink.confirmed(ev):
+            st['status'] = 'suspect_attr_link'
+            return st
+        st['name_check']['overruled_by'] = 'attr_link_evidence'
+""")
+rep("""        elif (small and not any(len(r) >= 3 and s >= 45 for s, r in db.runs if s in (65, 73))) or len(data) < 1_000_000:
+            st['status'] = 'empty_model'      # no part records at all: a template / blank model
+        else:
+            st['status'] = 'no_member_layout'""", """        elif (small and not any(len(r) >= 3 and s >= 45 for s, r in db.runs if s in (65, 73))) or len(data) < 1_000_000:
+            st['status'] = 'empty_model'      # no part records at all: a template / blank model
+        elif _no_native_parts(db):
+            # v2 (eng): no point table and (almost) no part records under ANY record variant: the model holds only
+            # reference models / drawings (8.07 'STAIR COORDINATION': 4 stride-73 records, 0 points, 26 RM layers)
+            st['status'] = 'empty_model'; st['empty_reason'] = 'no native part records (reference models / drawings only)'
+        else:
+            st['status'] = 'no_member_layout'""")
+rep("""def convert(db1_path, out_ifc, cat, layout=None, variants=(), allow_full=True):""", """def _no_native_parts(db):
+    \"\"\"v2 (eng): True when no known point table exists under the normal or the flag-1 record variant and the part-record
+    strides hold fewer than 50 records\"\"\"
+    from db1dec import Db
+    for flags in ((4,), (1, 4, 5)):
+        d = db
+        if flags != (4,):
+            d = Db(db.b); d.SEG_FLAGS = flags; d.PLAUS_MAX = d.GEO_MAX; d.segment()
+        if len(d.bystride.get(73, ())) >= 50 or len(d.bystride.get(65, ())) >= 50: return False
+        for st_, k_ in ((41, 17), (33, 9)):
+            if d.find_points(fixed=(st_, k_)): return False
+    return True
+
+
+def convert(db1_path, out_ifc, cat, layout=None, variants=(), allow_full=True):""")
+# old route: templates without part records
+old = """    if out.elems:
+        out.write(out_ifc); st['status'] = 'ok'
+    else:
+        st['status'] = 'no_resolvable_members' if M else 'no_member_layout'"""
+if s.count(old):
+    rep(old, """    if out.elems:
+        out.write(out_ifc); st['status'] = 'ok'
+    elif not M and not info.get('part_attr'):
+        st['status'] = 'empty_model'      # v2 (eng): no part records at all (7.30 model templates, 7-57 KB)
+    else:
+        st['status'] = 'no_resolvable_members' if M else 'no_member_layout'""")
+else:
+    print('WARN: old-route status anchor not found (builder changed convert_old); empty-template status not applied')
+open(dst, 'w').write(s); print('patched ->', dst)

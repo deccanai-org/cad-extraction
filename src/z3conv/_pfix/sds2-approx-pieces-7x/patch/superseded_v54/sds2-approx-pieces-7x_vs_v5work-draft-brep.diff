@@ -1,0 +1,389 @@
+--- a/sds2-step-pipeline/decode/brep.py	2026-10-01 18:34:35
++++ b/sds2-step-pipeline/decode/brep.py	2026-10-01 18:34:35
+@@ -185,12 +185,18 @@
+         return sh
+ 
+ 
++_CLEAN_LOOPS = False  # set only inside _repaired(): loops_of() then also splits keyholes and drops spikes
++
++
+ def loops_of(f):
+     """A face's entries are one or more loops back to back, each closed by repeating its first vertex
+     (hollow-section end faces: outer loop, then inner). A face with no repeat is a single loop.
+-    v5.5: a loop that runs out and back along the same edge (keyhole: outer ring, bridge across the wall, inner ring,
+-    bridge back - 7.1xx HSS / pipe end faces) is split at the bridge into its outer and inner loops; built as one
+-    polygon its bridge edges stayed unmatched and the piece fell back to an approximate profile (METHODIST 7.132)."""
++    In the repair stage (_CLEAN_LOOPS) a loop that runs out and back along the same edge (keyhole: outer ring, bridge
++    across the wall, inner ring, bridge back - 7.1xx HSS / pipe end faces) is split at the bridge into its outer and
++    inner loops, and zero-width spikes are dropped; built as one polygon the bridge edges stayed unmatched and the piece
++    fell back to an approximate profile (METHODIST 7.132). Not applied in the first passes: after conform() merges
++    coincident vertices some stored faces carry an out-and-back edge that their neighbours need (DSCC 7.312 W10x12,
++    SOCORRO 7.425 HSS5x2x5/16 build only with it)."""
+     out, cur = [], []
+     for i in f:
+         if cur and i == cur[0] and len(cur) >= 3:
+@@ -198,6 +204,8 @@
+         elif not cur or i != cur[-1]:
+             cur.append(i)
+     if len(cur) >= 3: out.append(cur)
++    if not _CLEAN_LOOPS:
++        return out
+     res = []
+     for l in out:
+         res.extend(_split_keyhole(_drop_spikes(l)))
+@@ -336,14 +344,14 @@
+             drop.update((k, seen[key]) if n >= 4 else (k,))
+         else:
+             seen[key] = k
+-    # v5.5: a single-loop face that repeats the outer loop of a ring face on the same plane is a cap over a hollow
+-    # end (7.1xx pipe ends stored as ring + full disk + inner disk: their edges had 3 users and the pipe fell back)
++    # repair stage only: a single-loop face that repeats the outer loop of a ring face on the same plane is a cap over a
++    # hollow end (7.1xx pipe ends stored as ring + full disk + inner disk: their edges had 3 users and the pipe fell back)
+     outer_of = {}
+-    for k, f in enumerate(faces):
++    for k, f in enumerate(faces if _CLEAN_LOOPS else ()):
+         ls = loops_of(f)
+         if len(ls) > 1 and info[k] is not None:
+             outer_of.setdefault((info[k][0], info[k][1], frozenset(ls[0])), k)
+-    for k, f in enumerate(faces):
++    for k, f in enumerate(faces if outer_of else ()):
+         ls = loops_of(f)
+         if len(ls) == 1 and info[k] is not None and (info[k][0], info[k][1], frozenset(ls[0])) in outer_of:
+             drop.add(k)
+@@ -357,24 +365,264 @@
+     return [f for k, f in enumerate(faces) if k not in drop]
+ 
+ 
+-def solid(V, faces, M=None, o=None):
+-    """Sew planar polygon faces (world transform o + M.T @ v, inches -> mm) into a solid (a compound of solids for
+-    multi-body pieces), or None. Retries with repair passes: conform() (merge vertices, split T-junctions), then
+-    also drop_covered() (redundant coplanar patches)."""
++SLIVER_W = 3e-3      # in: faces narrower than this (2 x area / perimeter) hanging on free / over-used edges are flaps
++PLANE_TOL = 1e-3     # in: vertex distance from a plane for faces treated as coplanar by merge_coplanar()
++LAST_REPAIR = ""     # set by solid(): which repair pass produced the solid ("" = as stored / conform / drop_covered)
++
++
++def _newell(P):
++    c = P.mean(0)
++    return sum(np.cross(P[k] - c, P[(k + 1) % len(P)] - c) for k in range(len(P))), c
++
++
++def _edge_use(faces):
++    import collections
++    E = collections.Counter()
++    for f in faces:
++        for l in loops_of(f):
++            for a, b in zip(l, l[1:] + l[:1]):
++                if a != b:
++                    E[(min(a, b), max(a, b))] += 1
++    return E
++
++
++def drop_slivers(V, faces, wmax=SLIVER_W):
++    """Remove zero-width flaps: single-loop faces narrower than wmax (2 x area / perimeter) with an edge that is not
++    shared by exactly two faces. P545 7.135 PL3/8x21 1/4: a 0.0009-in wide face hinged on a cope edge gave that edge 3
++    users and left 3 free edges, so the plate fell back to an approximate outline. A flap encloses no volume; the
++    other faces are kept as stored (if they do not close without it, the piece still falls back)."""
++    E = _edge_use(faces)
++    out = []
++    for f in faces:
++        ls = loops_of(f)
++        if len(ls) == 1:
++            l = ls[0]; P = V[l]
++            nv, _ = _newell(P)
++            per = sum(np.linalg.norm(P[(k + 1) % len(P)] - P[k]) for k in range(len(P)))
++            if per > 0 and np.linalg.norm(nv) / per < wmax and \
++                    any(E[(min(a, b), max(a, b))] != 2 for a, b in zip(l, l[1:] + l[:1]) if a != b):
++                continue
++        out.append(f)
++    return out
++
++
++WELD_TOL = 1e-3      # in: = the sewing tolerance; weld() merges vertices closer than this
++
++
++def weld(V, faces, tol=WELD_TOL):
++    """Merge vertices closer than the sewing tolerance (conform() merges at 1e-4 in only). 7.312 DUPONT W8x13: cope
++    corners stored 0.0002-0.0007 in apart left 10 free edges around 5-18 um slivers. No vertex moves by more than tol;
++    faces that collapse are skipped by the face builder."""
++    from scipy.spatial import cKDTree
++    used = sorted({i for f in faces for i in f})
++    if len(used) < 2:
++        return faces
++    par = list(range(len(used)))
++
++    def find(a):
++        while par[a] != a:
++            par[a] = par[par[a]]; a = par[a]
++        return a
++    for i, j in cKDTree(np.asarray(V)[used]).query_pairs(tol):
++        par[find(i)] = find(j)
++    rep = {used[i]: used[find(i)] for i in range(len(used))}
++    if all(rep[i] == i for i in used):
++        return faces
++    return [[rep[i] for i in f] for f in faces]
++
++
++def drop_isolated(faces):
++    """Remove faces that share no edge with any other face (every edge used once): they bound no volume. 8.004 TEMP JOB
++    BPL12GAx60 / 7.425 RH Jacksonville BPL3/16x1 1/2: a bent plate's mid-surface marker faces carry kind 7 except one
++    stored with kind 0, which was built as a real face, left 4 free edges and sent 312 + 202 placements to the
++    approximate builder. The stored boundary faces are unchanged (if they do not close, the piece still falls back)."""
++    E = _edge_use(faces)
++    return [f for f in faces
++            if not all(E[(min(a, b), max(a, b))] == 1 for l in loops_of(f) for a, b in zip(l, l[1:] + l[:1]) if a != b)]
++
++
++def merge_coplanar(V, faces, tol=PLANE_TOL):
++    """Overlapping coplanar faces of the same orientation -> one face, their union. 7.1xx-7.4xx cope / notch end faces
++    are stored as overlapping patches (P545 7.135 PL1/2x13 1/2: side x = 7 as y -13.5..-7.5 and y -11.5..-7; C6x8.2
++    cope end as two patches), whose overlap edges then have 3 users. The union covers exactly the points of the stored
++    patches: its outline vertices are the patches' own vertices, plus any crossing point of two patch edges (appended
++    to V). Multi-loop faces are left as they are. Returns (V, faces); faces unchanged if nothing overlaps."""
++    from shapely.geometry import Polygon, MultiPolygon
++    from shapely.geometry.polygon import orient
++    from shapely.ops import unary_union
++    info = []
++    for f in faces:
++        ls = loops_of(f)
++        if len(ls) != 1:
++            info.append(None); continue
++        nv, c = _newell(V[ls[0]])
++        a2 = np.linalg.norm(nv)
++        info.append((ls[0], nv / a2, c, a2 / 2, nv) if a2 > 1e-12 else None)
++    idx = [k for k in range(len(faces)) if info[k] is not None]
++    if len(idx) < 2:
++        return V, faces
++    N = np.array([info[k][1] for k in idx]); C = np.array([info[k][2] for k in idx])
++    taken = np.zeros(len(idx), bool); clusters = []
++    for oi in np.argsort([-info[k][3] for k in idx]):
++        if taken[oi]:
++            continue
++        k = idx[oi]; n = info[k][1]; d = float(n @ info[k][2])
++        taken[oi] = True; mem = [k]
++        # facing the same way and centred on k's plane; then every vertex on it (within tol)
++        for cj in np.where(~taken & (N @ n > 0.5) & (np.abs(C @ n - d) <= tol))[0]:
++            lj, _, _, _, nvj = info[idx[cj]]
++            if np.abs(V[lj] @ n - d).max() <= tol and nvj @ n > 0.5 * np.linalg.norm(nvj):
++                mem.append(idx[cj]); taken[cj] = True
++        if len(mem) > 1:
++            clusters.append((n, d, mem))
++    if not clusters:
++        return V, faces
++    V = np.asarray(V, float); extra = []; drop = set(); new = []
++    for n, d, mem in clusters:
++        u = np.cross(n, [1, 0, 0] if abs(n[0]) < 0.9 else [0, 1, 0]); u /= np.linalg.norm(u); w = np.cross(n, u)
++        polys = {}
++        for k in mem:
++            try:
++                pg = Polygon([(p @ u, p @ w) for p in V[info[k][0]]]).buffer(0)
++            except Exception:
++                pg = None
++            if pg is not None and not pg.is_empty and pg.area > 0:
++                polys[k] = pg
++        ks = list(polys)
++        adj = {k: set() for k in ks}
++        for x in range(len(ks)):
++            for y in range(x + 1, len(ks)):
++                if polys[ks[x]].intersection(polys[ks[y]]).area > 1e-6:
++                    adj[ks[x]].add(ks[y]); adj[ks[y]].add(ks[x])
++        seen = set()
++        for k0 in ks:
++            if k0 in seen or not adj[k0]:
++                continue
++            comp, st = [], [k0]
++            while st:
++                x = st.pop()
++                if x in seen: continue
++                seen.add(x); comp.append(x); st.extend(adj[x])
++            U = unary_union([polys[k] for k in comp])
++            parts = list(U.geoms) if isinstance(U, MultiPolygon) else [U]
++            src = sorted({i for k in comp for i in info[k][0]})
++            S2 = np.array([(V[i] @ u, V[i] @ w) for i in src])
++            faces_c = []
++            ok = True
++            for pg in parts:
++                if pg.geom_type != "Polygon" or pg.is_empty:
++                    ok = False; break
++                pg = orient(pg, 1.0)                     # exterior counter-clockwise in (u, w): normal +n
++                loops = []
++                for ring in [pg.exterior] + list(pg.interiors):
++                    lp = []
++                    for x, y in list(ring.coords)[:-1]:
++                        dd = np.abs(S2 - (x, y)).max(1)
++                        i = int(dd.argmin())
++                        if dd[i] <= tol:
++                            vi = src[i]
++                        else:                            # crossing point of two patch edges, on the plane
++                            vi = len(V) + len(extra); extra.append(n * d + x * u + y * w)
++                        if not lp or lp[-1] != vi:
++                            lp.append(vi)
++                    if len(lp) > 1 and lp[0] == lp[-1]:
++                        lp.pop()
++                    if len(lp) >= 3:
++                        loops.append(lp)
++                if not loops:
++                    ok = False; break
++                f = []
++                for lp in loops:
++                    f += lp + [lp[0]]
++                faces_c.append(f if len(loops) > 1 else loops[0])
++            if ok and faces_c:
++                drop.update(comp); new += faces_c
++    if not drop:
++        return V, faces
++    if extra:
++        V = np.vstack([V, np.array(extra)])
++    return V, [f for k, f in enumerate(faces) if k not in drop] + new
++
++
++def _passes(V, faces, M=None, o=None):
++    """The v5.4 sequence: faces as stored, conform() (merge vertices, split T-junctions), drop_covered()."""
+     sh = _solid_parts(V, faces, M, o)
+     if sh is None:
+-        try:
+-            F2 = conform(V, faces)
+-            sh = _solid_parts(V, F2, M, o)
+-            if sh is None:
+-                F3 = drop_covered(V, F2)
+-                if len(F3) < len(F2):
+-                    sh = _solid_parts(V, conform(V, F3), M, o)
+-        except Exception:
+-            sh = None
++        F2 = conform(V, faces)
++        sh = _solid_parts(V, F2, M, o)
++        if sh is None:
++            F3 = drop_covered(V, F2)
++            if len(F3) < len(F2):
++                sh = _solid_parts(V, conform(V, F3), M, o)
+     return sh
+ 
+ 
++def _repaired(V, faces, M=None, o=None):
++    """Repair stage of solid(), run only when the v5.4 passes leave the faces open (pieces that built in v5.4 are built
++    exactly as before). Uses only the faces the piece file stores:
++      1. keyhole / spike loops split, ring caps dropped (draft v5.5 loops_of / drop_covered), v5.4 passes again;
++      2. faces sharing no edge dropped (drop_isolated), zero-width flaps dropped (drop_slivers) and overlapping
++         coplanar patches merged (merge_coplanar), with the loops split as in 1, then as stored;
++      3. as 2 after welding vertices closer than the sewing tolerance (weld, 0.001 in).
++    Returns a closed valid solid or None; LAST_REPAIR names what was needed."""
++    global _CLEAN_LOOPS, LAST_REPAIR
++
++    def split_any(F):                                    # does the keyhole / spike split change any loop of F?
++        global _CLEAN_LOOPS
++        _CLEAN_LOOPS = False; raw = [loops_of(f) for f in F]
++        _CLEAN_LOOPS = True
++        return any(loops_of(f) != r for f, r in zip(F, raw))
++    try:
++        ks = split_any(faces) or split_any(conform(V, faces))
++        _CLEAN_LOOPS = True
++        sh = _passes(V, faces, M, o)
++        if sh is not None:
++            LAST_REPAIR = "keyhole / spike loops split" if ks else "ring caps over hollow ends dropped"
++            return sh
++        for clean, welded in [(c, w) for w in (False, True) for c in ((True, False) if ks else (False,))]:
++            _CLEAN_LOOPS = clean
++            F1 = weld(V, faces) if welded else faces
++            if welded and F1 is faces:
++                continue
++            F2 = conform(V, F1)
++            F3 = drop_isolated(F2)
++            F4 = drop_slivers(V, F3)
++            V5, F5 = merge_coplanar(V, F4)
++            if len(F4) == len(F2) and F5 is F4 and not welded:
++                continue
++            sh = _passes(V5, F5, M, o)
++            if sh is not None:
++                LAST_REPAIR = " + ".join(x for x, y in (("vertices within 0.001 in welded", welded),
++                                                         ("keyhole / spike loops split", clean),
++                                                         ("isolated faces dropped", len(F3) < len(F2)),
++                                                         ("zero-width faces dropped", len(F4) < len(F3)),
++                                                         ("overlapping coplanar faces merged", F5 is not F4)) if y)
++                return sh
++        return None
++    finally:
++        _CLEAN_LOOPS = False
++
++
++REPAIR_MAX_FACES = 5000   # larger face sets skip the repair stage (time bound)
++
++
++def solid(V, faces, M=None, o=None, repair=False):
++    """Sew planar polygon faces (world transform o + M.T @ v, inches -> mm) into a solid (a compound of solids for
++    multi-body pieces), or None. Retries with repair passes: conform() (merge vertices, split T-junctions), then
++    also drop_covered() (redundant coplanar patches); with repair=True (steel pieces, to_step2.brep_placed) then the
++    _repaired() stage (keyhole / spike loops, isolated faces, zero-width flaps, overlapping coplanar patches).
++    brep.LAST_REPAIR names the repair-stage fix used ("" if none)."""
++    global LAST_REPAIR
++    LAST_REPAIR = ""
++    try:
++        sh = _passes(V, faces, M, o)
++        if sh is None and repair and len(faces) <= REPAIR_MAX_FACES:
++            sh = _repaired(V, faces, M, o)
++    except Exception:
++        sh = None
++    return sh
++
++
+ def _solid_parts(V, faces, M=None, o=None):
+     parts = bodies(faces)
+     if len(parts) > 1:
+@@ -496,58 +744,3 @@
+     except Exception:
+         return None
+ 
+-
+-
+-def boundary_loops(faces):
+-    """Closed chains of edges used by exactly one face (the open rims of a body), as vertex-index loops."""
+-    import collections
+-    E = collections.Counter()
+-    for f in faces:
+-        for l in loops_of(f):
+-            for a, b in zip(l, l[1:] + l[:1]):
+-                E[(min(a, b), max(a, b))] += 1
+-    adj = collections.defaultdict(list)
+-    for (a, b), c in E.items():
+-        if c == 1:
+-            adj[a].append(b); adj[b].append(a)
+-    if any(len(v) != 2 for v in adj.values()):
+-        return None                                   # branching rim: not simple loops
+-    seen = set(); loops = []
+-    for s in list(adj):
+-        if s in seen:
+-            continue
+-        loop = [s]; seen.add(s); prev, cur = None, s
+-        while True:
+-            nxt = [x for x in adj[cur] if x != prev]
+-            if not nxt:
+-                return None
+-            n = nxt[0]
+-            if n == s:
+-                break
+-            if n in seen:
+-                return None
+-            loop.append(n); seen.add(n); prev, cur = cur, n
+-        loops.append(loop)
+-    return loops
+-
+-
+-def cap_open(V, faces, tol=1e-4):
+-    """Faces plus planar caps over the body's open rims (a rim is capped only when all its vertices lie in one
+-    plane within tol): SDS2 stores bar-grating bearing bars as four side faces with open ends. The cap is the planar
+-    face the stored rim already bounds - no vertex is invented. Returns None when a rim is missing or not planar."""
+-    loops = boundary_loops(faces)
+-    if not loops:
+-        return None
+-    caps = []
+-    for l in loops:
+-        if len(l) < 3:
+-            return None
+-        P = V[l]; c = P.mean(0)
+-        n = sum(np.cross(P[i] - c, P[(i + 1) % len(P)] - c) for i in range(len(P)))
+-        if np.linalg.norm(n) < 1e-12:
+-            return None
+-        n = n / np.linalg.norm(n)
+-        if np.abs((P - c) @ n).max() > tol:
+-            return None
+-        caps.append(list(l))
+-    return list(faces) + caps

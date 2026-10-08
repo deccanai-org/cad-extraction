@@ -1,0 +1,14 @@
+[
+ ["v71_champion_bridge", "Completed_Jobs_Data/SDS_Jobs_7.122/CHAMPION BRIDGE.7z", ["CHAMPION BRIDGE/SCHIEL_JOB", "CHAMPION BRIDGE/HARRISON AVENUE/HARRISON_JOB"]],
+ ["v71_doing_steel", "Completed_Jobs_Data/SDS_Jobs_7.122/Doing Steel.7z", ["Doing Steel/Merriam Auto Mall/Merriam_Job"]],
+ ["v71_jobs132", "Completed_Jobs_Data/SDS_Jobs_7.132/JOBS.7z", ["Courtesy Ford/Courtesy Ford_JOB", "Challenge Plant/CHALLENGE PLANT_JOB", "GE SPO_JOB"]],
+ ["v71_seminole", "Completed_Jobs_Data/SDS_Jobs_7.132/SEMINOLE_JOB.7z", ["SEMINOLE_JOB"]],
+ ["v71_saralee", "Completed_Jobs_Data/SDS_Jobs_7.132/SARALEE_JOB.7z", ["SARALEE_JOB"]],
+ ["v71_epi", "Completed_Jobs_Data/SDS_Jobs_7.122/EPI_1.7z", ["EPI/UPMC/UPMC_JOB"]],
+ ["v71_rossin", "Completed_Jobs_Data/SDS_Jobs_7.122/ROSSIN STEEL.7z", ["ROSSIN STEEL/SAN YSIDRO (SW)/SAN YSIDRO_JOB (SW)"]],
+ ["twin_schiel", "Completed_Jobs_Data/SDS_Jobs_7.312/L-Drive/7.135-CONV-JOBS/SCHIEL_JOB.7z", ["SCHIEL_JOB"]],
+ ["twin_merriam", "Completed_Jobs_Data/SDS_Jobs_7.312/Doing Steel/Merriam_Job.7z", ["Merriam_Job"]],
+ ["twin_courtesy", "Completed_Jobs_Data/SDS_Jobs_7.312/Job On 7.312 Data Files/Courtesy Ford.7z", ["Courtesy Ford/Courtesy Ford_JOB"]],
+ ["twin_challenge", "Completed_Jobs_Data/SDS_Jobs_7.312/Job On 7.312 Data Files/Challenge Plant.7z", ["Challenge Plant/CHALLENGE PLANT_JOB"]],
+ ["twin_gespo", "Completed_Jobs_Data/SDS_Jobs_7.312/Job On 7.312 Data Files/GE SPO_JOB.7z", ["GE SPO_JOB"]]
+]

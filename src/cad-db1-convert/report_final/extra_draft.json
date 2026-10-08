@@ -1,0 +1,11 @@
+{
+ "repairs": [
+  "<strong>Tekla DB1 cut frames.</strong> Tekla stores cuts that are square to a part with float noise (0.00024 rad seen). A flange cut 0.014&deg; off a W27X84's own axes made the geometry kernel loop for hours on 44 versions of one model. Cut axes within 0.06&deg; of the part's axes are now snapped exactly onto them; on three cut-heavy test models the output is identical (same parts, faces and extents; largest direction change 0.0033&deg;).",
+  "<strong>Two IFC exports in one file.</strong> One IFC held a Tekla 16.1 model followed by a Tekla 20.0 joist model, both numbering entities from #1, so references resolved into the wrong model and nothing converted. Merged into one valid exchange structure (second block renumbered, one IfcProject so the millimetre unit applies) and converted: 12,848 parts.",
+  "<strong>Corrupt source coordinates.</strong> Four IFC files store points such as z = 2.6&times;10<sup>266</sup>. The exact-geometry path had written them into the STEP as unreferenced points (solids were correct, but the file's extent read as astronomical). Elements with such coordinates are now tessellated instead; part counts unchanged (5,588 / 5,052 / 4,910 / 5,356). Packaged copies replaced.",
+  "<strong>Elements that crash the geometry kernel.</strong> For IFC models that segfaulted, the crashing elements are found by bisection and left out; every other element converts. Each result lists the excluded elements by GUID.",
+  "<strong>IFC cut off mid-statement.</strong> A file whose last statement was only half written is repaired only when nothing else is missing: the unfinished statement is dropped and every reference must still resolve (a 284 MB Tekla 18.1 model lost 49 bytes of one property link).",
+  "<strong>Legacy IFC inputs.</strong> IFC2X2 / IFC2X files declared as IFC2X3 (accepted only when the whole file parses strictly), zipped IFC saved as .ifc, and unreadable headers normalised.",
+  "<strong>Worker fix.</strong> Jobs killed for memory are released immediately with a larger memory reservation; a type error had left them locked for 40 minutes."
+ ]
+}

@@ -1,0 +1,418 @@
+[
+ {
+  "engine": "9.08",
+  "id": "1711581f7ff26e26f3e93a0bd7dbafcebc345ba73fb8381c90d6aefb81b52bba",
+  "size": 1487239,
+  "key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_S Drive Backup_Duvinage_24-D7586_JOHNS HOPKINS UNIVERSITY AGORA COMMUNITY.7z/24-D7586_JOHNS HOPKINS UNIVERSITY AGORA COMMUNITY/24-D7586_JOHNS HOPKINS UNIVERSITY AGORA COMMUNITY.db1",
+  "ifc": [
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_S Drive Backup_Duvinage_24-D7586_JOHNS HOPKINS UNIVERSITY AGORA COMMUNITY.7z/24-D7586_JOHNS HOPKINS UNIVERSITY AGORA COMMUNITY/IFC/out.ifc",
+    2335297
+   ]
+  ],
+  "members": 1783
+ },
+ {
+  "engine": "9.08",
+  "id": "561f4d83db6024eff61108a26f5b44a0517837a2f29fbe00ed7317527d19cf0e",
+  "size": 2172282,
+  "key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Lenex_ASV Women & Infant.7z/ASV Women & Infant_ABM/ASV Women & Infant_ABM.db1",
+  "ifc": [
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Lenex_ASV Women & Infant.7z/ASV Women & Infant_ABM/IFC/ASV_ref.ifc",
+    54293
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Lenex_ASV Women & Infant.7z/ASV Women & Infant_ABM/IFC/ASV_stl.ifc",
+    1893264
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Lenex_ASV Women & Infant.7z/ASV Women & Infant_ABM/IFC/New folder/ASV WOMENS & INFANT_REF.ifc",
+    54309
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Lenex_ASV Women & Infant.7z/ASV Women & Infant_ABM/IFC/New folder/ASV WOMENS & INFANT_STL.ifc",
+    1892864
+   ]
+  ],
+  "members": 2168
+ },
+ {
+  "engine": "9.08",
+  "id": "7f212a4a5b6a4174efac232c214344504dfc6a265e4ff5dd6135a2525f003f4a",
+  "size": 2318697,
+  "key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_S Drive Backup_Duvinage_D-7693 Lehman Construction_.7z/D-7693 Lehman Construction_/D-7693 Lehman Construction_.db1",
+  "ifc": [
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_S Drive Backup_Duvinage_D-7693 Lehman Construction_.7z/D-7693 Lehman Construction_/IFC/out.ifc",
+    2306900
+   ]
+  ],
+  "members": 1225
+ },
+ {
+  "engine": "9.08",
+  "id": "158fd94f7b6b49a0696a124b65942a806a71ef343e217b29e626331202feb834",
+  "size": 2386410,
+  "key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_S Drive Backup_Duvinage_24-103 Bowie self storage.7z/24-103 Bowie self storage/24-103 Bowie self storage.db1",
+  "ifc": [
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_S Drive Backup_Duvinage_24-103 Bowie self storage.7z/24-103 Bowie self storage/IFC/out.ifc",
+    2172673
+   ]
+  ],
+  "members": 1316
+ },
+ {
+  "engine": "9.08",
+  "id": "08f9049a454a376d001fdfb3edbdb112eda8f935492a13d27628355f3237c108",
+  "size": 5279794,
+  "key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_S Drive Backup_Duvinage_24-101 GRAND HYATT.7z/24-101 GRAND HYATT/24-101 GRAND HYATT/24-101 GRAND HYATT.db1",
+  "ifc": [
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_S Drive Backup_Duvinage_24-101 GRAND HYATT.7z/24-101 GRAND HYATT/24-101 GRAND HYATT/IFC/out.ifc",
+    840274
+   ]
+  ],
+  "members": 5116
+ },
+ {
+  "engine": "9.08",
+  "id": "c83082afcbb52770569f073f0e59a3e772cc91d989fd1bc192f3195595e2bdbe",
+  "size": 5896663,
+  "key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Lenex_ASV Women & Infant.7z/ASV Women & Infant_ABM_Latest/ASV Women & Infant_ABM_Latest.db1",
+  "ifc": [
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Lenex_ASV Women & Infant.7z/ASV Women & Infant_ABM_Latest/IFC/ASV_ref.ifc",
+    319518
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Lenex_ASV Women & Infant.7z/ASV Women & Infant_ABM_Latest/IFC/ASV_stl.ifc",
+    3465423
+   ]
+  ],
+  "members": 3131
+ },
+ {
+  "engine": "9.08",
+  "id": "7d2e84707bb1f3d9415e699ec82c8e909febb47d0634a3a0fb3bf7925d520a99",
+  "size": 6056622,
+  "key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_M Drive Backup_Lenex_10. ASV Brian & Spine.7z/10. ASV Brian & Spine/11. Model Back-up/1. 05-24-2023 Old Model before re-design/ASV Brain and Spine_ABM/ASV Brain and Spine_ABM.db1",
+  "ifc": [
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_M Drive Backup_Lenex_10. ASV Brian & Spine.7z/10. ASV Brian & Spine/11. Model Back-up/1. 05-24-2023 Old Model before re-design/ASV Brain and Spine_ABM/IFC/ASV_ref.ifc",
+    25884
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_M Drive Backup_Lenex_10. ASV Brian & Spine.7z/10. ASV Brian & Spine/11. Model Back-up/1. 05-24-2023 Old Model before re-design/ASV Brain and Spine_ABM/IFC/ASV_stl-Grid.ifc",
+    25890
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_M Drive Backup_Lenex_10. ASV Brian & Spine.7z/10. ASV Brian & Spine/11. Model Back-up/1. 05-24-2023 Old Model before re-design/ASV Brain and Spine_ABM/IFC/ASV_stl.ifc",
+    1716464
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_M Drive Backup_Lenex_10. ASV Brian & Spine.7z/10. ASV Brian & Spine/11. Model Back-up/1. 05-24-2023 Old Model before re-design/ASV Brain and Spine_ABM/IFC/out.ifc",
+    1716475
+   ]
+  ],
+  "members": 1483
+ },
+ {
+  "engine": "9.08",
+  "id": "8ec3ba13c9453ebc647cfd00c2a9e9c410dd535c0228b1aacf5b778cdac7a811",
+  "size": 6337524,
+  "key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_M Drive Backup_Lenex_10. ASV Brian & Spine.7z/10. ASV Brian & Spine/11. Model Back-up/1. 05-24-2023 Old Model before re-design/ASV Brain and Spine_Rev#2-ABM/ASV Brain and Spine_Rev#2-ABM.db1",
+  "ifc": [
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_M Drive Backup_Lenex_10. ASV Brian & Spine.7z/10. ASV Brian & Spine/11. Model Back-up/1. 05-24-2023 Old Model before re-design/ASV Brain and Spine_Rev#2-ABM/IFC/ASV_stl.ifc",
+    4245027
+   ]
+  ],
+  "members": 1268
+ },
+ {
+  "engine": "9.08",
+  "id": "de3b225fd3ef20684908213d64cd8621e5c60b21617169a35944bcc8c9658218",
+  "size": 8220081,
+  "key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_S Drive Backup_Duvinage_24-105 Broadway Lofts.7z/24-105 Broadway Lofts/24-105 Broadway Lofts.db1",
+  "ifc": [
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_S Drive Backup_Duvinage_24-105 Broadway Lofts.7z/24-105 Broadway Lofts/IFC/24-105 STAIR#A.ifc",
+    5855399
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_S Drive Backup_Duvinage_24-105 Broadway Lofts.7z/24-105 Broadway Lofts/IFC/24-105 STAIR#B.ifc",
+    4699070
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_S Drive Backup_Duvinage_24-105 Broadway Lofts.7z/24-105 Broadway Lofts/IFC/STAIR#A.ifc",
+    6451966
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_S Drive Backup_Duvinage_24-105 Broadway Lofts.7z/24-105 Broadway Lofts/IFC/out.ifc",
+    5191218
+   ]
+  ],
+  "members": 6965
+ },
+ {
+  "engine": "9.08",
+  "id": "f34e32d5075c86a52271e62cd02deee71af05c31ed2b86bbc624e59d484b524e",
+  "size": 14518652,
+  "key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_S Drive Backup_Duvinage_23-111 North village P3-Hotel.7z/23-111 North village P3-Hotel/23-111 North village P3-Hotel.db1",
+  "ifc": [
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_S Drive Backup_Duvinage_23-111 North village P3-Hotel.7z/23-111 North village P3-Hotel/IFC/out.ifc",
+    7877631
+   ]
+  ],
+  "members": 1917
+ },
+ {
+  "engine": "9.08",
+  "id": "617ba514c9a29fb69102449d745cd354cf81d58ac81d2576500644aace8c657d",
+  "size": 17103094,
+  "key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Lenex_ASV Brain and Spine_ABM.zip/ASV Brain and Spine_ABM/ASV Brain and Spine_ABM.db1",
+  "ifc": [
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Lenex_ASV Brain and Spine_ABM.zip/ASV Brain and Spine_ABM/IFC/ASV BS_grid.ifc",
+    28347
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Lenex_ASV Brain and Spine_ABM.zip/ASV Brain and Spine_ABM/IFC/ASV BS_ref.ifc",
+    492185
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Lenex_ASV Brain and Spine_ABM.zip/ASV Brain and Spine_ABM/IFC/ASV BS_stl.ifc",
+    4290443
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Lenex_ASV Brain and Spine_ABM.zip/ASV Brain and Spine_ABM/IFC/dont delete/ASV Brain & Spine_Misc.ifc",
+    261836
+   ]
+  ],
+  "members": 814
+ },
+ {
+  "engine": "9.08",
+  "id": "8ec1c46de9f58f6010125e81a1d7ec119a5d19506f71324705c6e1e19c45239c",
+  "size": 21600253,
+  "key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_M Drive Backup_Lenex_10. ASV Brian & Spine.7z/10. ASV Brian & Spine/11. Model Back-up/1. 05-24-2023 Old Model before re-design/ASV Brain and Spine/ASV Brain and Spine.db1",
+  "ifc": [
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_M Drive Backup_Lenex_10. ASV Brian & Spine.7z/10. ASV Brian & Spine/11. Model Back-up/1. 05-24-2023 Old Model before re-design/ASV Brain and Spine/IFC/ASV BS_ref.ifc",
+    892774
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_M Drive Backup_Lenex_10. ASV Brian & Spine.7z/10. ASV Brian & Spine/11. Model Back-up/1. 05-24-2023 Old Model before re-design/ASV Brain and Spine/IFC/ASV BS_stl.ifc",
+    17467751
+   ]
+  ],
+  "members": 18025
+ },
+ {
+  "engine": "9.08",
+  "id": "ba1b5a681ba89e129abe89bd73f36fc91dfb830e4ae2a7a7cf09bbd3c182f73b",
+  "size": 21698401,
+  "key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_S Drive Backup_Duvinage_23-110 Grand Hyatt Grand Cayman.7z/23-110 Grand Hyatt Grand Cayman/23-110 Grand Hyatt Grand Cayman.db1",
+  "ifc": [
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_S Drive Backup_Duvinage_23-110 Grand Hyatt Grand Cayman.7z/23-110 Grand Hyatt Grand Cayman/IFC/out.ifc",
+    1647741
+   ]
+  ],
+  "members": 13195
+ },
+ {
+  "engine": "9.08",
+  "id": "e6607bcfdf6cca1978733f05c185977ef2ef40478119965fd9f8c2dd28abbfb5",
+  "size": 39708026,
+  "key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Brand Industries Ltd_165 - Intel - CUB2_ABM.7z/165 - Intel - CUB2_ABM/165 - Intel - CUB2_ABM.db1",
+  "ifc": [
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Brand Industries Ltd_165 - Intel - CUB2_ABM.7z/165 - Intel - CUB2_ABM/IFC/INTEL CUB-2_AB & EMBED.ifc",
+    6674107
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Brand Industries Ltd_165 - Intel - CUB2_ABM.7z/165 - Intel - CUB2_ABM/IFC/XLCEX-AAA-000-SF-A0Q00-BRD-CM.ifc",
+    5678514
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Brand Industries Ltd_165 - Intel - CUB2_ABM.7z/165 - Intel - CUB2_ABM/IFC/out.ifc",
+    38299
+   ]
+  ],
+  "members": 5296
+ },
+ {
+  "engine": "9.08",
+  "id": "ecec7a022ca5f08f6ea119437706009042441935e7fbf14198ef4468d7ef822b",
+  "size": 42317091,
+  "key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_M Drive Backup_Brand Industries Ltd_4.176-Lachish campus_Intel.7z/4.176-Lachish campus_Intel/19. IFC From Client/176-LVSS.ZIP!/176-LVSS/176-LVSS.db1",
+  "ifc": [
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_M Drive Backup_Brand Industries Ltd_4.176-Lachish campus_Intel.7z/4.176-Lachish campus_Intel/19. IFC From Client/176-LVSS.ZIP!/176-LVSS/IFC/176-005.ifc",
+    1919576
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_M Drive Backup_Brand Industries Ltd_4.176-Lachish campus_Intel.7z/4.176-Lachish campus_Intel/19. IFC From Client/176-LVSS.ZIP!/176-LVSS/IFC/176-REV-1.ifc",
+    356982
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_M Drive Backup_Brand Industries Ltd_4.176-Lachish campus_Intel.7z/4.176-Lachish campus_Intel/19. IFC From Client/176-LVSS.ZIP!/176-LVSS/IFC/176-REV-2.ifc",
+    439315
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_M Drive Backup_Brand Industries Ltd_4.176-Lachish campus_Intel.7z/4.176-Lachish campus_Intel/19. IFC From Client/176-LVSS.ZIP!/176-LVSS/IFC/176-full.ifc",
+    17085081
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_M Drive Backup_Brand Industries Ltd_4.176-Lachish campus_Intel.7z/4.176-Lachish campus_Intel/19. IFC From Client/176-LVSS.ZIP!/176-LVSS/IFC/176.ifc",
+    1815387
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_M Drive Backup_Brand Industries Ltd_4.176-Lachish campus_Intel.7z/4.176-Lachish campus_Intel/19. IFC From Client/176-LVSS.ZIP!/176-LVSS/IFC/LVSS structural steel.ifc",
+    1969044
+   ]
+  ],
+  "members": 1600
+ },
+ {
+  "engine": "9.08",
+  "id": "9f337a86b00c13ac0e644ea4db1677efe513a101a5ab95ee3c19f5546db7ed85",
+  "size": 43395083,
+  "key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Lenex_ASV Brain and Spine.7z/ASV Brain and Spine/ASV Brain and Spine.db1",
+  "ifc": [
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Lenex_ASV Brain and Spine.7z/ASV Brain and Spine/IFC/ASV BS_MISC TEAM-1.ifc",
+    18729209
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Lenex_ASV Brain and Spine.7z/ASV Brain and Spine/IFC/ASV BS_MISC_TEAM.ifc",
+    158480
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Lenex_ASV Brain and Spine.7z/ASV Brain and Spine/IFC/ASV BS_ref.ifc",
+    722521
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Lenex_ASV Brain and Spine.7z/ASV Brain and Spine/IFC/ASV BS_stl.ifc",
+    19553314
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Lenex_ASV Brain and Spine.7z/ASV Brain and Spine/IFC/dont delete/210923/ASV Brain & Spine_Misc.ifc",
+    6371570
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Lenex_ASV Brain and Spine.7z/ASV Brain and Spine/IFC/dont delete/ASV Brain & Spine_Misc.ifc",
+    4127701
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Lenex_ASV Brain and Spine.7z/ASV Brain and Spine/IFC/dont delete/ASV Brain & Spine_Misc_latest.ifc",
+    3204494
+   ]
+  ],
+  "members": 18619
+ },
+ {
+  "engine": "9.08",
+  "id": "9a527605503b4b72346334c40ad228f303e62a570f56597d8212a85cc9341791",
+  "size": 71566978,
+  "key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Lenex_ASV Women & Infant.7z/ASV Women & Infant/ASV Women & Infant.db1",
+  "ifc": [
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Lenex_ASV Women & Infant.7z/ASV Women & Infant/IFC/ASV_ref.ifc",
+    970060
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Lenex_ASV Women & Infant.7z/ASV Women & Infant/IFC/ASV_stl.ifc",
+    51863863
+   ]
+  ],
+  "members": 46284
+ },
+ {
+  "engine": "9.08",
+  "id": "4f49f15e49de6d152a89dac9a65a3daae7ee77e871708464f7492d6c9adc9a0b",
+  "size": 224253743,
+  "key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_M Drive Backup_Brand Industries Ltd_5. Intel-CUB.2.7z/5. Intel-CUB.2/13.Model Backup/11-12-2023/197 - Intel - CUB2_Trestle_Building/197 - Intel - CUB2_Trestle_Building.db1",
+  "ifc": [
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_M Drive Backup_Brand Industries Ltd_5. Intel-CUB.2.7z/5. Intel-CUB.2/13.Model Backup/11-12-2023/197 - Intel - CUB2_Trestle_Building/IFC/197-CUB-2_Trestle Scope Confirmation .ifc",
+    542881
+   ]
+  ],
+  "members": 408
+ },
+ {
+  "engine": "9.08",
+  "id": "7b87082a053941911216ec53b71175d98af0c2d9a2c0627f5654b5ef73df8d00",
+  "size": 240214075,
+  "key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Brand Industries Ltd_197 - Intel - CUB2_Trestle_Building.7z/197 - Intel - CUB2_Trestle_Building/197 - Intel - CUB2_Trestle_Building.db1",
+  "ifc": [
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Brand Industries Ltd_197 - Intel - CUB2_Trestle_Building.7z/197 - Intel - CUB2_Trestle_Building/IFC/XLCEX-AAA-000-SF-A0Q00-BRD-CM.zip!/XLCEX-AAA-000-SF-A0Q00-BRD-CM.ifc",
+    28685938
+   ]
+  ],
+  "members": 8138
+ },
+ {
+  "engine": "9.08",
+  "id": "b992f41e4f1865dc070bbd77feced05d458568add8e762963bf242df0a1994e6",
+  "size": 301458986,
+  "key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Brand Industries Ltd_165 - Intel - CUB2.7z/165 - Intel - CUB2/165 - Intel - CUB2.db1",
+  "ifc": [
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Brand Industries Ltd_165 - Intel - CUB2.7z/165 - Intel - CUB2/IFC/185-Intel Cub.2_Retaining wall guardrails_05022025.ifc",
+    2088335
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Brand Industries Ltd_165 - Intel - CUB2.7z/165 - Intel - CUB2/IFC/Missing Support.ifc",
+    95260
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Brand Industries Ltd_165 - Intel - CUB2.7z/165 - Intel - CUB2/IFC/Old Files/Complete IFC Of Supports.ifc",
+    121043
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Brand Industries Ltd_165 - Intel - CUB2.7z/165 - Intel - CUB2/IFC/Old Files/Pipe support-1.ifc",
+    105127
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Brand Industries Ltd_165 - Intel - CUB2.7z/165 - Intel - CUB2/IFC/Old Files/Pipe support-2.ifc",
+    160430
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Brand Industries Ltd_165 - Intel - CUB2.7z/165 - Intel - CUB2/IFC/Old Files/SUPPORT-2.ifc",
+    32225
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Brand Industries Ltd_165 - Intel - CUB2.7z/165 - Intel - CUB2/IFC/Old Files/SUPPORT-6.ifc",
+    121473
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Brand Industries Ltd_165 - Intel - CUB2.7z/165 - Intel - CUB2/IFC/Old Files/Support#1.ifc",
+    104192
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Brand Industries Ltd_165 - Intel - CUB2.7z/165 - Intel - CUB2/IFC/Old Files/Support#7 Updated.ifc",
+    71264
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Brand Industries Ltd_165 - Intel - CUB2.7z/165 - Intel - CUB2/IFC/Old Files/XLCEX-AAA-000-SF-A0T00-BRD-CM-1.ifc",
+    109271
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Brand Industries Ltd_165 - Intel - CUB2.7z/165 - Intel - CUB2/STP_files/185-DSFR2000___.ifc",
+    81922
+   ],
+   [
+    "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_Backup 2026_N Drive Backup_Brand Industries Ltd_165 - Intel - CUB2.7z/165 - Intel - CUB2/STP_files/185-DSFR6000___.ifc",
+    89255
+   ]
+  ],
+  "members": 9261
+ }
+]

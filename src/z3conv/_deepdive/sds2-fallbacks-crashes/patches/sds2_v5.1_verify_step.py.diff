@@ -1,0 +1,37 @@
+--- a/sds2-step-pipeline/decode/verify_step.py
++++ b/sds2-step-pipeline/decode/verify_step.py
+@@ -24,13 +24,30 @@
+ 
+ 
+ def product_names(path):
+-    """PRODUCT('name',...) entities in file order (one per written solid)."""
+-    rx = re.compile(r"=\s*PRODUCT\('([^']*)'")
+-    out = []
++    """PRODUCT('name',...) entities in file order (one per written solid). The STEP writer wraps long entities: the
++    name can start on the line after "PRODUCT(" and itself continue on the next line (reference parts / tagged
++    nominal bolts whose part name is the full instance label). A line-only regex missed those, and when the miss made
++    the name count equal the shape count the assembly was read as one shape (7.425 NVX: "1 top-level shapes")."""
++    rx = re.compile(r"=\s*PRODUCT\(\s*'([^']*)'")
++    rx_open = re.compile(r"=\s*PRODUCT\(\s*('[^']*)?$")
++    out = []; buf = None
+     with open(path, encoding="latin-1") as f:
+         for line in f:
++            line = line.rstrip("\r\n")
++            if buf is not None:
++                buf += line
++                m = re.match(r"\s*'([^']*)'", buf)
++                if m:
++                    out.append(m.group(1)); buf = None
++                elif len(buf) > 8192:
++                    buf = None
++                continue
+             m = rx.search(line)
+-            if m: out.append(m.group(1))
++            if m:
++                out.append(m.group(1)); continue
++            m = rx_open.search(line)
++            if m:
++                buf = m.group(1) or ""
+     return out
+ 
+ 

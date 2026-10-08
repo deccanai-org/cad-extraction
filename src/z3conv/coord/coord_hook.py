@@ -1,0 +1,43 @@
+#!/usr/bin/env python3
+"""Coordinator hook for automatic packaging (call once per coordinator round, after build_index wrote index.jsonl.gz).
+
+    import coord_hook
+    blk = coord_hook.round(write=True)        # -> dict for conv_status['packaging']
+
+What one round does (pkg.pkg_delta):
+  1. shipped set = rows of the current index that pass pkgcore.ship_decision (class 1; verified where a verifier merges)
+  2. minus the packaging ledger (compacted from _state/packaging/ledger_parts/) -> 'package' jobs, one per affected project
+     (create when the project does not exist yet, update otherwise); a shipped STEP whose step_key or ETag changed -> refresh
+  3. models / placements that left the shipped set -> appended to _state/packaging/removals_pending.jsonl (never applied here)
+  4. writes the jobs list (PKG_JOBS_KEY), the immutable index snapshot the jobs use, status.json, ledger.jsonl + ledger_index.json
+Jobs whose project still has an open (unfinished) job are not re-emitted: the job id is stable for the same delta, so an open job
+keeps its id; a project lock (_state/packaging/locks/) guarantees one writer per project anyway.
+"""
+import os, sys
+HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
+os.environ.setdefault('PKG_ALLOW_WRITE', '1')
+import pkg
+
+
+DISK_ADAPTERS = {'zen4': 'cad-disk-extract/_control/z3conv/package/active_zen4'}   # (h) per-disk activation flags (lead review first)
+
+
+def round(write=True, adapter='zen3', policy=None):
+    jobs, status = pkg.pkg_delta(adapter, policy=policy, write=write)
+    # (h, phase 2) another disk's packaging runs only after its dry-run report was reviewed and its own control flag exists
+    for name, flag in DISK_ADAPTERS.items():
+        try:
+            pkg.pc.s3c().head_object(Bucket='annotationprod', Key=flag)
+        except Exception:
+            continue
+        try:
+            _, st = pkg.pkg_delta(name, policy=policy, write=write)
+            status = dict(status, disks=dict(status.get('disks') or {}, **{name: st}))
+        except Exception as e:
+            status = dict(status, disks=dict(status.get('disks') or {}, **{name: {'error': f'{type(e).__name__}: {str(e)[:200]}'}}))
+    return status
+
+
+if __name__ == '__main__':
+    import json
+    print(json.dumps(round(write='--write' in sys.argv), indent=1))

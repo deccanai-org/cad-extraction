@@ -1,0 +1,456 @@
+#!/usr/bin/env python3
+"""Zenitude-data-3 Tekla DB1 -> STEP worker (fleet kit; data-4 decoder pipeline + data-3 grading signals).
+
+Job list  _state/conv/db1/jobs.json (bim)   one job per distinct model DB1 sha256 (xslib.db1 libraries excluded)
+Output    conversions/db1-step/<sha256>.stp (+ .check.json, .png)
+Detail    _state/conv/db1/detail/<sha256>.{decoded_parts.json.gz, census.json, src_parts.jsonl.gz, step_parts.jsonl.gz}
+Result    _state/conv/db1/results/<sha256>.json
+Grading signals: decoder inventory per part (category member / connection / other, written or skipped + reason, bolt
+groups, catalog misses), STEP check (OCC read-back per root, BRepCheck + volume per solid, bbox, render), join of the
+decoder's intermediate IFC (expected analytic volume per part) with the STEP by GlobalId.
+
+Same pipeline as the finished Disk-1/2 run (cad-disk-extract/_control/db1-v2, code db1-2026-09-25g + cut-snap + arc2):
+decode (db1dec: version layout re-verified per file, variants of every approved engine) -> IFC of Tekla-exact
+extrusions (db1step: member axis agreement >= 0.9, COLUMN parts vertical, plausible profiles, cut-frame snapping,
+edge-by-edge arcs) -> ifc2step5.py --mode hybrid --prec 2 --threads 4 on ifcopenshell 0.8.4.post1 -> kernel crash /
+hang: bisect + exclude the culprit elements (<= max(50, 1%)) -> flavour markers + OCC read-back + bbox check.
+A DB1 is self-contained (model database file; no sibling files are read). Engines not in layouts.json are
+recorded as unapproved_engine (never guessed).
+"""
+import os, sys, re, json, time, gzip, zlib, collections, hashlib
+HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
+import convfleet as cf
+os.environ.setdefault('V6_FAR_VERIFY', '0')    # (verifier 10:10Z) far mode OFF: its far-origin L0 solids read invalid in place (15,060 of 38,646)
+
+CODE = 'z3-db1-2026-10-01v'
+# z3 v: u + Tekla slots checked part by part against Tekla's own NC1 files in the same archives (193 models):
+#       (1) 'rotate slots' decoded (old part-attr byte @368; 7.x stride-389 @385; stride-317 @265: 0 no / 1 even plies / 2 odd plies);
+#           slot direction vs NC 4,742 / 4,745 on 6.87-7.30, 3,346 / 3,346 on 7.64 (u cut those slots 90 deg off);
+#       (2) 8.x slot ply selection read at +21 without the variable-block shift (8.07: 688 / 688 groups; u read +69);
+#       (3) slot engines unchanged (6.87 / 7.01 / 7.64 / 8.53): no further engine reaches 99 % per part vs NC on a multi-model sample
+#           (7.24 95 %, 8.85 94 %, 8.44 98 %, 7.82 98 %; 8.07 100 % on same-revision NC but 94.7 % on direction in one model);
+#       (4) panels: square A*A names exact ('parametric_rect_square'); A*B exact ('parametric_rect_hb', A = height along y) on
+#           7.64 / 7.82 / 8.07 / 8.53 only (Tekla IFC truth 140 / 140, 0 rotated); other engines keep 'orientation assumed';
+#       (5) headed studs unchanged: Tekla's own geometry has a catalog head the DB1 does not store, so it stays a stand-in
+# z3 o: n + tekla-slots (6.87 / 7.01 slotted holes from the group's 'slotted holes in part 1..5' mask, parts by ply from the head,
+#       validated on Tekla NC 374/374 + 116/116; old-engine PL / F.B a*b plates with a > b: thickness = the smaller value along z)
+#       + ifc2step6 6.1.4 STEP stage
+# z3 u: t + old-engine curved beams: 3-point polybeams with an arc point (polygon record chamfer type 40) written as the exact circular
+#       arc (IfcRevolvedAreaSolid; bbox 7/7 within 1 mm vs Tekla's export, tagged approx) + own bolt catalogs of 0f3629014894 /
+#       7a6a190dfd82 (assdb / screwdb from the unextracted 0120_ZAZA archive): nominal heads 1,244 -> 0 on both
+# z3 t: s + P12 validated subset: perpendicular Tekla fitting trims on profile extrusions for 8.07 / 8.53 / 8.85 / 9.08 (exact trim,
+#       no boolean; 99.85-100 % better-or-equal vs Tekla IFC, 8.07 98.0 %); line cuts and oblique fittings stay off and tagged
+# z3 s: r + tekla-slots A (slot selection bits kept by the isolated-attribute salvage; 2-part overlapping plies ranked by the grip
+#       window; flush tolerance 2.0 mm with a 3 mm gap guard): six 6.87 models slotted-cut-round 45 -> 0, 0 invalid, same solids
+# z3 r: q + Tekla environment bolt catalog (owner 18:10Z): bolt / nut / washer standards the model folder's own assdb/screwdb do not
+#       size are sized from the environment screwdb consensus (bolt_catalog.json = class1-readiness c1_env: the own entries unchanged,
+#       31 more models); such bolts count in bolt_stats tekla_env_catalog (info tag, not a class-1 blocker)
+# z3 q: p + verifier fixes (06:30Z): audit P6 merges coaxial holes only when they overlap along the axis (4,934 of 7,850 merges
+#       joined two holes up to 629 mm apart into one cylinder); audit P4: a group whose type-10 list names none of the parts its bolt
+#       meets falls back to the grip rule, a listed part always keeps its hole (also over not-a-ply); cut-not-applied P12 (new-engine
+#       fittings) off by default (DB1_FITTINGS_NEW=1), parts tagged 'fitting / line cut not applied'; tekla-slots v2: new-engine slots
+#       7.64 / 8.53 (selection bits at attribute +25; NC 1246 / 1249, 619 / 621), 7.x slotted accounting; the v2 7.64 thin-side rule
+#       is P15 (one copy). P15 / P8 'thickness = the smaller value' (Tekla's documented rule) on every engine; validated on the old
+#       engines (459 / 459 bolt plies vs recorded grips, Tekla NC agrees) and 7.64 (743 / 743 a>b parts vs Tekla IFC, 17,887 a<=b
+#       match); 8.53 / 9.x not validated (no a>b plate in their truth pairs; one 9.08 pair agrees 10 / 11) - kept on (lead 07:20Z)
+# z3 p: o + cut-not-applied (fittings / line cuts decoded and applied: old engines db1old P13, new engines the eng fork's fittings.py;
+#       Tekla operative (obj_type 11) cutters used as cuts, not steel; dropped edited parts kept; R.B round bars; bare-number cut depths;
+#       zero-thickness cuts counted apart; arc-outline sliver repair; P15 'PL a*b' / P8 'F.B' thickness = the smaller value in section_for,
+#       both engines (replaces code o's old-engine tekla-slots swap: one copy of that rule; its stats kept). 106 models: cuts applied
+#       38,092 -> 101,921, unbuilt 260 -> 6, no status change, no lost holes)
+# z3 n: m + audit-db1-codes (old-engine polybeams written along their whole polyline; 7.1-7.4x relation records stride 61 -> cuts
+#       applied on 7.24 / 7.30; 7.30 bolts; holes only in Tekla's bolted parts / within the grip; coaxial duplicate holes cut once)
+#       + class1-readiness (bolt catalog rebuilt from the models' own assdb / screwdb with per-length heads; holes-only bolts not
+#       counted nominal; ASTM tables not exact where the model's assdb maps the standard; v2 stats keys) + ifc2step6 6.1.1 STEP stage
+# z3 m: l + kit_v2 update (grader keys in the 7.5+ bolt stats, raw csys x for bolt groups, full ply thickness in the grip window)
+#       + engine variants #2 (9.08 / 9.50 float64 contour outlines, data-4 no_member_layout record variants, attr-link overrule,
+#       empty_model statuses; attrlink.py) + coverage-regression kit fixes (ambiguous catalog entry -> no geometry; overlay for
+#       the 5 Lego 1620-D models; best-of compares with every ok stored result) + hole-tolerance-residue (old engines: field 4
+#       as stored, any sign / size, d + t <= 0 = no hole; no cuts in members the bolt runs inside) + kit_v2 update 3 (Tekla
+#       dims at the table's true inch diameter for metric-rounded old-engine bolts)
+# z3 l: k + ifc2step6 6.1.0-rc in the STEP stage (instanced parts as MAPPED_ITEM, L2 loop-order fix, openings transcoded to kernel)
+# z3 k: j + Tekla improver kit_v2: engines >= 7.5 decode / place / write bolt groups (db1bolts2, 65/73-byte group records, pattern
+#       records) and cut d + tolerance holes in the related parts within the grip; head / nut / washer dims from Tekla's own
+#       assemblies harvested from 2,500 Tekla IFC exports (after the model's own catalog, before the standard tables), all engines;
+#       crash fallback ifc_unhole (strip only the culprits' bolt-hole subtractions) before ifc_exclude
+# z3 j: i + profile overlay v2 (36 of 52 profile reasons cleared; L150*90*9 global, D<d> rounds proven by report weights, zero /
+#       denormal origin records dropped) + Tekla 9.21 / 9.50 layouts (9.08 geometry, stride-381 attribute record; approved)
+# z3 i: bolt geometry from the model's own assdb/screwdb catalog (bolt_catalog.json, exact), proven washer flags (d4 head, d2 nut, d3 inferred)
+# z3 h: profile overlay (global + per-model, models' own profdb / reports) + db1prof fixes (Latin-1 names, ELD/EPD frustums, null records)
+#       + STEP stage on ifc2step6 (outward shells, healing, per-part verification, [v6:] tags); versioned outputs + best-of
+# z3 g: db1old point table keeps the clean copy of an id over stray denormal copies (axis-guard deep dive: 8/9 affected models recover their dropped parts, 6/6 controls identical)
+# z3 f: decoded bolt placement (head +z, underside f6 + f10/2), assembly flags (holes-only groups, washers, nuts), washers as rings
+# z3 e: hole tolerance decoded from the old-engine bolt record (holes = stored d + tolerance, as the Tekla model cuts them)
+# z3 d: bolt standard decoded (material field) -> ASTM heavy hex / hex and ISO 4014/4032 head+nut tables, ASTM inch-size mapping within 1 mm, AISC / ISO 273 hole clearance
+# z3 c: Tekla bolt groups + clearance holes for engines 6.87/7.01/7.24 (db1bolts; positions identical to the owner's Windows pipeline), bolts as exact faceted polyhedra, [approx: ...] tags on derived parts, profile-less 8.x records counted as bolt groups
+# z3 b: parsers for older Tekla names ([h*b*tw*tf channels, U<n> -> UPN, TUBE d*t, L a*t, F.B flats); code-a results re-run
+# z3 a: data-4 code d + per-part decoder records, plate/stud IFC classes, step_check, census of the decoder IFC, grade_join
+# d: runtime v4 (redo entries by failure reason: download_error requeue after the extraction repair)
+# c: runtime convfleet-v3 (redo list read from S3 every round instead of a watched file; hand-off without waiting)
+# b: STEP writer encodes names safely (two consecutive apostrophes were written as '''' which OpenCASCADE 8.0.1 cannot lex ->
+#    read-back crash) and drops zero-area loops; read-back crashes reported as readback_crash; runtime convfleet-v2
+OUT = cf.ROOT + '/conversions/db1-step'
+W = os.environ.get('CONV_HOME', '/opt/conv')
+PY = os.path.join(W, 'env/bin/python')                 # conda env (OCC read-back)
+PY84 = os.path.join(W, 'ifc84/bin/python')             # ifcopenshell 0.8.4.post1: decoder IFC writer + STEP stage
+CONV = os.path.join(HERE, 'ifc2step6.py') if os.path.exists(os.path.join(HERE, 'ifc2step6.py')) else os.path.join(HERE, 'ifc2step5.py')
+CHECK = os.path.join(HERE, 'step_check.py'); CENSUS = os.path.join(HERE, 'ifc_census.py')
+DET = cf.SROOT + '/db1/detail'
+RB_MAX = int(os.environ.get('RB_MAX_MB', '1024')) << 20
+DEC_TIMEOUT = 7200; STEP_TIMEOUT = 21600; STALL = 1800
+FILES = ('worker.py', 'convfleet.py', 'ifc2step5.py', 'ifc2step6.py', 'db1prof.py', 'tekla_profiles_overlay.json', 'bolt_catalog.json', 'step_check.py', 'ifc_census.py', 'grade_join.py', 'db1dec.py', 'db1step.py', 'db1bolts.py',
+         'db1old.py', 'convert_one.py', 'ifc_crash_bisect.py', 'ifc_exclude.py', 'layouts.json', 'db1bolts2.py', 'tekla_bolt_assemblies.json',
+         'ifc_unhole.py', 'attrlink.py', 'fittings.py')
+import grade_join
+CRASH = (-11, 139, -6, 134, 124, 125)
+LAYOUTS = json.load(open(os.path.join(HERE, 'layouts.json')))
+
+
+def catalog_overlay():
+    """Tekla improver's profile overlay (real dimensions incl. angle root radius, harvested from Tekla's own IFC exports / profdb):
+    newest *overlay*.json or tekla_profiles*.json under _control/z3conv/db1/v2/ -> (key, etag) or None"""
+    try:
+        objs = [o for p_ in cf.s3.get_paginator('list_objects_v2').paginate(Bucket=cf.CB, Prefix=f'{cf.CTLROOT}/db1/v2/') for o in p_.get('Contents', [])]
+    except Exception:
+        return None
+    c = [o for o in objs if o['Key'].endswith('.json') and ('overlay' in o['Key'].rsplit('/', 1)[-1].lower() or o['Key'].rsplit('/', 1)[-1].lower().startswith('tekla_profiles'))]
+    if not c:
+        return None
+    o = max(c, key=lambda o: o['LastModified'])
+    return o['Key'], o['ETag'].strip('"')
+
+
+OVERLAY = catalog_overlay()
+
+
+def catalog_path():
+    """base catalog; convert_one.py applies tekla_profiles_overlay.json (global + per-model by DB1 sha256) from the kit"""
+    base = os.path.join(HERE, 'tekla_profiles.json')
+    ovp = os.path.join(HERE, 'tekla_profiles_overlay.json')
+    if os.path.exists(ovp):
+        return base, {'file': 'tekla_profiles_overlay.json', 'md5': hashlib.md5(open(ovp, 'rb').read()).hexdigest(), 'applied_by': 'convert_one (global + per_model[sha256])'}
+    if True:
+        return base, None
+    key, et = OVERLAY
+    out = os.path.join(W, f'catalog_merged_{et[:12]}.json')
+    if not os.path.exists(out):
+        cat = json.load(open(base))
+        ov = json.loads(cf.s3.get_object(Bucket=cf.CB, Key=key)['Body'].read())
+        if isinstance(ov, dict) and isinstance(ov.get('profiles'), dict):
+            ov = ov['profiles']
+        n = 0
+        for k, v in (ov.items() if isinstance(ov, dict) else []):
+            if isinstance(v, dict) and v.get('kind') and ('dims' in v or 'pts' in v):
+                cat[k] = v; n += 1
+        tmp = out + '.tmp'; json.dump(cat, open(tmp, 'w')); os.replace(tmp, out)
+        json.dump({'key': key, 'etag': et, 'entries': n}, open(out + '.meta', 'w'))
+    try:
+        meta = json.load(open(out + '.meta'))
+    except Exception:
+        meta = {'key': key, 'etag': et}
+    return out, meta
+
+
+VSUF = '.u'                                           # versioned output: a re-run never overwrites the earlier STEP (best-of)
+APPROVED = {e for e, v in LAYOUTS.items() if v.get('approved')}
+
+
+def redo(r):
+    """code h: every model of older code re-runs (best-of keeps the earlier STEP when the new one grades worse)"""
+    if r.get('code') == CODE:
+        return False
+    if r.get('code') in ('z3-db1-2026-10-01q', 'z3-db1-2026-10-01r', 'z3-db1-2026-10-01s', 'z3-db1-2026-10-01t'):
+        return False                              # code r / s change bolts / slots only: earlier q / r results re-run only when targeted                              # code r changes only the bolt catalog: q results re-run only when the coordinator targets them
+    if True:
+        return True
+    return r.get('code') in ('z3-db1-2026-10-01a',) or str(r.get('engine')) in ('6.87', '7.01', '7.24')
+
+
+def decoded_summary(pl):
+    """per-part decoder records [seq, profile, category, status, how/reason, guid, n_cuts] -> counts"""
+    exp = collections.Counter(); wr = collections.Counter(); sk = collections.defaultdict(collections.Counter)
+    how = collections.Counter(); miss_prof = collections.Counter(); nosize = collections.Counter(); noprof = 0
+    for seq, prof, cat, stt, hw, guid, nc in pl:
+        exp[cat] += 1
+        if stt == 'written':
+            wr[cat] += 1; how[hw] += 1
+        else:
+            sk[cat][hw] += 1
+            if hw in ('unresolved', 'implausible_profile', 'no_profile', 'writer_skip'):
+                miss_prof[prof or '<none>'] += 1
+            elif hw == 'profile_without_size':
+                nosize[prof or '<none>'] += 1
+            elif hw == 'no_profile':
+                noprof += 1
+    return {'expected': dict(exp), 'written': dict(wr), 'skipped': {k: dict(v) for k, v in sk.items()}, 'written_by_source': dict(how),
+            'bolt_groups': sum(v.get('bolt_group_excluded', 0) for v in sk.values()),
+            'grating_solid': how.get('parametric_grating', 0), 'stud_shank_only': how.get('parametric_stud_shank', 0),
+            'catalog_misses': miss_prof.most_common(30), 'profiles_without_size': nosize.most_common(10), 'records_without_profile': noprof}
+
+
+def need_bytes(job):
+    # decode + ifc2step6, measured on the data-3 fleet (1.2 x p95 peak RSS per size bucket): < 1 MB p95 3.4 GB, 1-5 MB 12.0,
+    # 5-20 MB 13.3 (max 15.7), 20-50 MB 18.1; refreshed by the coordinator (mem_buckets.json)
+    mb = (job.get('size') or 0) >> 20
+    for hi, gb in ((1, 4), (5, 14.4), (20, 19), (50, 24)):
+        if mb < hi:
+            return int(gb * (1 << 30))
+    return 40 << 30
+
+
+def engine_of(path):
+    raw = open(path, 'rb').read(1 << 16)
+    data = zlib.decompressobj(16 + zlib.MAX_WBITS).decompress(raw) if raw[:2] == b'\x1f\x8b' else raw
+    m = re.search(rb'(\d+\.\d+)', data[:16])
+    return m.group(1).decode() if m else None
+
+
+def tail_of(p, n=2000):
+    try:
+        return open(p, errors='replace').read()[-n:]
+    except Exception:
+        return ''
+
+
+def process(fl, job, d):
+    jid = job['id']; logf = os.path.join(d, 'log.txt')
+    db1 = os.path.join(d, 'in.db1'); ifc = os.path.join(d, 'model.ifc'); stp = os.path.join(d, 'model.stp'); stats = os.path.join(d, 'convert.json')
+    rec = {'sha256': job['sha256'], 'input_key': job['input_key'], 'input_from': job.get('input_from'), 'in_bytes': job.get('size'),
+           'n_paths': job.get('n_paths'), 'paths_sample': job.get('paths', [])[:3], 'siblings_sample': (job.get('siblings') or [])[:30],
+           'out_key': f'{OUT}/{jid}{VSUF}.stp', 'writer': 'cut-snap', 'arc_writer': None,
+           'pipeline': 'db1dec+db1step -> ifc2step5.py --mode hybrid --prec 2 (ifcopenshell 0.8.4.post1)'}
+    try:
+        cf.s3.download_file(cf.B, job['input_key'], db1)
+    except Exception as e:
+        return dict(rec, status='fail', reason='download_error', transient=True, error=str(e)[:300])
+    got = cf.sha256_file(db1)
+    if got != job['sha256']:
+        return dict(rec, status='fail', reason='input_sha_mismatch', transient=True, error=got)
+    eng = job.get('engine') or engine_of(db1)
+    rec['engine'] = eng
+    if eng not in APPROVED:
+        return dict(rec, status='fail', reason='unapproved_engine' if eng else 'no_engine_banner',
+                    detail=f'Tekla engine {eng} has no verified record layout (approved: {sorted(APPROVED)})')
+    lay = LAYOUTS[eng].get('layout')
+    lp = os.path.join(d, 'layout.json'); json.dump(lay, open(lp, 'w'))
+    vp = os.path.join(d, 'variants.json'); json.dump([v['layout'] for v in LAYOUTS.values() if v.get('layout')], open(vp, 'w'))
+    dpy = PY84 if os.path.exists(PY84) else PY
+    t = time.time()
+    catp, ovmeta = catalog_path()
+    rec['catalog_overlay'] = ovmeta
+    rc = fl.run(jid, [dpy, os.path.join(HERE, 'convert_one.py'), db1, ifc, catp, lp, stats, vp],
+                logf, DEC_TIMEOUT)
+    if rc == -9: raise MemoryError()
+    cs = json.load(open(stats)) if os.path.exists(stats) else {}
+    if rc == 0 and cs.get('status') == 'deferred_layout':
+        # large file whose layout did not verify on the fast paths: full record-layout discovery (Disk-1/2 left these)
+        rec['full_discovery'] = True
+        rc = fl.run(jid, [dpy, os.path.join(HERE, 'convert_one.py'), db1, ifc, catp, lp, stats, vp],
+                    logf, DEC_TIMEOUT, env=dict(os.environ, DB1_FULL_DISCOVERY='1'))
+        if rc == -9: raise MemoryError()
+        cs = json.load(open(stats)) if os.path.exists(stats) else {}
+    rec['convert_rc'] = rc; rec['convert_sec'] = round(time.time() - t, 1)
+    plp = stats + '.parts.json.gz'
+    if os.path.exists(plp):
+        try:
+            pl = json.load(gzip.open(plp, 'rt'))
+            rec['decoded'] = decoded_summary(pl)
+            fl.upload(plp, f'{DET}/{jid}.decoded_parts.json.gz')
+        except Exception as e:
+            rec['decoded'] = {'error': f'{type(e).__name__}: {str(e)[:200]}'}
+    rec['convert'] = {k: v for k, v in cs.items() if k not in ('layout', 'trace')}; rec['layout'] = cs.get('layout')
+    rec['arc_writer'] = cs.get('arc_writer'); rec['arc_stats'] = cs.get('arc_stats')
+    if rc != 0 or cs.get('status') != 'ok':
+        reason = cs.get('status') or ('convert_timeout' if rc == 124 else 'convert_fail')
+        return dict(rec, status='fail', reason=reason, trace=cs.get('trace'), log_tail=tail_of(logf))
+    t = time.time()
+    rc = fl.run(jid, [dpy, CONV, ifc, stp, '--mode', 'hybrid', '--prec', '2', '--threads', '4'], logf, STEP_TIMEOUT, stall=STALL)
+    if rc == -9: raise MemoryError()
+    rec['step_rc'] = rc; rec['step_ifcopenshell'] = '0.8.4.post1' if dpy == PY84 else 'env'
+    if rc in CRASH and os.path.exists(ifc):
+        info = {'at': cf.now()}
+        try:
+            fl.run(jid, [dpy, os.path.join(HERE, 'ifc_crash_bisect.py'), ifc, CONV, '8', '120'], os.path.join(d, 'bisect.log'), 4 * 3600)
+            lines = [l for l in tail_of(os.path.join(d, 'bisect.log'), 200000).splitlines() if l.startswith('{')]
+            res = json.loads(lines[-1]) if lines else None
+            if res is None:
+                info['result'] = 'bisect produced no result'
+            else:
+                culprits = res['culprits']; cap = max(50, res['tessellate_set'] // 100)
+                info.update(tessellate_set=res['tessellate_set'], culprits=len(culprits), bisect_sec=res['secs'])
+                if not culprits:
+                    info['result'] = 'no crashing element isolated'
+                elif len(culprits) > cap:
+                    info['result'] = f'too many crashing elements ({len(culprits)} > {cap})'
+                else:
+                    guids = [c['guid'] for c in culprits if c.get('guid')]
+                    uh = {}; unholed = os.path.join(d, 'unholed.ifc')
+                    if os.path.exists(os.path.join(HERE, 'ifc_unhole.py')):
+                        # kit_v2: first drop only the culprits' bolt-hole subtractions (parts kept, those holes tagged uncut)
+                        r1, out1, err1 = fl.sh([dpy, os.path.join(HERE, 'ifc_unhole.py'), ifc, unholed] + guids, timeout=3600)
+                        try:
+                            uh = json.loads(out1.strip().splitlines()[-1])
+                        except Exception:
+                            uh = {}
+                    if uh.get('unholed') and os.path.exists(unholed):
+                        for f in (stp, stp + '.stats.json'):
+                            if os.path.exists(f): os.remove(f)
+                        rc = fl.run(jid, [dpy, CONV, unholed, stp, '--mode', 'hybrid', '--prec', '2', '--threads', '4'], logf, STEP_TIMEOUT, stall=STALL)
+                        if rc == -9: raise MemoryError()
+                        info['unhole_rc'] = rc
+                        if rc == 0:
+                            rec['unholed_elements'] = uh
+                            info['rc'] = rc
+                            info['result'] = f"converted with the bolt holes of {len(uh['unholed'])} crashing element(s) left uncut"
+                    if rc != 0:
+                        fixed = os.path.join(d, 'fixed.ifc')
+                        r2, out, err = fl.sh([dpy, os.path.join(HERE, 'ifc_exclude.py'), ifc, fixed] + guids, timeout=3600)
+                        rec['excluded_elements'] = json.loads(out.strip().splitlines()[-1])
+                        for f in (stp, stp + '.stats.json'):
+                            if os.path.exists(f): os.remove(f)
+                        rc = fl.run(jid, [dpy, CONV, fixed, stp, '--mode', 'hybrid', '--prec', '2', '--threads', '4'], logf, STEP_TIMEOUT, stall=STALL)
+                        if rc == -9: raise MemoryError()
+                        info['rc'] = rc
+                        info['result'] = f'converted without {len(culprits)} crashing element(s)' if rc == 0 else f'still fails (rc {rc})'
+        except MemoryError:
+            raise
+        except Exception as e:
+            info['result'] = f'rescue error: {type(e).__name__}: {str(e)[:200]}'
+        rec['rescue'] = info; rec['step_rc'] = rc
+    rec['step_sec'] = round(time.time() - t, 1)
+    st = {}
+    try:
+        st = json.load(open(stp + '.stats.json'))
+    except Exception:
+        pass
+    rec['step_stats'] = {k: st.get(k) for k in ('parts', 'faces', 'points', 'bbox', 'transcode_products', 'tess_products', 'total_sec', 'peak_rss_mb', 'out_bytes')}
+    if rc != 0 or not os.path.exists(stp) or os.path.getsize(stp) == 0:
+        reason = {124: 'step_timeout', 125: 'step_kernel_hang'}.get(rc, 'step_kernel_crash' if rc in CRASH else 'step_fail')
+        return dict(rec, status='fail', reason=reason, log_tail=tail_of(logf))
+    if not cf.bbox_sane(st.get('bbox')):
+        return dict(rec, status='fail', reason='absurd_bbox', bbox=st.get('bbox'))
+    nb = os.path.getsize(stp); rec['out_bytes'] = nb
+    mk = cf.count_markers(stp, cf.STEP_MARKERS)
+    head = open(stp, errors='replace').read(3000)
+    flavour = mk['ADVANCED_FACE'] == 0 and mk['TESSELLATED'] == 0 and mk['TRIANGULATED_FACE_SET'] == 0 and 'AUTOMOTIVE_DESIGN' in head
+    png = stp + '.png'; chk = stp + '.check.json'; sparts = os.path.join(d, 'step_parts.jsonl.gz')
+    v = {}
+    if nb < RB_MAX:
+        rcv = fl.run(jid, [PY, CHECK, stp, chk, '--png', png, '--parts', sparts, '--title', f"{jid[:16]}  {(job.get('paths') or [''])[0][-90:]}"],
+                     os.path.join(d, 'val.log'), 4 * 3600)
+        if rcv == -9:                             # memory kill: once more without the render (read-back only)
+            rcv = fl.run(jid, [PY, CHECK, stp, chk, '--parts', sparts], os.path.join(d, 'val.log'), 4 * 3600)
+        try:
+            v = json.load(open(chk)) if rcv == 0 else {'error': f'read-back rc {rcv}', 'rc': rcv}
+        except Exception:
+            v = {'error': f'read-back rc {rcv}', 'rc': rcv, 'log': tail_of(os.path.join(d, 'val.log'), 300)}
+    else:
+        fl.run(jid, [PY, CHECK, stp, chk, '--no-occ'], os.path.join(d, 'val.log'), 3600)
+        try:
+            v = json.load(open(chk))
+        except Exception:
+            v = {}
+        v['skipped'] = f'STEP >= {RB_MAX >> 20} MB: text checks only (markers, products), no OCC read-back'
+    v['flavour_ok'] = flavour; v['markers_kit'] = mk
+    solids = v.get('solids') if v.get('read_status') == 'ok' else (mk['FACETED_BREP'] if 'skipped' in v else 0)
+    grade = 'ok_solid' if (solids or 0) > 0 else 'empty'
+    if v.get('bbox') and not cf.bbox_sane(v['bbox']):
+        grade = 'bad_bbox'
+    v['grade'] = grade; v['validated'] = v.get('read_status') == 'ok'
+    rec['validate'] = v
+    rec['step'] = {'key': rec['out_key'], 'bytes': nb, 'parts': st.get('parts'), 'faces': st.get('faces'), 'bbox_mm': st.get('bbox'),
+                   'members': cs.get('members'), 'written': cs.get('written'), 'converter': os.path.basename(CONV),
+                   'v6': {k: st.get(k) for k in ('levels', 'tags', 'repair', 'exact_parts', 'approx_parts', 'surface_fallback_parts') if st.get(k) is not None} or None}
+    if v.get('rc') in (-11, 139, -6, 134):
+        key = f'{OUT}/_readback_crash/{jid}.stp'
+        try:
+            fl.upload(stp, key, 'application/step'); rec['unverified_key'] = key
+        except Exception:
+            pass
+        return dict(rec, status='fail', reason='readback_crash')
+    if grade != 'ok_solid' or not flavour:
+        return dict(rec, status='fail', reason={'empty': 'empty_output', 'bad_bbox': 'absurd_bbox'}.get(grade, 'bad_flavour'))
+    # expected per-part volumes from the decoder's own IFC (analytic profile area x length; cut parts unchecked)
+    cj = os.path.join(d, 'census.json'); cparts = os.path.join(d, 'src_parts.jsonl.gz')
+    rcc = fl.run(jid, [PY, CENSUS, ifc, cj, '--parts', cparts], os.path.join(d, 'census.log'), 2 * 3600)
+    try:
+        rec['census'] = json.load(open(cj))
+    except Exception:
+        rec['census'] = {'error': f'census rc {rcc}', 'log': tail_of(os.path.join(d, 'census.log'), 400)}
+    if os.path.exists(cparts) and os.path.exists(sparts):
+        try:
+            rec['join'] = grade_join.join(grade_join.load(cparts), grade_join.load(sparts))
+        except Exception as e:
+            rec['join'] = {'error': f'{type(e).__name__}: {str(e)[:200]}'}
+    fl.upload(stp, rec['out_key'], 'application/step')
+    if os.path.exists(chk):
+        fl.upload(chk, rec['out_key'] + '.check.json', 'application/json')
+    if os.path.exists(png):
+        fl.upload(png, f'{OUT}/{jid}{VSUF}.png', 'image/png'); rec['render_key'] = f'{OUT}/{jid}{VSUF}.png'
+    for fpath, nm in ((cj, 'census.json'), (cparts, 'src_parts.jsonl.gz'), (sparts, 'step_parts.jsonl.gz')):
+        if os.path.exists(fpath):
+            fl.upload(fpath, f'{DET}/{jid}{VSUF}.{nm}')
+    rec['detail_prefix'] = f'{DET}/{jid}{VSUF}'
+    if os.path.exists(stp + '.parts.json'):
+        fl.upload(stp + '.parts.json', rec['out_key'] + '.parts.json', 'application/json')
+    rec['status'] = 'ok'
+    return rec
+
+
+def est(r, op_sub=0):
+    """best-of key (lower is better): failure, written / decoded share, invalid + non-positive solids.
+    code p: the count of [approx: ...]-tagged products is no longer a key - codes n-p tag geometry honestly that older codes wrote
+    wrong and untagged (polybeams along the whole polyline, merged coincident holes, fittings), so it kept the older, less faithful
+    STEP (code p 05:40Z: 12 of 12 re-runs lost to a code-m STEP with 69 vs 262 tags); a tie keeps the new run"""
+    if not r or r.get('status') != 'ok':
+        return (1, 0, 0)
+    v = r.get('validate') or {}
+    wr, exp = phys(r, op_sub)
+    return (0, -round(wr / max(1, exp), 4), (v.get('invalid') or 0) + (v.get('nonpos_vol') or 0))
+
+
+def phys(r, op_sub=0):
+    """(written, expected) over physical parts: code p+ leaves Tekla operative (obj_type 11) cutters out of the part list (they are
+    cuts); a result of older code wrote them as steel, so the new run's operative count is taken off both its numbers"""
+    dec = r.get('decoded') or {}
+    exp = sum((dec.get('expected') or {}).values()); wr = sum((dec.get('written') or {}).values())
+    return max(0, wr - op_sub), max(0, exp - op_sub)
+
+
+def operative_sub(new, prev):
+    """operative parts to take off an older result (none when it already comes from code p+ with cut statistics)"""
+    if ((prev.get('convert') or {}).get('cut_stats') or {}):
+        return 0
+    return int((((new.get('convert') or {}).get('cut_stats') or {}).get('operative_parts')) or 0)
+
+
+_process_inner = process
+
+
+def process(fl, job, d):
+    prev = fl.getj(f'{fl.ST}/results/{job["id"]}.json')
+    new = _process_inner(fl, job, d)
+    # [coverage-regression fix] compare with every ok stored result, also one already stamped with this CODE (a kept earlier
+    # STEP carries the running code; a duplicate same-code run must not overwrite it with its own failure)
+    if not prev or prev.get('status') != 'ok':
+        return new
+    osub = operative_sub(new, prev)
+    en, ep = est(new), est(prev, osub)
+    # new wins on the physical-part key, or when it writes at least as many physical parts with no more invalid solids (code p
+    # recovers edited parts, some with unresolved profiles: the share can dip while the written count rises)
+    if en <= ep or (en[0] == 0 and phys(new)[0] >= phys(prev, osub)[0] and en[2] <= ep[2]):
+        new['alternatives'] = {prev.get('code'): {'status': prev.get('status'), 'step_key': (prev.get('step') or {}).get('key'), 'est': list(ep), 'operative_sub': osub}}
+        return new
+    keep = {k: v for k, v in prev.items() if k not in ('id', 'pipeline', 'code', 'runtime', 'host', 'started', 'sec', 'finished', 'size')}
+    keep['alternatives'] = {CODE: {'status': new.get('status'), 'reason': new.get('reason'), 'step_key': (new.get('step') or {}).get('key'), 'est': list(en),
+                                   'kept_est': list(ep), 'operative_sub': osub, 'phys_written': [phys(new)[0], phys(prev, osub)[0]]}}
+    keep['best_of_note'] = f'{CODE} graded worse than {prev.get("code")}: earlier STEP kept'
+    return keep
+
+
+if __name__ == '__main__':
+    # decode is one single-threaded process per job and the STEP stage uses 4 threads: 3/4 of the cores as slots,
+    # memory-gated per job (30x the DB1 size) with the watchdog as backstop (Disk-1/2 ran nproc-2 slots on r7i.16xlarge)
+    os.environ.setdefault('CONV_SLOTS', str(max(1, (os.cpu_count() or 4) * 3 // 4)))
+    fl = cf.Fleet('db1', CODE, process, need_bytes, FILES, need_disk=lambda j: max(2 << 30, (j.get('size') or 0) * 12), redo=redo, redo_ids_key=f'{cf.CTLROOT}/db1/redo_ids.json')
+    sys.exit(fl.main())

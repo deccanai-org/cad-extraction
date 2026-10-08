@@ -1,0 +1,38 @@
+--- a/z3conv/sds2/worker.py
++++ b/z3conv/sds2/worker.py
+@@ -131,6 +131,23 @@
+         out['steel_t'] = float(m.group(1)); out['sds2_t'] = float(m.group(2))
+     out['invalid_named'] = re.findall(r'invalid after read-back: (.*)', txt)[:20]
+     return out
++
++
++JOIST_DESIG = re.compile(r'^\s*\d+(?:\.\d+)?\s*(KCS|K|LH|DLH|SLH)', re.I)
++
++
++def member_standin(b, nm, mt):
++    """pieces-csv row of kind 'member' (a member written without SDS2 pieces) -> (stand-in type, real type).
++    Decided by the SECTION, not the member type: v4 reads 7.0/7.1 member types one slot off (BAHAMAR 7.135: joists
++    labelled BEAM / COLUMN / MISC), and Revit-imported jobs type W-shape framing JOIST (bghjk 7.331: 1,303 rolled
++    members labelled JOIST)."""
++    if b in ('joist_openweb_catalog', 'joist_openweb_standin'):
++        return 'joist_openweb_from_designation', 'joist ' + (nm or mt)
++    if JOIST_DESIG.match(nm or ''):
++        return 'joist_as_envelope_box', 'joist ' + nm
++    if b == 'member_undetailed_profile' or (b == 'joist_envelope_approx' and nm):
++        return 'member_undetailed_nominal_profile', f'{mt or "member"} {nm.split("x")[0] if nm else ""} without material in the job'.replace('  ', ' ')
++    return 'member_as_envelope', f'{mt or "member"} without piece data'
+ 
+ 
+ def piece_inventory(pieces_csv, skipped_csv, s2):
+@@ -145,10 +162,7 @@
+             inv['members'].add(mem); inv['pieces'][kind] += 1; inv['builders'][b] += 1
+             if kind == 'member':
+                 inv['members_envelope'].add(mem)
+-                if 'joist' in b:
+-                    standins[('joist_as_envelope_box', 'joist ' + (nm or mt))] += 1
+-                else:
+-                    standins[('member_as_envelope', f'{mt or "member"} without piece data')] += 1
++                standins[member_standin(b, nm, mt)] += 1
+             elif b in ('plate_fallback', 'profile_fallback'):
+                 standins[(f'{b}_approximate_no_holes', f'{kind} {nm.split()[0] if nm else ""}'.strip())] += 1
+             elif kind == 'concrete':

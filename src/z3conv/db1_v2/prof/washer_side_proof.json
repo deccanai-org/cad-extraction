@@ -1,0 +1,54 @@
+{
+ "claim": "Tekla bolt-assembly flag code (6 decimal digits d5..d0) = [holes only (bolt off), washer under the HEAD, washer 2, washer under the NUT, nut 1, nut 2]",
+ "where": {
+  "8.x/9.x DB1": "int at bolt attribute record +301 (8.53 stride-317 record; db1_v2 re/bolt853)",
+  "6.87-7.4x DB1 (old reader)": "9th '/'-field of the bolt-group profile string, e.g. MM16*50/57/0/2/0/100/-1.75/1/110/0/23.5 -> 110; same value set (110, 10110, 10010, 100000, ...)"
+ },
+ "proof": "BSA Ardent Cancer Center, Tekla 8.53 DB1 joined to its Tekla IFC export (29903.ifc) by object GUID: 1,841 bolt groups with a shank. Per group the IFC mapped bolt geometry was split relative to the shank (head ends at the shank start; washers = circles wider than 1.3 d and not the hole; head-side washer starts at the shank start; nut-side washers elsewhere; nuts = hex polygons beyond the shank start).",
+ "result": {
+  "groups_checked": 1841,
+  "exact_match_head_washers_nut_washers_nuts": 1837,
+  "mismatch": 4,
+  "mismatch_flags": "011110 (4 groups: W1+W2+W3+N1; IFC shows a DTI ring + 1 nut-side washer, no head washer)",
+  "holes_only_100000": "832 groups: IFC holds hole cylinders only, no shank"
+ },
+ "by_flag": [
+  {
+   "flags": "000110",
+   "groups": 1734,
+   "ifc": "washer under the nut + 1 nut (0 head-side washers)",
+   "match": 1734
+  },
+  {
+   "flags": "010110",
+   "groups": 69,
+   "ifc": "washer under the head + washer under the nut + 1 nut",
+   "match": 69
+  },
+  {
+   "flags": "010010",
+   "groups": 29,
+   "ifc": "washer under the head + 1 nut",
+   "match": 29
+  },
+  {
+   "flags": "010000",
+   "groups": 5,
+   "ifc": "washer under the head, no nut",
+   "match": 5
+  },
+  {
+   "flags": "100000",
+   "groups": 832,
+   "ifc": "holes only (no bolt solid)"
+  },
+  {
+   "flags": "011110",
+   "groups": 4,
+   "ifc": "not matched (see mismatch)",
+   "match": 0
+  }
+ ],
+ "use": "d4 = 1 -> one washer between head and first ply; d2 = 1 -> one washer between last ply and nut 1; d3 (washer 2) seen only in 4 groups (side not proven: leave inferred); d1/d0 -> nuts; d5 = 1 -> cut holes, write no bolt.",
+ "scripts": "prof/bolt/val2.py, prof/bolt/flags_vs_sides.py (uses re/bolt853.setup)"
+}

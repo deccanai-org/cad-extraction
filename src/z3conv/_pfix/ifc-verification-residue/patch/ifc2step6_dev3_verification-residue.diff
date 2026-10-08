@@ -1,0 +1,410 @@
+--- ifc2step6_dev3.py	(6.1.0-dev3, md5 f23651e819ec959abb0619fc4a3ae9d0)
++++ ifc2step6.py	(6.1.0-dev3+vr)
+@@ -95,6 +95,13 @@
+     return s
+ 
+ 
++def _rp(v):
++    """STEP REAL of a placement coordinate (mm): fixed point, 6 decimals (the %.10g of _r kept 10 significant digits
++    only: a MAPPED_ITEM instance 3e9 mm from the origin was placed to the nearest mm, 2e8 mm to 0.1 mm)"""
++    s = ('%.6f' % v).rstrip('0')
++    return '0.' if s in ('0.', '-0.') else s
++
++
+ def _r(v):
+     """compact STEP REAL (always with a '.')"""
+     if v == 0.0:
+@@ -1523,13 +1530,54 @@
+ 
+ 
+ class Frag:
+-    __slots__ = ('off', 'size', 'pd', 'sdr', 'nsol', 'nsurf', 'nfaces', 'vol', 'nopen', 'ghash', 'needs')
++    __slots__ = ('off', 'size', 'pd', 'sdr', 'nsol', 'nsurf', 'nfaces', 'vol', 'nopen', 'ghash', 'needs', 'far')
+ 
+-    def __init__(self, off, size, pd, sdr, nsol, nsurf, nfaces, vol, nopen=0, ghash=None, needs=None):
++    def __init__(self, off, size, pd, sdr, nsol, nsurf, nfaces, vol, nopen=0, ghash=None, needs=None, far=None):
+         self.off = off; self.size = size; self.pd = pd; self.sdr = sdr; self.nsol = nsol; self.nsurf = nsurf
+         self.nfaces = nfaces; self.vol = vol; self.nopen = nopen; self.ghash = ghash; self.needs = needs
++        self.far = far          # whole-km offset (mm) when the part lies beyond FAR_MM from the origin (see far_offset)
++
++
++# Far from the origin (geo-referenced models: 1.5e9 / 3.0e9 mm seen in SDS/2 exports) OpenCASCADE's 1e-7 mm tolerances
++# are finer than the coordinates' own floating-point resolution (ulp(3e9) = 4.8e-7 mm): the STEP reader's shape healing
++# throws ('gp_Dir() - input vector has zero norm') and BRepCheck fails solids that are valid (UnorientableShape,
++# SelfIntersectingWire) - in place and when placed by a MAPPED_ITEM alike; verdicts even differ between a one-part
++# read and a whole-file read. The same solid written 1 km from the origin reads back valid. Opt-in (V6_FAR_VERIFY=1,
++# to ship together with the same rule in the grader's step_check, step_check_far.diff): a part beyond FAR_MM is
++# verified on a copy of its STEP blocks in which every far point (a coordinate >= FAR_MM; local frames and the
++# context origin stay) is moved by the same whole number of kilometres - exact decimal arithmetic, a rigid
++# translation; tag far-origin (sidecar / stats). The output STEP always keeps the source coordinates.
++FAR_MM = float(os.environ.get('V6_FAR_MM', '1e7'))
++FAR_VERIFY = os.environ.get('V6_FAR_VERIFY', '0') == '1'
++
++
++def far_offset(lo, hi):
++    """whole-km offset (tuple of int mm) for a part with world bbox lo..hi beyond FAR_MM, else None"""
++    if max(float(np.abs(lo).max()), float(np.abs(hi).max())) <= FAR_MM:
++        return None
++    return tuple(int(v) for v in (np.floor(np.asarray(lo, np.float64) / 1e6) * 1e6).tolist())
+ 
+ 
++_CP_RE = re.compile(rb"CARTESIAN_POINT\('',\(([^)]*)\)\)")
++
++
++def shift_points(data, off):
++    """every far CARTESIAN_POINT (a coordinate >= FAR_MM) of a STEP block moved by -off (mm), exact decimal arithmetic"""
++    from decimal import Decimal
++    o = [Decimal(int(v)) for v in off]
++
++    def one(m):
++        vals = m.group(1).split(b',')
++        if len(vals) != 3 or max(abs(float(v)) for v in vals) < FAR_MM:
++            return m.group(0)
++        res = []
++        for k, v in enumerate(vals):
++            x = format(Decimal(v.decode().strip()) - (o[k] if k < 3 else 0), 'f')
++            res.append(x if '.' in x else x + '.')
++        return b"CARTESIAN_POINT('',(" + ','.join(res).encode() + b"))"
++    return _CP_RE.sub(one, data)
++
++
+ class Shared:
+     """geometry written once (representation + REPRESENTATION_MAP), placed by every instance with a MAPPED_ITEM"""
+     __slots__ = ('key', 'off', 'size', 'rmap', 'nsol', 'nsurf', 'nfaces', 'vol', 'nopen', 'lo', 'hi', 'src', 'tags', 'curved')
+@@ -1554,7 +1602,16 @@
+         self.noplane = noplane
+         self.bb = [1e300, 1e300, 1e300, -1e300, -1e300, -1e300]
+         self.n_faces_total = 0
++        self.far_off = None       # one whole-km offset per model for far parts (first far part's), see far_offset
+ 
++    def _far(self, lo, hi):
++        o = far_offset(lo, hi)
++        if o is None:
++            return None
++        if self.far_off is None:
++            self.far_off = o
++        return self.far_off
++
+     def close(self):
+         self.fh.flush(); self.fh.close()
+ 
+@@ -1723,7 +1780,7 @@
+         h.update(np.fromiter((loc[i] if j else -1 - loc[i] for f in faces for lp in f for j, i in enumerate(lp)), np.int64).tobytes())
+         h.update(repr([(len(s_.faces), len(s_.voids), s_.closed) for s_ in solids] + [(len(x.faces),) for x in surfaces]).encode())
+         return Frag(off, len(data), pd, sdr, len(solids), len(surfaces), len(faces), vol,
+-                    sum(1 for x in solids if not x.closed), h.hexdigest())
++                    sum(1 for x in solids if not x.closed), h.hexdigest(), far=self._far(lo, hi))
+ 
+     def emit_instance(self, name, pid, desc, sh, R, t):
+         """a part that places shared geometry: MAPPED_ITEM(REPRESENTATION_MAP, AXIS2_PLACEMENT_3D(t, R[:,2], R[:,0]))"""
+@@ -1731,7 +1788,7 @@
+         ap = buf.append
+         n = self.n
+         n += 1
+-        ap("#%d=CARTESIAN_POINT('',(%s,%s,%s));\n" % (n, _r(round(t[0], 6)), _r(round(t[1], 6)), _r(round(t[2], 6))))
++        ap("#%d=CARTESIAN_POINT('',(%s,%s,%s));\n" % (n, _rp(t[0]), _rp(t[1]), _rp(t[2])))
+         n += 1
+         ap("#%d=DIRECTION('',(%s,%s,%s));\n" % (n, _r(R[0][2]), _r(R[1][2]), _r(R[2][2])))
+         n += 1
+@@ -1768,7 +1825,14 @@
+         b = self.bb
+         for k in range(3):
+             b[k] = min(b[k], float(C[:, k].min())); b[k + 3] = max(b[k + 3], float(C[:, k].max()))
+-        return Frag(off, len(data), pd, sdr, sh.nsol, sh.nsurf, sh.nfaces, sh.vol, sh.nopen, 'inst:%s' % (sh.key,), sh.key)
++        # every instance is verified at its own placement: OCC's verdict on a located shape depends on the placement (data-3
++        # Stockton 2c0f7a89: 2 of 24 instances of one representation, same rotation as passing ones, fail the grader's
++        # read while dev3 verified one instance per representation and passed all 24). Far from the origin without the
++        # far rule (FAR_VERIFY) in-place verdicts are precision noise either way: dev3's behaviour is kept there.
++        far = self._far(C.min(0), C.max(0))
++        dedup = os.environ.get('V6_INSTANCE_DEDUP') == '1' or (far is not None and not FAR_VERIFY)
++        return Frag(off, len(data), pd, sdr, sh.nsol, sh.nsurf, sh.nfaces, sh.vol, sh.nopen,
++                    'inst:%s' % (sh.key,) if dedup else None, sh.key, far=far)
+ 
+     def read(self, fr):
+         with open(self.path, 'rb') as fh:
+@@ -2096,6 +2160,23 @@
+ 
+ 
+ def kernel_run(f, prods, threads, mode, stats_key, stats, on_shape=None):
++    """kernel pass; products with openings are meshed as triangles (see below), the rest in the requested mode"""
++    if mode == 'poly' and os.environ.get('V6_OPENINGS_POLY') != '1':
++        # ifcopenshell 0.9.0's polyhedral output (POLYHEDRON_WITH_HOLES) of a boolean result can run away: data-3
++        # Seaport L4 (SDS/2) angle a3717 (12-face faceted brep minus two 18-face faceted hole prisms) grows past 12 GB
++        # in one create_shape and took the converter to 173 GB; its triangle mesh takes 0.14 s (valid solid). Opening
++        # products are 1-7 s each in polyhedral mode, 0.1-0.2 s as triangles; coplanar triangles are merged back into
++        # the same planar polygons with holes by Repair.merge_coplanar (exact: no vertex moves, no surface changes).
++        op = [p for p in prods if getattr(p, 'HasOpenings', None)]
++        if op:
++            rest = [p for p in prods if not getattr(p, 'HasOpenings', None)]
++            done, m = _kernel_run(f, rest, threads, 'poly', stats_key, stats, on_shape) if rest else (set(), 'poly')
++            d2, _ = _kernel_run(f, op, threads, 'tri', stats_key + '_openings_tri', stats, on_shape)
++            return done | d2, m
++    return _kernel_run(f, prods, threads, mode, stats_key, stats, on_shape)
++
++
++def _kernel_run(f, prods, threads, mode, stats_key, stats, on_shape=None):
+     """iterate the kernel over products; every shape is handed to on_shape(eid, V, faces, iids) as it comes (streaming,
+     bounded memory). Products the iterator skips are retried one by one with create_shape (polyhedral, then
+     triangle mesh). Returns (set of product ids done, mode)."""
+@@ -2440,24 +2521,37 @@
+             # enough chunks to keep every verifier process busy, each between 0.5 and 12 MB
+             tot = sum(fr.size for _, fr in reps)
+             limit_b = int(min(12 << 20, max(512 << 10, tot / (3.0 * self.procs))))
++        self._sdata = {}          # shared block bytes by (shared key, far offset): written once per chunk file
++        curs = {}
+         with open(self.spool.path, 'rb') as sp:
+             for key, fr in reps:
+                 bykey[fr.pd] = key; bykey[fr.sdr] = key
+                 sp.seek(fr.off)
+                 data = sp.read(fr.size)
++                far = fr.far is not None and FAR_VERIFY
++                if far:
++                    data = shift_points(data, fr.far)
++                    self.far_parts = getattr(self, 'far_parts', 0) + 1
++                sk = None
+                 if fr.needs is not None:
+                     shd = self.shared.get(fr.needs)
+                     if shd is not None:
+-                        sp.seek(shd.off)
+-                        data = sp.read(shd.size) + data
++                        sk = (fr.needs, fr.far if far else None)
++                        if sk not in self._sdata:
++                            sp.seek(shd.off)
++                            sdata = sp.read(shd.size)
++                            self._sdata[sk] = shift_points(sdata, fr.far) if far else sdata
+                 if fr.size >= limit_b // 3:
+-                    chunks.append([(key, data)])          # big part: its own file
++                    chunks.append([(key, data, sk)])          # big part: its own file
+                     continue
+-                cur.append((key, data)); cur_b += fr.size
+-                if cur_b >= limit_b or len(cur) >= 2000:
+-                    chunks.append(cur); cur, cur_b = [], 0
+-            if cur:
+-                chunks.append(cur)
++                # far-mode items never share a file with in-place items (two variants of one shared block = same ids)
++                c_ = curs.setdefault(far, [[], 0])
++                c_[0].append((key, data, sk)); c_[1] += fr.size
++                if c_[1] >= limit_b or len(c_[0]) >= 2000:
++                    chunks.append(c_[0]); curs[far] = [[], 0]
++            for c_ in curs.values():
++                if c_[0]:
++                    chunks.append(c_[0])
+         self.bykey = bykey
+         self.rd = rd
+         self.nfile = 0
+@@ -2478,7 +2572,10 @@
+         fn = os.path.join(self.rd, 'c%06d.stp' % self.nfile)
+         with open(fn, 'wb') as fh:
+             fh.write(self.hdr)
+-            for _, d in ch:
++            done = set()
++            for _, d, sk in ch:
++                if sk is not None and sk not in done:
++                    fh.write(self._sdata[sk]); done.add(sk)      # one copy of each shared block per file
+                 fh.write(d)
+             fh.write(TAIL.encode())
+         return (fn, ch)
+@@ -2489,7 +2586,7 @@
+         running = []
+         last_log = time.time()
+         queue = list(queue)
+-        queue.sort(key=lambda x: -sum(len(d) for _, d in x[1]))
++        queue.sort(key=lambda x: -sum(len(d) for _, d, _s in x[1]))
+         while queue or running:
+             while queue and len(running) < self.procs:
+                 fn, ch = queue.pop(0)
+@@ -2515,9 +2612,9 @@
+                         if k is not None:
+                             res[k] = r; got.add(k)
+                 if rc != 0:
+-                    rest = [(k, d) for k, d in ch if k not in got]
++                    rest = [(k, d, sk) for k, d, sk in ch if k not in got]
+                     if len(rest) == 1 or len(ch) == 1:
+-                        for k, d in rest:
++                        for k, d, sk in rest:
+                             res[k] = {'crash': rc}
+                         self.crashes = getattr(self, 'crashes', 0) + 1
+                     elif rest:
+@@ -2571,12 +2668,13 @@
+ # ====================================================================================================== main pipeline
+ 
+ class PartRec:
+-    __slots__ = ('eid', 'gid', 'name', 'cls', 'src', 'level', 'tags', 'frag', 'ok', 'why', 'curved', 'hist', 'inst')
++    __slots__ = ('eid', 'gid', 'name', 'cls', 'src', 'level', 'tags', 'frag', 'ok', 'why', 'curved', 'hist', 'inst', 'vres')
+ 
+     def __init__(self, eid, gid, name, cls, src, curved):
+         self.eid = eid; self.gid = gid; self.name = name; self.cls = cls; self.src = src; self.level = 0
+         self.tags = set(); self.frag = None; self.ok = None; self.why = None; self.curved = curved; self.hist = []
+         self.inst = None      # (shared key, R, t) when the part places shared geometry
++        self.vres = None      # read-back result of the representation that is written (verify_worker record)
+ 
+ 
+ DESC_TAGS = {'L1': 'L1-triangulated', 'L2': 'L2-alt-source', 'L3': 'L3-partial-surface', 'L4': 'L4-surface',
+@@ -2844,6 +2942,14 @@
+     else:
+         verify_and_fallback(f, recs, spool, ver, repair, tc, threads, a, stats, vstats)
+         recs = [r for r in recs if r.frag is not None]
++        if FAR_VERIFY:
++            nfar = 0
++            for r in recs:
++                if r.frag.far is not None:
++                    r.tags.add('far-origin'); nfar += 1
++            if nfar:
++                stats['far_origin'] = {'parts': nfar, 'threshold_mm': FAR_MM,
++                                       'note': 'verified on a copy whose far points are moved by whole km (OCC precision); STEP keeps the source coordinates'}
+     # ---- assemble
+     spool.close()
+     PHASE[0] = 'assemble'
+@@ -2914,6 +3020,38 @@
+         stats['sidecar'] = os.path.basename(side)
+     except Exception as e:
+         stats['sidecar_error'] = str(e)[:200]
++    if ver is not None:
++        # per-part read-back of the written representation, in step_check's --parts format (pid = GlobalId, solids,
++        # BRepCheck-valid solids, volume): every part was read back from its own STEP block by verify_worker (same OCC
++        # checks as step_check), so a STEP too large for a whole-file read-back still has per-part data for the join
++        try:
++            vp = a.out + '.verify_parts.jsonl.gz'
++            tot = collections.Counter()
++            with gzip.open(vp, 'wt') as g:
++                for i, r in enumerate(recs, 1):
++                    v = r.vres or {}
++                    rec = {'i': i, 'pid': r.gid, 'name': r.name, 'desc': describe(r)}
++                    if not v or v.get('empty') or v.get('crash') is not None or v.get('read_fail') or v.get('error'):
++                        rec.update(solids=0, empty=True)
++                        tot['empty_roots'] += 1
++                    else:
++                        vals = v.get('valid') or []
++                        vols = [x for x in (v.get('vols') or []) if x is not None]
++                        rec.update(solids=v.get('solids') or 0, faces=v.get('faces') or 0)
++                        if not rec['solids']:
++                            rec['shells'] = v.get('shells')
++                        else:
++                            rec.update(valid=sum(1 for x in vals if x), volume=round(sum(vols), 3))
++                        tot['transferred'] += 1; tot['solids'] += rec['solids']; tot['faces'] += rec['faces']
++                        tot['valid'] += sum(1 for x in vals if x); tot['invalid'] += sum(1 for x in vals if not x)
++                        tot['nonpos_vol'] += sum(1 for x in (v.get('vols') or []) if x is None or not (x > 0))
++                        if v.get('finite') is False:
++                            tot['nonfinite'] += 1
++                    g.write(json.dumps(rec) + '\n')
++            stats['readback_parts'] = dict(tot, roots=len(recs), file=os.path.basename(vp),
++                                           how='converter read-back of every written part (own STEP block, step_check checks)')
++        except Exception as e:
++            stats['readback_parts_error'] = str(e)[:200]
+     with open(a.out + ".stats.json", "w") as sf:
+         json.dump(stats, sf, indent=1)
+     print(json.dumps({k: v for k, v in stats.items() if k not in ('tagged_parts',)}))
+@@ -3039,10 +3177,54 @@
+             bp = build_part(kernel_pieces(f, V, faces, iids), repair, tri=tri)
+             if bp is not None and bp != 'corrupt':
+                 out[eid] = bp
+-        kernel_run(f, prods, threads, mode, key, stats, on_shape)
++        if mode == 'poly_guarded':
++            kernel_each_guarded(f, prods, 'poly', key, stats, on_shape)
++        else:
++            kernel_run(f, prods, threads, mode, key, stats, on_shape)
+     return out
+ 
+ 
++def kernel_each_guarded(f, prods, mode, stats_key, stats, on_shape):
++    """products one by one (create_shape) under an address-space cap (current size + V6_GUARD_GB, default 8): an
++    ifcopenshell polyhedral run-away (see kernel_run) becomes an ordinary failure of that one product"""
++    import ifcopenshell.geom
++    s, _, m = kernel_settings(mode)
++    t0 = time.time()
++    done = 0
++    old = None
++    if resource is not None:
++        try:
++            vm = 0
++            for line in open('/proc/self/status'):
++                if line.startswith('VmSize:'):
++                    vm = int(line.split()[1]) * 1024
++            if vm > 0:                 # Linux (/proc): cap = current address space + headroom
++                cap = vm + int(float(os.environ.get('V6_GUARD_GB', '8')) * (1 << 30))
++                old = resource.getrlimit(resource.RLIMIT_AS)
++                hard = old[1]
++                resource.setrlimit(resource.RLIMIT_AS, (cap if hard == resource.RLIM_INFINITY else min(cap, hard), hard))
++        except Exception:
++            old = None
++    failed = 0
++    try:
++        for p in prods:
++            try:
++                sh = ifcopenshell.geom.create_shape(s, p)
++                g = kernel_geometry(sh.geometry, m)
++            except Exception:          # incl. bad_alloc of a run-away under the cap
++                failed += 1
++                continue
++            done += 1
++            on_shape(p.id(), *g)
++    finally:
++        if old is not None:
++            try:
++                resource.setrlimit(resource.RLIMIT_AS, old)
++            except Exception:
++                pass
++    stats[stats_key] = {'products': len(prods), 'shapes': done, 'failed': failed, 'sec': round(time.time() - t0, 2), 'guarded': old is not None}
++
++
+ def verify_and_fallback(f, recs, spool, ver, repair, tc, threads, a, stats, vstats):
+     t0 = time.time()
+     res = ver.run([(i, r.frag) for i, r in enumerate(recs)])
+@@ -3050,6 +3232,7 @@
+     for i, r in enumerate(recs):
+         ok, why = judge(res.get(i), r.frag)
+         r.ok = ok
++        r.vres = res.get(i)
+         if not ok:
+             r.why = why
+             r.hist.append('L0:%s' % why)
+@@ -3082,7 +3265,7 @@
+         for k, (r, old) in enumerate(trial):
+             ok, why = judge(rr.get(k), r.frag)
+             if ok:
+-                r.ok = True; r.why = None
++                r.ok = True; r.why = None; r.vres = rr.get(k)
+             else:
+                 r.hist.append('L%d:%s' % (level, why))
+                 r.frag, r.level, r.tags = old
+@@ -3112,7 +3295,14 @@
+         if g_tc and a.mode != 'transcode':
+             attempt(g_tc, 2, 'L2', regen(f, g_tc, 'kernel', tc, repair, threads, stats, 'kernel_L2a', mode='poly'))
+         if g_k:
+-            attempt(g_k, 2, 'L2', regen(f, g_k, 'kernel', tc, repair, threads, stats, 'kernel_L2b', mode='tri'))
++            # products with openings were triangles at L0 (kernel_run): their alternative is the polyhedral form, run
++            # one by one under an address-space cap; all other kernel parts get the triangle mesh as before
++            g_op = [r for r in g_k if os.environ.get('V6_OPENINGS_POLY') != '1' and getattr(f.by_id(r.eid), 'HasOpenings', None)]
++            g_ot = [r for r in g_k if r not in g_op]
++            if g_ot:
++                attempt(g_ot, 2, 'L2', regen(f, g_ot, 'kernel', tc, repair, threads, stats, 'kernel_L2b', mode='tri'))
++            if g_op:
++                attempt(g_op, 2, 'L2', regen(f, g_op, 'kernel', tc, repair, threads, stats, 'kernel_L2b_openings_poly', mode='poly_guarded'))
+     # L3: per solid (valid solids kept, failing solids as open shells); L4: whole part as surface model
+     if fails and not a.no_surface_fallback:
+         bps = {}
+@@ -3158,7 +3348,7 @@
+             for k, (r, old) in enumerate(trial):
+                 ok, why = judge(rr.get(k), r.frag)
+                 if ok:
+-                    r.ok = True
++                    r.ok = True; r.vres = rr.get(k)
+                 else:
+                     r.hist.append('L3:%s' % why)
+                     r.frag, r.level, r.tags = old
+@@ -3179,6 +3369,7 @@
+             rr = ver.run([(k, r.frag) for k, (r, _) in enumerate(trial)])
+             for k, (r, old) in enumerate(trial):
+                 ok, why = judge(rr.get(k), r.frag)
++                r.vres = rr.get(k)
+                 if ok:
+                     r.ok = True
+                 else:
+@@ -3195,6 +3386,7 @@
+     stats['dropped_reader_crash_total'] = len(crashers)
+     stats['verify'] = {'rounds': ver.rounds, 'sec': round(ver.sec, 1), 'procs': ver.procs, 'python': ver.py,
+                        'reader_crash_chunks': getattr(ver, 'crashes', 0), 'identical_parts_not_reverified': getattr(ver, 'deduped', 0),
++                       'far_parts_verified_translated': getattr(ver, 'far_parts', 0),
+                        'final_failed': len(fails), 'final_failed_examples': [[r.gid, r.cls, r.name, r.hist] for r in fails[:20]]}
+     for r in fails:
+         r.tags.add('unverified')

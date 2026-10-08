@@ -1,0 +1,751 @@
+{
+ "counting": "packaged partial models (26,733, each once): a shortfall counts once per model; from the final conversion indexes",
+ "models": {
+  "ifc": 8471,
+  "db1": 13883,
+  "sds2": 4379
+ },
+ "kinds": {
+  "ifc|approximated": 6475,
+  "ifc|complete_to_source": 1996,
+  "db1|approximated": 13883,
+  "sds2|approximated": 4363,
+  "sds2|complete_to_source": 16
+ },
+ "categories": {
+  "converter_feature": 23092,
+  "profile_or_catalog_missing": 13371,
+  "source_data_absent": 8964,
+  "source_damaged": 88
+ },
+ "issues_top": [
+  [
+   "converter_feature",
+   "N hole slotted cut round (bolt hole of a slotted group cut round (slotted plies not decoded))",
+   11536
+  ],
+  [
+   "converter_feature",
+   "verify",
+   9237
+  ],
+  [
+   "profile_or_catalog_missing",
+   "N parts with derived section dimensions (headed stud written as its shank only)",
+   8586
+  ],
+  [
+   "converter_feature",
+   "N bolts positioned along their axis by fitting to the plies",
+   7669
+  ],
+  [
+   "profile_or_catalog_missing",
+   "N washers with nominal thickness",
+   7287
+  ],
+  [
+   "profile_or_catalog_missing",
+   "N bolts with nominal head/nut geometry",
+   7035
+  ],
+  [
+   "converter_feature",
+   "N parts: part written as a surface model (no valid solid)",
+   6315
+  ],
+  [
+   "converter_feature",
+   "N parts read back as surfaces, not solids",
+   5919
+  ],
+  [
+   "profile_or_catalog_missing",
+   "N parts with derived section dimensions (panel from an AxB name (orientation assumed))",
+   5278
+  ],
+  [
+   "converter_feature",
+   "N bolt axial position unknown (bolt (no connected ply on its axis: shank centred on the bolt plane))",
+   5041
+  ],
+  [
+   "converter_feature",
+   "N/N parts differ > N% from the source volume",
+   3912
+  ],
+  [
+   "converter_feature",
+   "N bolts whose washer side is inferred from the assembly flags",
+   3121
+  ],
+  [
+   "source_data_absent",
+   "N parts are surface models / open shells in the source (copied faithfully; no solid to check)",
+   3065
+  ],
+  [
+   "source_data_absent",
+   "N bolts guessed from hole stacks (no bolt record)",
+   3062
+  ],
+  [
+   "converter_feature",
+   "N cuts not applied",
+   2825
+  ],
+  [
+   "source_data_absent",
+   "N members without piece data written as envelopes",
+   2744
+  ],
+  [
+   "source_data_absent",
+   "N concrete parts as L x W x T prisms",
+   2479
+  ],
+  [
+   "source_data_absent",
+   "N parts stored as surface models / open shells in the source, written as surfaces (part written as a surface m",
+   2451
+  ],
+  [
+   "converter_feature",
+   "N mating holes not stored (bolt holes in the piece a single decoded ply bolts to)",
+   2396
+  ],
+  [
+   "converter_feature",
+   "STEP > N GB not verified by OCC read-back",
+   2310
+  ],
+  [
+   "converter_feature",
+   "Tekla bolt groups not written; bolt holes not cut",
+   2143
+  ],
+  [
+   "converter_feature",
+   "N holes derived from bolts (bolt holes in the main material)",
+   2134
+  ],
+  [
+   "converter_feature",
+   "step vs decoder join unavailable",
+   1981
+  ],
+  [
+   "profile_or_catalog_missing",
+   "N parts with derived section dimensions (bar grating written as a solid plate)",
+   1806
+  ],
+  [
+   "source_data_absent",
+   "N reference parts written as open surfaces (zero-thickness double-sided source surface (not a solid))",
+   1627
+  ],
+  [
+   "converter_feature",
+   "N pieces approximated (rolled profile extrusion: WNxN)",
+   1379
+  ],
+  [
+   "profile_or_catalog_missing",
+   "profiles missing from the catalog: <none> xN",
+   1343
+  ],
+  [
+   "source_data_absent",
+   "N open-web joists rebuilt from their designation (open-web steel joist NKN (vendor-designed))",
+   1144
+  ],
+  [
+   "profile_or_catalog_missing",
+   "N parts with derived section dimensions (HSS: corner radii assumed Nt)",
+   1058
+  ],
+  [
+   "source_data_absent",
+   "N parts whose source shell is open (closed by OCC healing, not exact)",
+   897
+  ],
+  [
+   "converter_feature",
+   "N holes derived from bolts (bolt hole derived from an SDSN bolt record and a coaxial decoded hole (not a store",
+   889
+  ],
+  [
+   "source_data_absent",
+   "N reference parts written as open surfaces (WNxN)",
+   834
+  ],
+  [
+   "converter_feature",
+   "N pieces approximated (plate from vertices: PLN/NxN N/N)",
+   754
+  ],
+  [
+   "converter_feature",
+   "N pieces approximated (plate from vertices: BPLN/NxN N/N)",
+   752
+  ],
+  [
+   "profile_or_catalog_missing",
+   "N parts with derived section dimensions (angle: root radius assumed = t)",
+   671
+  ],
+  [
+   "converter_feature",
+   "N parts: part rebuilt from an alternative source representation; volume check not passed",
+   626
+  ],
+  [
+   "converter_feature",
+   "N pieces approximated (rolled profile extrusion: HSSNxNxN/N)",
+   552
+  ],
+  [
+   "converter_feature",
+   "N solids with a volume larger than their own bounding box (self-overlapping, e.g. hole loops wound like the ou",
+   511
+  ],
+  [
+   "source_data_absent",
+   "N open-web joists rebuilt from their designation (open-web steel joist NLHN (vendor-designed))",
+   494
+  ],
+  [
+   "converter_feature",
+   "N pieces approximated (plate from vertices: PLN/NxN)",
+   485
+  ]
+ ],
+ "issues_top_by_pipeline": {
+  "ifc": [
+   [
+    "source_data_absent",
+    "N parts are surface models / open shells in the source (copied faithfully; no solid to check)",
+    3065
+   ],
+   [
+    "converter_feature",
+    "N parts read back as surfaces, not solids",
+    2834
+   ],
+   [
+    "converter_feature",
+    "N/N parts differ > N% from the source volume",
+    2662
+   ],
+   [
+    "source_data_absent",
+    "N parts stored as surface models / open shells in the source, written as surfaces (part written as a surface m",
+    2451
+   ],
+   [
+    "converter_feature",
+    "N parts: part written as a surface model (no valid solid)",
+    2063
+   ],
+   [
+    "source_data_absent",
+    "N reference parts written as open surfaces (zero-thickness double-sided source surface (not a solid))",
+    1103
+   ],
+   [
+    "source_data_absent",
+    "N parts whose source shell is open (closed by OCC healing, not exact)",
+    897
+   ],
+   [
+    "converter_feature",
+    "N parts: part rebuilt from an alternative source representation; volume check not passed",
+    626
+   ],
+   [
+    "converter_feature",
+    "N solids with a volume larger than their own bounding box (self-overlapping, e.g. hole loops wound like the ou",
+    510
+   ],
+   [
+    "converter_feature",
+    "some source parts not in the STEP (members N%)",
+    485
+   ],
+   [
+    "converter_feature",
+    "some source parts not in the STEP (connections N%)",
+    362
+   ],
+   [
+    "converter_feature",
+    "N parts written only as zero-volume / degenerate solids (not solids)",
+    183
+   ],
+   [
+    "converter_feature",
+    "N parts: part tessellated from an analytic source representation (approx)",
+    73
+   ],
+   [
+    "source_data_absent",
+    "N parts stored as surface models / open shells in the source, written as surfaces (part with some faces kept a",
+    72
+   ]
+  ],
+  "db1": [
+   [
+    "converter_feature",
+    "N hole slotted cut round (bolt hole of a slotted group cut round (slotted plies not decoded))",
+    11536
+   ],
+   [
+    "converter_feature",
+    "verify",
+    9149
+   ],
+   [
+    "profile_or_catalog_missing",
+    "N parts with derived section dimensions (headed stud written as its shank only)",
+    8586
+   ],
+   [
+    "converter_feature",
+    "N bolts positioned along their axis by fitting to the plies",
+    7669
+   ],
+   [
+    "profile_or_catalog_missing",
+    "N washers with nominal thickness",
+    7287
+   ],
+   [
+    "profile_or_catalog_missing",
+    "N bolts with nominal head/nut geometry",
+    7035
+   ],
+   [
+    "profile_or_catalog_missing",
+    "N parts with derived section dimensions (panel from an AxB name (orientation assumed))",
+    5278
+   ],
+   [
+    "converter_feature",
+    "N bolt axial position unknown (bolt (no connected ply on its axis: shank centred on the bolt plane))",
+    5041
+   ],
+   [
+    "converter_feature",
+    "N parts: part written as a surface model (no valid solid)",
+    4252
+   ],
+   [
+    "converter_feature",
+    "N bolts whose washer side is inferred from the assembly flags",
+    3121
+   ],
+   [
+    "converter_feature",
+    "N parts read back as surfaces, not solids",
+    3085
+   ],
+   [
+    "converter_feature",
+    "N cuts not applied",
+    2825
+   ],
+   [
+    "converter_feature",
+    "Tekla bolt groups not written; bolt holes not cut",
+    2143
+   ],
+   [
+    "converter_feature",
+    "STEP > N GB not verified by OCC read-back",
+    1981
+   ]
+  ],
+  "sds2": [
+   [
+    "source_data_absent",
+    "N bolts guessed from hole stacks (no bolt record)",
+    3062
+   ],
+   [
+    "source_data_absent",
+    "N members without piece data written as envelopes",
+    2744
+   ],
+   [
+    "source_data_absent",
+    "N concrete parts as L x W x T prisms",
+    2479
+   ],
+   [
+    "converter_feature",
+    "N mating holes not stored (bolt holes in the piece a single decoded ply bolts to)",
+    2396
+   ],
+   [
+    "converter_feature",
+    "N holes derived from bolts (bolt holes in the main material)",
+    2134
+   ],
+   [
+    "converter_feature",
+    "N pieces approximated (rolled profile extrusion: WNxN)",
+    1379
+   ],
+   [
+    "source_data_absent",
+    "N open-web joists rebuilt from their designation (open-web steel joist NKN (vendor-designed))",
+    1144
+   ],
+   [
+    "converter_feature",
+    "N holes derived from bolts (bolt hole derived from an SDSN bolt record and a coaxial decoded hole (not a store",
+    889
+   ],
+   [
+    "source_data_absent",
+    "N reference parts written as open surfaces (WNxN)",
+    834
+   ],
+   [
+    "converter_feature",
+    "N pieces approximated (plate from vertices: PLN/NxN N/N)",
+    754
+   ],
+   [
+    "converter_feature",
+    "N pieces approximated (plate from vertices: BPLN/NxN N/N)",
+    752
+   ],
+   [
+    "converter_feature",
+    "N pieces approximated (rolled profile extrusion: HSSNxNxN/N)",
+    552
+   ],
+   [
+    "source_data_absent",
+    "N open-web joists rebuilt from their designation (open-web steel joist NLHN (vendor-designed))",
+    494
+   ],
+   [
+    "converter_feature",
+    "N pieces approximated (plate from vertices: PLN/NxN)",
+    485
+   ]
+  ]
+ },
+ "standins_top": [
+  [
+   "hole_slotted_cut_round",
+   11536
+  ],
+  [
+   "section_parametric_stud_shank",
+   8586
+  ],
+  [
+   "v6_L4-surface",
+   8405
+  ],
+  [
+   "bolt_axial_position_fitted",
+   7669
+  ],
+  [
+   "washer_nominal",
+   7287
+  ],
+  [
+   "bolt_nominal_head_nut",
+   7035
+  ],
+  [
+   "section_parametric_panel",
+   5278
+  ],
+  [
+   "bolt_axial_position_unknown",
+   5041
+  ],
+  [
+   "washer_side_inferred",
+   3121
+  ],
+  [
+   "holes_derived_from_bolts",
+   3023
+  ],
+  [
+   "nominal_bolt",
+   2440
+  ],
+  [
+   "mating_holes_not_stored",
+   2396
+  ],
+  [
+   "member_envelope",
+   2281
+  ],
+  [
+   "pieces_without_bolt_holes",
+   2143
+  ],
+  [
+   "concrete_prism",
+   2077
+  ],
+  [
+   "rolled_profile_extrusion",
+   1996
+  ],
+  [
+   "section_parametric_grating",
+   1806
+  ],
+  [
+   "v6_open-surface",
+   1627
+  ],
+  [
+   "plate_from_vertices",
+   1615
+  ],
+  [
+   "joist_openweb_standin",
+   1482
+  ],
+  [
+   "brep_open_surface",
+   1388
+  ],
+  [
+   "section_parametric_hss",
+   1058
+  ],
+  [
+   "v6_open_in_source_healed",
+   897
+  ],
+  [
+   "section_parametric_angle",
+   671
+  ],
+  [
+   "v6_L2-alt-source_volume_unverified",
+   626
+  ],
+  [
+   "nominal_bolt_from_hole_stack",
+   622
+  ],
+  [
+   "piece_table_standin",
+   535
+  ],
+  [
+   "v6_L3-partial-surface",
+   494
+  ],
+  [
+   "member_as_envelope",
+   463
+  ],
+  [
+   "profile_fallback_approximate_no_holes",
+   417
+  ],
+  [
+   "section_parametric_rhs",
+   407
+  ],
+  [
+   "concrete_as_prism",
+   402
+  ],
+  [
+   "approx_tagged_products",
+   352
+  ],
+  [
+   "brep_unvalidated",
+   332
+  ],
+  [
+   "plate_fallback_approximate_no_holes",
+   305
+  ],
+  [
+   "joist_as_envelope_box",
+   297
+  ],
+  [
+   "mesh_cylinder",
+   289
+  ],
+  [
+   "hole_clearance_nominal",
+   180
+  ],
+  [
+   "section_parametric_angle_equal",
+   164
+  ],
+  [
+   "joist_envelope_box",
+   111
+  ]
+ ],
+ "standins_top_by_pipeline": {
+  "ifc": [
+   [
+    "v6_L4-surface",
+    4153
+   ],
+   [
+    "v6_open-surface",
+    1103
+   ],
+   [
+    "v6_open_in_source_healed",
+    897
+   ],
+   [
+    "v6_L2-alt-source_volume_unverified",
+    626
+   ],
+   [
+    "v6_L3-partial-surface",
+    110
+   ],
+   [
+    "v6_L1_tessellated_analytic",
+    73
+   ],
+   [
+    "bounding_box",
+    7
+   ],
+   [
+    "v6_unverified",
+    4
+   ],
+   [
+    "v6_cis2-feature-not-applied",
+    2
+   ],
+   [
+    "v6_cis2-camber-not-applied",
+    2
+   ],
+   [
+    "v6_cis2-approx-section",
+    2
+   ]
+  ],
+  "db1": [
+   [
+    "hole_slotted_cut_round",
+    11536
+   ],
+   [
+    "section_parametric_stud_shank",
+    8586
+   ],
+   [
+    "bolt_axial_position_fitted",
+    7669
+   ],
+   [
+    "washer_nominal",
+    7287
+   ],
+   [
+    "bolt_nominal_head_nut",
+    7035
+   ],
+   [
+    "section_parametric_panel",
+    5278
+   ],
+   [
+    "bolt_axial_position_unknown",
+    5041
+   ],
+   [
+    "v6_L4-surface",
+    4252
+   ],
+   [
+    "washer_side_inferred",
+    3121
+   ],
+   [
+    "pieces_without_bolt_holes",
+    2143
+   ],
+   [
+    "section_parametric_grating",
+    1806
+   ],
+   [
+    "section_parametric_hss",
+    1058
+   ]
+  ],
+  "sds2": [
+   [
+    "holes_derived_from_bolts",
+    3023
+   ],
+   [
+    "nominal_bolt",
+    2440
+   ],
+   [
+    "mating_holes_not_stored",
+    2396
+   ],
+   [
+    "member_envelope",
+    2281
+   ],
+   [
+    "concrete_prism",
+    2077
+   ],
+   [
+    "rolled_profile_extrusion",
+    1996
+   ],
+   [
+    "plate_from_vertices",
+    1615
+   ],
+   [
+    "joist_openweb_standin",
+    1482
+   ],
+   [
+    "brep_open_surface",
+    1388
+   ],
+   [
+    "nominal_bolt_from_hole_stack",
+    622
+   ],
+   [
+    "piece_table_standin",
+    535
+   ],
+   [
+    "member_as_envelope",
+    463
+   ]
+  ]
+ }
+}

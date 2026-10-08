@@ -1,0 +1,402 @@
+[
+ {
+  "etag": "9d0014cbfa38d0d38435c1ca2ce97b8f",
+  "bytes": 1828566,
+  "key": "cad-disk-extract/dataset/main/3d/Disk-1__TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_16._CHST_Dallas_On_Call_Rooms_Renovation.7z-2bc663675599/model/db1/CHST_DALLAS_ON_CALL_ROOMS_RENOVATON-dc984f.db1",
+  "route": "3d",
+  "project": "Disk-1__TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_16._CHST_Dallas_On_Call_Rooms_Renovation.7z-2bc663675599",
+  "source_key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_16._CHST_Dallas_On_Call_Rooms_Renovation.7z-2bc663675599/16._CHST_Dallas_On_Call_Rooms_Renovation/7.PRODUCTION/NAGARAJU.V/29-07-2021/CHST_DALLAS_ON_CALL_ROOMS_RENOVATON/CHST_DALLAS_ON_CALL_ROOMS_RENOVATON.db1",
+  "engine": "8.85",
+  "sha": "91785192179b7b7aaf07c833c4bbacdfab1b997e89e45bc1a32672a2550f663a"
+ },
+ {
+  "etag": "10451f13c71ac61e9bac0fec39e2a2c5",
+  "bytes": 936526,
+  "key": "cad-disk-extract/dataset/main/2d/Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_Lego_UPLOADS_FROM_LEGO_1620-D-021_MODEL_MAR21.zip-17e3420a328a/model/db1/1620-D-021.db1",
+  "route": "2d",
+  "project": "Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_Lego_UPLOADS_FROM_LEGO_1620-D-021_MODEL_MAR21.zip-17e3420a328a",
+  "source_key": "cad-disk-extract/Disk-2/Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_Lego_UPLOADS_FROM_LEGO_1620-D-021_MODEL_MAR21.zip-17e3420a328a/1620-D-021_MODEL_MAR21/1620-D-021/1620-D-021.db1",
+  "engine": "7.01",
+  "sha": "77d1d050d4ea4662d3773e0e3a0d438780b8600d42f34efea46417242321540d"
+ },
+ {
+  "etag": "c72950e0f57bf403e2af978e194679bc",
+  "bytes": 61002993,
+  "key": "cad-disk-extract/dataset/main/3d/Disk-1__TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_32._32356_Americus_Fresh.7z/model/db1/32356_AMERICUS_FRESH-65d603.db1",
+  "route": "3d",
+  "project": "Disk-1__TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_32._32356_Americus_Fresh.7z",
+  "source_key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_32._32356_Americus_Fresh.7z/32._32356_Americus_Fresh/7._Submittals/OFA_IFF/ABM/32356_Americus_Fresh_ABM_005/32356-ABM_005-020124-Model.zip!/32356_AMERICUS_FRESH/32356_AMERICUS_FRESH.db1",
+  "engine": "8.85",
+  "sha": "ec02e34ecda47817275d1580e84a9b304e83f80758b7ffda6eb1a985830c0a05"
+ },
+ {
+  "etag": "d5a69fba5b9ab883a6f7e077549c68ac",
+  "bytes": 1257856,
+  "key": "cad-disk-extract/dataset/main/2d/Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_Lego_UPLOADS_FROM_LEGO_1620-D-017_MODEL_MAR14.zip-ddc4b89e9011/model/db1/1620-D-017.db1",
+  "route": "2d",
+  "project": "Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_Lego_UPLOADS_FROM_LEGO_1620-D-017_MODEL_MAR14.zip-ddc4b89e9011",
+  "source_key": "cad-disk-extract/Disk-2/Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_Lego_UPLOADS_FROM_LEGO_1620-D-017_MODEL_MAR14.zip-ddc4b89e9011/1620-D-017_MODEL_MAR14/1620-D-017/1620-D-017.db1",
+  "engine": "7.01",
+  "sha": "3c34bdb34f6e85c937c9e529978c1e4051c7c74c7baf8658b7f45d4a89c0c93c"
+ },
+ {
+  "etag": "45a5b5ef4832a2c5341e6d0b1c0706d0",
+  "bytes": 3881346,
+  "key": "cad-disk-extract/dataset/main/2d/Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09-09-02-12.zip-5f68b57cfbb1/model/db1/BRIDGE_2.09.db1",
+  "route": "2d",
+  "project": "Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09-09-02-12.zip-5f68b57cfbb1",
+  "source_key": "cad-disk-extract/Disk-2/Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09-09-02-12.zip-5f68b57cfbb1/09-02-2012/BRIDGE_2.09-MODEL/BRIDGE_2.09.db1",
+  "engine": "7.01",
+  "sha": "a7f94f2edc0fa54606cd12c19915a2d67b11cb49b02e5fae40df20e51b747b57"
+ },
+ {
+  "etag": "7d79dd8ede0569a7e1258a5ccadb7552",
+  "bytes": 9224106,
+  "key": "cad-disk-extract/dataset/main/3d/Disk-1__TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_25._3300_Whitehaven.7z/model/db1/3300_WHITEHAVEN.db1",
+  "route": "3d",
+  "project": "Disk-1__TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_25._3300_Whitehaven.7z",
+  "source_key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_25._3300_Whitehaven.7z/25._3300_Whitehaven/7._PRODUCTION/DJ/BACKUP_MODEL/17-01-2023_01.20_PM/3300_WHITEHAVEN/3300_WHITEHAVEN.db1",
+  "engine": "8.85",
+  "sha": "18cf112c0f9b300259aba55f0c2861777bd4abf6a9f8d726da276d9c814598c8"
+ },
+ {
+  "etag": "e96d33ae75ea20c87d57c544e0c5c683",
+  "bytes": 739983,
+  "key": "cad-disk-extract/dataset/main/2d/Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_Lego_UPLOADS_FROM_LEGO_1620-D-003_BACK_UP_APR03.zip-64f78279e4a9/model/db1/1620-D-003.db1",
+  "route": "2d",
+  "project": "Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_Lego_UPLOADS_FROM_LEGO_1620-D-003_BACK_UP_APR03.zip-64f78279e4a9",
+  "source_key": "cad-disk-extract/Disk-2/Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_Lego_UPLOADS_FROM_LEGO_1620-D-003_BACK_UP_APR03.zip-64f78279e4a9/1620-D-003_BACK_UP_APR03/1620-D-003/1620-D-003.db1",
+  "engine": "7.01",
+  "sha": "cc9bf730baa1585cf371b5c5ee5ee62e55ceafc69d73c720756ca42418f5b0c9"
+ },
+ {
+  "etag": "da50112b0616103724adf344d08f3e00",
+  "bytes": 3906580,
+  "key": "cad-disk-extract/dataset/main/2d/Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09.zip-962fa575ba06/model/db1/BRIDGE_2.09.db1",
+  "route": "2d",
+  "project": "Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09.zip-962fa575ba06",
+  "source_key": "cad-disk-extract/Disk-2/Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09.zip-962fa575ba06/BRIDGE_2.09/BRIDGE_2.09.db1",
+  "engine": "7.01",
+  "sha": "58675adb55d0559b91d7a023efbd7b5a18ace32b3cf20795f5d10329fde98975"
+ },
+ {
+  "etag": "a7739169ceb9e729155e05ac21f5a3a9",
+  "bytes": 5693605,
+  "key": "cad-disk-extract/dataset/main/3d/Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP2.7z/model/db1/SPARTANBURG_REHABILITATION_INSTITUTE.db1",
+  "route": "3d",
+  "project": "Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP2.7z",
+  "source_key": "cad-disk-extract/Disk-2/Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP2.7z/FTP2/cmc/Upload_From_Moldtek/spartanburg/SPARTANBURG_REHABILITATION_INSTITUTE-21st_nov.zip!/SPARTANBURG_REHABILITATION_INSTITUTE/SPARTANBURG_REHABILITATION_INSTITUTE.db1",
+  "engine": "7.24",
+  "sha": "cd9207295eb9bdfc9f2952989f2ee82830ac41fee2fcc360be70840d35d1515e"
+ },
+ {
+  "etag": "95e385b63fbefaa41a18fcb4802f69a0",
+  "bytes": 2252007,
+  "key": "cad-disk-extract/dataset/main/2d/Disk-1__TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_26._22117_Cambrex.7z/model/db1/31986_-_CAMBREX.db1",
+  "route": "2d",
+  "project": "Disk-1__TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_26._22117_Cambrex.7z",
+  "source_key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_26._22117_Cambrex.7z/26._22117_Cambrex/7._Submittals/1._IFA/1._31986_Sub_1_Cambrex_AB_s_Mainsteel_for_IFA_09092022/31986-IFA_001-090922-Model.zip!/31986_-_CAMBREX/31986_-_CAMBREX.db1",
+  "engine": "8.85",
+  "sha": "aaf32621940aa4f1a2bbdcc0022d6c11d801b125ad966748abff8d4370000470"
+ },
+ {
+  "etag": "940d6364ef3f43fb83b05fe82ce1e82a",
+  "bytes": 3715715,
+  "key": "cad-disk-extract/dataset/main/2d/Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09-3rd_feb_2012.zip-332cd561d1b6/model/db1/BRIDGE_2.09.db1",
+  "route": "2d",
+  "project": "Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09-3rd_feb_2012.zip-332cd561d1b6",
+  "source_key": "cad-disk-extract/Disk-2/Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09-3rd_feb_2012.zip-332cd561d1b6/BRIDGE_2.09/BRIDGE_2.09.db1",
+  "engine": "7.01",
+  "sha": "127fc6b8ecf9bbd2fe3f6633cb3c193dac155f7bacde48fd6f89738d418c9425"
+ },
+ {
+  "etag": "737638541fc5635917a8cf3a1756c5e7",
+  "bytes": 6917471,
+  "key": "cad-disk-extract/dataset/main/3d/Disk-2__Completed_Projects_Data_033_CIVES_NEWENGLAND_401_Congress.7z/model/db1/10_WT_Tekla_TS2017i.db1",
+  "route": "3d",
+  "project": "Disk-2__Completed_Projects_Data_033_CIVES_NEWENGLAND_401_Congress.7z",
+  "source_key": "cad-disk-extract/Disk-2/Completed_Projects_Data_033_CIVES_NEWENGLAND_401_Congress.7z/401_Congress/073021/OneDrive_1_7-30-2021.zip!/10_World_Trade-7.22.21.zip!/Other_Documents/Models/2021.07.16_10_World_Trade-ReferenceTeklaModel.zip!/2021.07.16_10_World_Trade-ReferenceTeklaModel/1._10_World_Trade_Tekla_Model_Reference_Only/10_WT_Tekla_TS2017i/10_WT_Tekla_TS2017i.db1",
+  "engine": "8.53",
+  "sha": "1d8972fb557e33712b2ce4bcdb4c424adb77e0424d310434b10fa5037768d870"
+ },
+ {
+  "etag": "405e10bdfc234d100400c8e29693af58",
+  "bytes": 7341170,
+  "key": "cad-disk-extract/dataset/main/3d/Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP2.7z/model/db1/MAG_GRINDING_CIRCUIT-5da0e3.db1",
+  "route": "3d",
+  "project": "Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP2.7z",
+  "source_key": "cad-disk-extract/Disk-2/Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP2.7z/FTP2/customer/UPLOADS_FROM_CUSTOMER/MODEL-102913/model-102913.zip!/model-102913/MAG_GRINDING_CIRCUIT/MAG_GRINDING_CIRCUIT.db1",
+  "engine": "7.24",
+  "sha": "ffd36bc29f2fac6086e5269e5bfd43c54f8bffebbc6602a73a288041f2c394d5"
+ },
+ {
+  "etag": "e5fe1cd259ea2b5614fcea0cf8433e08",
+  "bytes": 3984677,
+  "key": "cad-disk-extract/dataset/main/2d/Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09-24-02-2012.zip-033ebf4c444d/model/db1/BRIDGE_2.09.db1",
+  "route": "2d",
+  "project": "Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09-24-02-2012.zip-033ebf4c444d",
+  "source_key": "cad-disk-extract/Disk-2/Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09-24-02-2012.zip-033ebf4c444d/BRIDGE_2.09/BRIDGE_2.09.db1",
+  "engine": "7.01",
+  "sha": "86cff378b3cf273f0eead2d0ad598c9e11f725a84610f10a4386b80500f64252"
+ },
+ {
+  "etag": "b0ca636901d49896a49639bb1faad69d",
+  "bytes": 938245,
+  "key": "cad-disk-extract/dataset/main/2d/Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_Lego_UPLOADS_FROM_LEGO_1620-D-014_MODEL_MAR14.zip-554d777bedd7/model/db1/1620-D-014.db1",
+  "route": "2d",
+  "project": "Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_Lego_UPLOADS_FROM_LEGO_1620-D-014_MODEL_MAR14.zip-554d777bedd7",
+  "source_key": "cad-disk-extract/Disk-2/Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_Lego_UPLOADS_FROM_LEGO_1620-D-014_MODEL_MAR14.zip-554d777bedd7/1620-D-014_MODEL_MAR14/1620-D-014/1620-D-014.db1",
+  "engine": "7.01",
+  "sha": "ab155ee541c2c563790f49af80d7a5d70dca331b8d0ba0f4121e6894118c713b"
+ },
+ {
+  "etag": "22bdb39cbe2bfaadd2c9dcc45786fca7",
+  "bytes": 65163824,
+  "key": "cad-disk-extract/dataset/main/3d/Disk-1__TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_32._32356_Americus_Fresh.7z/model/db1/32356_AMERICUS_FRESH-c2cfbc.db1",
+  "route": "3d",
+  "project": "Disk-1__TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_32._32356_Americus_Fresh.7z",
+  "source_key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_32._32356_Americus_Fresh.7z/32._32356_Americus_Fresh/7._Submittals/OFA_IFF/ABM/32356_Americus_Fresh_ABM_003/32356-ABM_003-090123-Model.zip!/32356_AMERICUS_FRESH/32356_AMERICUS_FRESH.db1",
+  "engine": "8.85",
+  "sha": "e87690bebcaa7875b933e40edc0d820d363cd4f18f17f1749f408d83672d8df7"
+ },
+ {
+  "etag": "ca28afd7f7131bbdbc8a8aa69b370598",
+  "bytes": 3338518,
+  "key": "cad-disk-extract/dataset/main/2d/Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09-01-26-12.zip-775213172b9a/model/db1/BRIDGE_2.09.db1",
+  "route": "2d",
+  "project": "Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09-01-26-12.zip-775213172b9a",
+  "source_key": "cad-disk-extract/Disk-2/Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09-01-26-12.zip-775213172b9a/BRIDGE_2.09/BRIDGE_2.09.db1",
+  "engine": "7.01",
+  "sha": "078d01bfe6fea2eaaf0e2d93cb77a5e4a73222c3fa6b9d6e20dd8270bc9a591c"
+ },
+ {
+  "etag": "8e1ccb2b3ad90b65b2802103a803ac2d",
+  "bytes": 25057974,
+  "key": "cad-disk-extract/dataset/main/3d/Disk-1__TEKLA-HYD_PROJECT_DATA-2023-2024_N_Drive_BackUp_Steel_Fab_31318_-_Trex_HQ.7z-5aa29e07e233/model/db1/31318_-_Trex_HQ.db1",
+  "route": "3d",
+  "project": "Disk-1__TEKLA-HYD_PROJECT_DATA-2023-2024_N_Drive_BackUp_Steel_Fab_31318_-_Trex_HQ.7z-5aa29e07e233",
+  "source_key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2023-2024_N_Drive_BackUp_Steel_Fab_31318_-_Trex_HQ.7z-5aa29e07e233/31318_-_Trex_HQ/31318_-_Trex_HQ.db1",
+  "engine": "8.85",
+  "sha": "0a5eb140317c1f5ae8cec72b708089ea97b4177c4ed89c9749dcea541ace2263"
+ },
+ {
+  "etag": "7c596f10ae9f64f21b1f6796f465c5e5",
+  "bytes": 8159254,
+  "key": "cad-disk-extract/dataset/main/3d/Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP2.7z/model/db1/MAG_GRINDING_CIRCUIT-c3d013.db1",
+  "route": "3d",
+  "project": "Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP2.7z",
+  "source_key": "cad-disk-extract/Disk-2/Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP2.7z/FTP2/customer/UPLOADS_FROM_CUSTOMER/FOR_FABRICATION/STAIR-2001-2002-_FOR_FAB-112913-VOID/RFF-STAIR-2001-2002L.zip!/MODEL/MAG_GRINDING_CIRCUIT/MAG_GRINDING_CIRCUIT.db1",
+  "engine": "7.24",
+  "sha": "ec92f614980650d07750b642d967d508c6e0ea86a10f74c6e0afd5b6f15651d1"
+ },
+ {
+  "etag": "006fbeafdc6af50dee5639cd873b4701",
+  "bytes": 144791,
+  "key": "cad-disk-extract/dataset/main/2d/Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_kwik_UPLOADS_FROM_MOLDTEK_MAR_2012_1620-D-110_DT-09.03.2012.zip-05d0840dd9f7/model/db1/1620-D-110.db1",
+  "route": "2d",
+  "project": "Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_kwik_UPLOADS_FROM_MOLDTEK_MAR_2012_1620-D-110_DT-09.03.2012.zip-05d0840dd9f7",
+  "source_key": "cad-disk-extract/Disk-2/Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_kwik_UPLOADS_FROM_MOLDTEK_MAR_2012_1620-D-110_DT-09.03.2012.zip-05d0840dd9f7/1620-D-110_DT-09.03.2012/MODEL/1620-D-110/1620-D-110.db1",
+  "engine": "6.87",
+  "sha": "63ecb8207e981b6d5cc1d0b3101e9fe1041bdab28464617599e61376cb7037f9"
+ },
+ {
+  "etag": "2dff111903c21bd50b58b60b18dde671",
+  "bytes": 542647,
+  "key": "cad-disk-extract/dataset/main/3d/Disk-1__TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_16._CHST_Dallas_On_Call_Rooms_Renovation.7z-2bc663675599/model/db1/30945-60cb4b.db1",
+  "route": "3d",
+  "project": "Disk-1__TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_16._CHST_Dallas_On_Call_Rooms_Renovation.7z-2bc663675599",
+  "source_key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_16._CHST_Dallas_On_Call_Rooms_Renovation.7z-2bc663675599/16._CHST_Dallas_On_Call_Rooms_Renovation/5._Correspondence/To_Client/05102021/30945.zip!/30945/30945.db1",
+  "engine": "8.85",
+  "sha": "39a86379e9a6a1fc1a66363fd0962adede4894a028d27066f0f4164930710132"
+ },
+ {
+  "etag": "1feb7e7e38ed2d9f8385251216d3c099",
+  "bytes": 7827454,
+  "key": "cad-disk-extract/dataset/main/3d/Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP2.7z/model/db1/MAG_GRINDING_CIRCUIT-269f70.db1",
+  "route": "3d",
+  "project": "Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP2.7z",
+  "source_key": "cad-disk-extract/Disk-2/Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP2.7z/FTP2/customer/UPLOADS_FROM_CUSTOMER/MODEL-110613/MAG_GRINDING_CIRCUIT.zip!/MAG_GRINDING_CIRCUIT/MAG_GRINDING_CIRCUIT.db1",
+  "engine": "7.24",
+  "sha": "e6ec773c7179da07ed15c3589cdbb19db3a407675fab2b0bd2eb64e25434d4d1"
+ },
+ {
+  "etag": "6101708a2a8d2331453fb9bbbe5c8831",
+  "bytes": 9750192,
+  "key": "cad-disk-extract/dataset/main/3d/Disk-1__TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_32._32356_Americus_Fresh.7z/model/db1/32356_AMERICUS_FRESH.db1",
+  "route": "3d",
+  "project": "Disk-1__TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_32._32356_Americus_Fresh.7z",
+  "source_key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_32._32356_Americus_Fresh.7z/32._32356_Americus_Fresh/7._Submittals/OFA_IFF/ABM/32356_Americus_Fresh_ABM_001.zip!/32356_Americus_Fresh_ABM_001/32356-ABM_001-041823-Model.zip!/32356_AMERICUS_FRESH/32356_AMERICUS_FRESH.db1",
+  "engine": "8.85",
+  "sha": "9e1991621321af682b452804e0211ff0e6a527214075088102d6e6015dc958a5"
+ },
+ {
+  "etag": "3de928465d670965d080357901b96785",
+  "bytes": 7973877,
+  "key": "cad-disk-extract/dataset/main/3d/Disk-1__TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_25._3300_Whitehaven.7z/model/db1/3300_WHITEHAVEN-dd4912.db1",
+  "route": "3d",
+  "project": "Disk-1__TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_25._3300_Whitehaven.7z",
+  "source_key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_25._3300_Whitehaven.7z/25._3300_Whitehaven/8._SUBMITTALS/ABM/31936-3300_Whitehaven_ABM-002_MCN-02_01132023/31936-ABM_002-011323-Model.zip!/3300_WHITEHAVEN/3300_WHITEHAVEN.db1",
+  "engine": "8.85",
+  "sha": "738ee19da0806dbe4ce6f827abcaefed51ab5e2e27151dc549b3cdc9f2c214b2"
+ },
+ {
+  "etag": "6623738106871b737dc2c5d08f29ce36",
+  "bytes": 3905619,
+  "key": "cad-disk-extract/dataset/main/2d/Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09-15-02-2102.zip-3010c6cbb733/model/db1/BRIDGE_2.09.db1",
+  "route": "2d",
+  "project": "Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09-15-02-2102.zip-3010c6cbb733",
+  "source_key": "cad-disk-extract/Disk-2/Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09-15-02-2102.zip-3010c6cbb733/BRIDGE_2.09/BRIDGE_2.09.db1",
+  "engine": "7.01",
+  "sha": "a81d6d1e5b3eec8d74b09dc43bcd07da1ba054c809dcf0b784c6698a3ff430cb"
+ },
+ {
+  "etag": "2a615a802142228ba3ad27ee698920fa",
+  "bytes": 1106532,
+  "key": "cad-disk-extract/dataset/main/3d/Disk-1__TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_25._3300_Whitehaven.7z/model/db1/3300_WHITEHAVEN-2e33c8.db1",
+  "route": "3d",
+  "project": "Disk-1__TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_25._3300_Whitehaven.7z",
+  "source_key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_25._3300_Whitehaven.7z/25._3300_Whitehaven/7._PRODUCTION/nagarjuna/ABM/MCN/31936-ABM_001-082622-Model.zip!/3300_WHITEHAVEN/3300_WHITEHAVEN.db1",
+  "engine": "8.85",
+  "sha": "a6d58d6b5ce00e02bb170fb6323bcf1d97650aab75dd2abd0fe40e5f6e8d96ab"
+ },
+ {
+  "etag": "55447982294316c9f39a8869bee2705f",
+  "bytes": 1045707,
+  "key": "cad-disk-extract/dataset/main/3d/Disk-1__TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_16._CHST_Dallas_On_Call_Rooms_Renovation.7z-2bc663675599/model/db1/CHST_DALLAS_ON_CALL_ROOMS_RENOVATON.db1",
+  "route": "3d",
+  "project": "Disk-1__TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_16._CHST_Dallas_On_Call_Rooms_Renovation.7z-2bc663675599",
+  "source_key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_16._CHST_Dallas_On_Call_Rooms_Renovation.7z-2bc663675599/16._CHST_Dallas_On_Call_Rooms_Renovation/7.PRODUCTION/Backup-250521/CHST_DALLAS_ON_CALL_ROOMS_RENOVATON/CHST_DALLAS_ON_CALL_ROOMS_RENOVATON.db1",
+  "engine": "8.85",
+  "sha": "4edff16e16da9086a8305fc7b7c6886fb18f551b45b466a642c45a38b16c7aff"
+ },
+ {
+  "etag": "9703f030839537c2d3967c1880e0b545",
+  "bytes": 799561,
+  "key": "cad-disk-extract/dataset/main/2d/Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_Lego_UPLOADS_FROM_LEGO_1620-D-001_BACK_UP_MAR29.zip-f5e97b2d35f0/model/db1/1620-D-001.db1",
+  "route": "2d",
+  "project": "Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_Lego_UPLOADS_FROM_LEGO_1620-D-001_BACK_UP_MAR29.zip-f5e97b2d35f0",
+  "source_key": "cad-disk-extract/Disk-2/Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_Lego_UPLOADS_FROM_LEGO_1620-D-001_BACK_UP_MAR29.zip-f5e97b2d35f0/1620-D-001_BACK_UP_MAR29/1620-D-001/1620-D-001.db1",
+  "engine": "7.01",
+  "sha": "4fa8f263f754f8625968d935eed6b3a90afc9e15135fd6bced833b43bc6a148b"
+ },
+ {
+  "etag": "05cdb6640fcc420846a9a1d06024c3d5",
+  "bytes": 3140848,
+  "key": "cad-disk-extract/dataset/main/2d/Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09-9th_jan_2012.zip-9a6b4315e88b/model/db1/BRIDGE_2.09.db1",
+  "route": "2d",
+  "project": "Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09-9th_jan_2012.zip-9a6b4315e88b",
+  "source_key": "cad-disk-extract/Disk-2/Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09-9th_jan_2012.zip-9a6b4315e88b/BRIDGE_2.09/BRIDGE_2.09.db1",
+  "engine": "7.01",
+  "sha": "291547d3c10f8d7b0a598b74e810dc743df1551b04f1c04b73c1affb180a289a"
+ },
+ {
+  "etag": "df3eb3eebb5926ac88b0db2e8ec577bc",
+  "bytes": 8060826,
+  "key": "cad-disk-extract/dataset/main/3d/Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP2.7z/model/db1/MAG_GRINDING_CIRCUIT-cecd37.db1",
+  "route": "3d",
+  "project": "Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP2.7z",
+  "source_key": "cad-disk-extract/Disk-2/Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP2.7z/FTP2/customer/UPLOADS_FROM_CUSTOMER/LADDER-111513/MAG_GRINDING_CIRCUIT/MAG_GRINDING_CIRCUIT.db1",
+  "engine": "7.24",
+  "sha": "88be5995e1e43151ad77607e3c62fea54d037fc348fc5aa22c24c3dcc5201d17"
+ },
+ {
+  "etag": "95e081368d15b6037ed305d98068b1ef",
+  "bytes": 1509680,
+  "key": "cad-disk-extract/dataset/main/3d/Disk-1__TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_16._CHST_Dallas_On_Call_Rooms_Renovation.7z-2bc663675599/model/db1/CHST_DALLAS_ON_CALL_ROOMS_RENOVATON-0466f7.db1",
+  "route": "3d",
+  "project": "Disk-1__TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_16._CHST_Dallas_On_Call_Rooms_Renovation.7z-2bc663675599",
+  "source_key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_16._CHST_Dallas_On_Call_Rooms_Renovation.7z-2bc663675599/16._CHST_Dallas_On_Call_Rooms_Renovation/7.PRODUCTION/Naresh/25-06-2021/CHST_DALLAS_ON_CALL_ROOMS_RENOVATON/CHST_DALLAS_ON_CALL_ROOMS_RENOVATON.db1",
+  "engine": "8.85",
+  "sha": "eafaaaa0109aef168e06d1328c254a271f60403ce55d82b11b2c4b070df3bf59"
+ },
+ {
+  "etag": "71fb46d5fec74b056b8b4ea9129739c5",
+  "bytes": 13934398,
+  "key": "cad-disk-extract/dataset/main/3d/Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP2.7z/model/db1/MAGNETATION_GRINDING_CIRCUIT_MASTER.db1",
+  "route": "3d",
+  "project": "Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP2.7z",
+  "source_key": "cad-disk-extract/Disk-2/Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP2.7z/FTP2/customer/UPLOADS_FROM_MOLDTEK/Master_Model/MAGNETATION_GRINDING_CIRCUIT_MASTER.zip!/MAGNETATION_GRINDING_CIRCUIT_MASTER/MAGNETATION_GRINDING_CIRCUIT_MASTER.db1",
+  "engine": "7.24",
+  "sha": "5b33936fcd1e3efc1c15c2e95872ca9ec08ab9f3141cd16f52474913aad52e20"
+ },
+ {
+  "etag": "74615c1d5056e7dd4f79329b74ef52dc",
+  "bytes": 45839962,
+  "key": "cad-disk-extract/dataset/main/3d/Disk-1__TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_32._32356_Americus_Fresh.7z/model/db1/32356_AMERICUS_FRESH-735b5b.db1",
+  "route": "3d",
+  "project": "Disk-1__TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_32._32356_Americus_Fresh.7z",
+  "source_key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_32._32356_Americus_Fresh.7z/32._32356_Americus_Fresh/7._Submittals/OFA_IFF/ABM/32356_Americus_Fresh_ABM_002/32356-ABM_002-072623-Model.zip!/32356_AMERICUS_FRESH/32356_AMERICUS_FRESH.db1",
+  "engine": "8.85",
+  "sha": "e18f3f0a09aadf808e98c7e6209f5fb940f2d8d99197f68a7b20734c94e8c355"
+ },
+ {
+  "etag": "8c4bb9f9b58a344a860a36eb3a0f7464",
+  "bytes": 60966288,
+  "key": "cad-disk-extract/dataset/main/3d/Disk-1__TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_32._32356_Americus_Fresh.7z/model/db1/32356_AMERICUS_FRESH-6cf58b.db1",
+  "route": "3d",
+  "project": "Disk-1__TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_32._32356_Americus_Fresh.7z",
+  "source_key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_32._32356_Americus_Fresh.7z/32._32356_Americus_Fresh/7._Submittals/OFA_IFF/Draft/old/New_folder/32356_Americus_FreshSub_27_IFA_02022024/32356-IFA_014-020224-Model.zip!/32356_AMERICUS_FRESH/32356_AMERICUS_FRESH.db1",
+  "engine": "8.85",
+  "sha": "764ca4730f7bb51a2e2cb2d75f0e340cc15f8f85616fb3a19b116281525c0f85"
+ },
+ {
+  "etag": "67730d4175a3264ecc5bf864117cec97",
+  "bytes": 7454910,
+  "key": "cad-disk-extract/dataset/main/2d/Disk-1__TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_24._31911_Guilford.7z/model/db1/31911_GUILFORD_COUNTY_SHERIFF_S_OFFICE.db1",
+  "route": "2d",
+  "project": "Disk-1__TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_24._31911_Guilford.7z",
+  "source_key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_24._31911_Guilford.7z/24._31911_Guilford/7._Submittals/1._OFA_IFF/31911_Sub_1_Guilford_AB_s_For_Approval_01022023/31911-IFA_001-010223-Model.zip!/31911_GUILFORD_COUNTY_SHERIFF_S_OFFICE/31911_GUILFORD_COUNTY_SHERIFF_S_OFFICE.db1",
+  "engine": "8.85",
+  "sha": "f4ffad4ab68a998af1f23a349955b883ea7ca1ea696ad3c16b7253a46840a84a"
+ },
+ {
+  "etag": "3cacd9f7bf673d6d5916ad0811857207",
+  "bytes": 26375717,
+  "key": "cad-disk-extract/dataset/main/3d/Disk-1__TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_32._32356_Americus_Fresh.7z/model/db1/32356_AMERICUS_FRESH-52171c.db1",
+  "route": "3d",
+  "project": "Disk-1__TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_32._32356_Americus_Fresh.7z",
+  "source_key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2023-2024_M_Drive_BackUp_Steel_Fab_32._32356_Americus_Fresh.7z/32._32356_Americus_Fresh/7._Submittals/OFA_IFF/ABM/32356_Americus_Fresh_ABM_001_Revised/32356-ABM_001-061223-Model.zip!/32356_AMERICUS_FRESH/32356_AMERICUS_FRESH.db1",
+  "engine": "8.85",
+  "sha": "ac83e806224da6e85441f22505737ece82f381ac9e196c029bb326402abc325e"
+ },
+ {
+  "etag": "941461038da2155b0e0e8517f97e1a5a",
+  "bytes": 370667,
+  "key": "cad-disk-extract/dataset/main/3d/Disk-1__TEKLA-HYD_JOBS-2015-2016_10.10.40.51_Server_Backup_TEKLA-TEAM_10.10.40.59-DATA_USA_PROJECTS_FRONT_RANGE_STEEL.7z/model/db1/STEVINSON_IMPORTS_PORSCHE-a48686.db1",
+  "route": "3d",
+  "project": "Disk-1__TEKLA-HYD_JOBS-2015-2016_10.10.40.51_Server_Backup_TEKLA-TEAM_10.10.40.59-DATA_USA_PROJECTS_FRONT_RANGE_STEEL.7z",
+  "source_key": "cad-disk-extract/Disk-1/TEKLA-HYD_JOBS-2015-2016_10.10.40.51_Server_Backup_TEKLA-TEAM_10.10.40.59-DATA_USA_PROJECTS_FRONT_RANGE_STEEL.7z/FRONT_RANGE_STEEL/1.Stevinson_Imports_Porsche/14.Customer_Standards/STEVINSON_IMPORTS_PORSCHE.zip!/STEVINSON_IMPORTS_PORSCHE/STEVINSON_IMPORTS_PORSCHE.db1",
+  "engine": "8.07",
+  "sha": "658f281df3bfbcd4f9ffe23446bfaa26d58c84b84e89e474deed973350072fef"
+ },
+ {
+  "etag": "dfec021918fc571ea4057d7f0973a080",
+  "bytes": 3985104,
+  "key": "cad-disk-extract/dataset/main/2d/Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09-02-22-2012.zip-4f336639c410/model/db1/BRIDGE_2.09.db1",
+  "route": "2d",
+  "project": "Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09-02-22-2012.zip-4f336639c410",
+  "source_key": "cad-disk-extract/Disk-2/Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09-02-22-2012.zip-4f336639c410/BRIDGE_2.09/BRIDGE_2.09.db1",
+  "engine": "7.01",
+  "sha": "38bf75653bdc8789cf277813283081cc3f0b725fd9683d37349796919c35dd04"
+ },
+ {
+  "etag": "dac5082020bd7be22936eb0f42795a92",
+  "bytes": 2866490,
+  "key": "cad-disk-extract/dataset/main/2d/Disk-1__TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_26._22117_Cambrex.7z-782b1b585020/model/db1/31986_-_CAMBREX.db1",
+  "route": "2d",
+  "project": "Disk-1__TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_26._22117_Cambrex.7z-782b1b585020",
+  "source_key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_26._22117_Cambrex.7z-782b1b585020/26._22117_Cambrex/7._Submittals/1._IFA/3._31986_Sub_3_Cambrex_Seq_1_3_for_IFA_10132022/31986-IFA_003-101322-Model.zip!/31986_-_CAMBREX/31986_-_CAMBREX.db1",
+  "engine": "8.85",
+  "sha": "e90dee352398fa319bd5fa4c7b4c7f371f502e11a8c549e834aa1917a059800e"
+ },
+ {
+  "etag": "cd9aa6c2c271af7c41b4ed229353c606",
+  "bytes": 3836661,
+  "key": "cad-disk-extract/dataset/main/2d/Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09-7th_feb_2012.zip-81735c022575/model/db1/BRIDGE_2.09.db1",
+  "route": "2d",
+  "project": "Disk-2__Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09-7th_feb_2012.zip-81735c022575",
+  "source_key": "cad-disk-extract/Disk-2/Jobs_Data_Files_Completed_On_Server12_Jobs_Files_FTP_Data_19-3-2014_FTP_Data_21-3-2014-10.10.40.4_FTP6_liaromatis_UPLOADS_FROM_MOLDTEK_BRIDGE_2.09-7th_feb_2012.zip-81735c022575/BRIDGE_2.09/BRIDGE_2.09.db1",
+  "engine": "7.01",
+  "sha": "0d8fdd0a7de1eb22d1d98a2fc985462f52d385ed1d4d5636713ab56d6c750296"
+ }
+]

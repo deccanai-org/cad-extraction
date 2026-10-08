@@ -1,0 +1,148 @@
+--- orig/build_index.py	2026-10-02 13:29:24
++++ new/build_index.py	2026-10-02 13:46:15
+@@ -282,6 +282,23 @@
+             row['issues'].append(f'parts_with_nonfinite_coords:{v["nonfinite"]}')
+         if v.get('empty_roots'):
+             row['issues'].append(f'roots_not_transferred:{v["empty_roots"]}')
++        # [z3v port 2/3/4] ifc-step-verifier W_BROKEN_SOLID, duplicate products, db1-step-verifier W_STRAY_PARTS / W_DUPLICATES
++        # (step_check keys absent on older read-backs -> no effect)
++        if v.get('impossible_solids'):
++            row['issues'].append(f'solids_volume_exceeds_bbox:{v["impossible_solids"]}')
++        if v.get('duplicate_pid_parts'):
++            row['issues'].append(f'step_duplicate_parts:{v["duplicate_pid_parts"]}')
++        n_roots = v.get('transferred') or v.get('roots') or 0
++        if v.get('stray_parts'):
++            if row.get('pipeline') == 'db1' and n_roots and v['stray_parts'] / n_roots > 0.005:
++                row['issues'].append(f'stray_parts:{v["stray_parts"]}')          # decoder: parts cut off from the model
++            else:
++                row['issues_info'] = (row.get('issues_info') or []) + [f'stray_parts:{v["stray_parts"]} (as placed in the source)']
++        if v.get('coincident_duplicates'):
++            if row.get('pipeline') == 'db1' and n_roots and v['coincident_duplicates'] / n_roots > 0.05:
++                row['issues'].append(f'coincident_duplicate_parts:{v["coincident_duplicates"]}')
++            else:
++                row['issues_info'] = (row.get('issues_info') or []) + [f'coincident_duplicate_parts:{v["coincident_duplicates"]} (distinct source ids)']
+     elif 'skipped' in v:
+         row['graded_by'] = 'text_only (STEP too large for OCC read-back)'
+         row['issues'].append('not_read_back_large_file')
+@@ -295,6 +312,14 @@
+         row['issues'].append('not_read_back_out_of_memory')
+     else:
+         row['reasons'].append('step_read_failed')
++    # [z3v port 1] file-level integrity (ifc-step-verifier F_TRUNCATED / F_NOT_STEP / F_COMPRESSED / F_SCHEMA): OCC reads a cut-off
++    # file up to the cut, so a truncated STEP could otherwise pass; keys absent on older read-backs -> no effect
++    if v.get('end_marker') is False:
++        row['reasons'].append('step_truncated')
++    if v.get('iso_header') is False:
++        row['reasons'].append('step_compressed' if v.get('compressed') else 'step_not_iso10303_21')
++    if v.get('schema_geometry') is False:
++        row['reasons'].append('step_schema_not_geometry')
+     bb = v.get('bbox') or v.get('bbox_mm')
+     ok = bbox_ok(bb)
+     if ok is False:
+@@ -437,6 +462,25 @@
+         cov = j.get('coverage') or {}
+         row['coverage_members'] = cov.get('member'); row['coverage_connections'] = cov.get('connection'); row['coverage_other'] = cov.get('other')
+         row['coverage_all'] = cov.get('all'); row['join_mode'] = j.get('mode')
++        at = (r.get('attrib') if isinstance(r.get('attrib'), dict) else None) or ATTRIB.get(row['id']) or {}
++        vd = ((at.get('missing') or {}).get('voided') or []) if j.get('mode') == 'gid' else []
++        if vd:
++            # [z3v rule 1] source_element_fully_voided (ifc-step-verifier I_MISSING_SOURCE, e1828d1ce27d): IfcOpenShell builds the element
++            # without openings but nothing with them, and one of its own openings covers its whole extent -> the source cuts it away;
++            # the empty result is faithful: info (cause source), not a missing part
++            exp_ = dict(j.get('expected') or {}); mat_ = j.get('matched') or {}
++            for k_, n_ in collections.Counter(v_.get('cat') for v_ in vd).items():
++                exp_[k_] = max(mat_.get(k_, 0), exp_.get(k_, 0) - n_)
++            c4 = lambda m_, e_: math.floor(m_ / e_ * 1e4) / 1e4 if e_ else None
++            oth_e = sum(v_ for k_, v_ in exp_.items() if k_ not in ('member', 'connection')); oth_m = sum(v_ for k_, v_ in mat_.items() if k_ not in ('member', 'connection'))
++            row['coverage_members'] = c4(mat_.get('member', 0), exp_.get('member', 0)); row['coverage_connections'] = c4(mat_.get('connection', 0), exp_.get('connection', 0))
++            row['coverage_other'] = c4(oth_m, oth_e); row['coverage_all'] = c4(sum(mat_.values()), sum(exp_.values()))
++            if row.get('parts_source'): row['parts_source'] -= len(vd)
++            row['issues_info'] = (row.get('issues_info') or []) + [f'source_element_fully_voided:{len(vd)} (cause source: an opening of the element covers its whole extent)']
++            row['source_fully_voided'] = [v_.get('gid') for v_ in vd][:50]
++        sa = at.get('surface') or {}
++        if sa.get('n') is not None:
++            row['attrib'] = {'surface_source': sa.get('source') or 0, 'surface_pipeline': sa.get('pipeline') or 0, 'voided': len(vd), 'by_state': sa.get('by_state')}
+         if j.get('mode') == 'name':
+             row['issues_info'] = ['coverage matched by part name (older writer without source ids)']
+         elif j.get('mode') == 'count':
+@@ -447,11 +491,20 @@
+         if j.get('missing_examples') and (cov.get('all') or 1) < 1:
+             row['missing_examples'] = j['missing_examples'][:10]
+         vol_issues(row, j)
++        if j.get('mode') == 'gid' and j.get('step_parts_unmatched'):
++            # [z3v port 5] ifc-step-verifier W_EXTRA_PARTS: STEP parts whose id is no source GlobalId (0 of 300 sampled class-1 models)
++            row['issues'].append(f'step_parts_not_in_source:{j["step_parts_unmatched"]}')
+         if j.get('surface_parts'):
+             # a part that reads back with faces but no solid: SHELL_BASED_SURFACE_MODEL / OPEN_SHELL (the transcode of
+             # IfcShellBasedSurfaceModel, also when its shells are IfcClosedShell) or a FACETED_BREP whose shell is not closed.
+             # No validity / volume check is possible on it, so 'all solids valid' is unproven -> class 2
+-            row['issues'].append(f'parts_without_solid:{j["surface_parts"]}')
++            # [z3v rule 3] cause per part (ifc-step-verifier source_state via ifc_attrib.py): SOURCE when the IFC element itself is a surface
++            # model or an open faceted shell (copied faithfully), PIPELINE otherwise; without attribution all count as pipeline (as before)
++            ns_ = min(j['surface_parts'], ((row.get('attrib') or {}).get('surface_source') or 0))
++            if j['surface_parts'] - ns_:
++                row['issues'].append(f'parts_without_solid:{j["surface_parts"] - ns_}')
++            if ns_:
++                row['issues'].append(f'parts_without_solid_source:{ns_}')
+     exc = r.get('excluded_elements') or (r.get('prior_result') or {}).get('excluded_elements')
+     if exc:
+         row['issues'].append(f'kernel_crash_elements_excluded:{len(exc) if isinstance(exc, list) else exc}')
+@@ -514,6 +567,7 @@
+ 
+ 
+ OPEN_SEED = {}
++ATTRIB = {}          # [z3v rules 1-3] ifc_attrib.py results by model id (_state/conv/ifc/attrib/<id>.json; a worker may embed rec['attrib'])
+ LAST_GOOD = {}
+ ETA_HIST = {}
+ 
+@@ -1525,8 +1579,22 @@
+             add(f'{n} solids fail the BRep validity check', n, 'solid healing / exact rebuild in the converter', CF, f'{p} invalid solids')
+         elif t == 'non_positive_volume_solids':
+             add(f'{n} solids inside-out or not closed (non-positive volume)', n, 'shell orientation / closing in the converter', CF, f'{p} shell orientation')
++        elif t == 'solids_volume_exceeds_bbox':
++            add(f'{n} solids with a volume larger than their own bounding box (self-overlapping, e.g. hole loops wound like the outer loop)', n,
++                'hole-loop winding / exact solid rebuild in the writer', CF, f'{p} self-overlapping solids')
++        elif t == 'step_duplicate_parts':
++            add(f'{n} parts written twice (same source id)', n, 'write each source element once', CF, f'{p} duplicate parts')
++        elif t == 'step_parts_not_in_source':
++            add(f'{n} STEP parts with no source element', n, 'writer: one product per source element (PRODUCT.id = source GlobalId)', CF, f'{p} parts not in source')
++        elif t == 'stray_parts':
++            add(f'{n} parts cut off from the model (stray placements)', n, 'decoder: part placement for those records', CF, f'{p} stray parts')
++        elif t == 'coincident_duplicate_parts':
++            add(f'{n} parts coincide exactly with another part', n, 'decoder: duplicate records (history / numbering copies)', CF, f'{p} duplicate parts')
+         elif t == 'parts_outside_volume_tolerance':
+             add(f'{x.split(":")[1]} parts differ > 5% from the source volume', n, 'exact geometry for those parts (tessellation / boolean accuracy)', CF, f'{p} volume tolerance')
++        elif t == 'parts_without_solid_source':
++            add(f'{n} parts are surface models / open shells in the source (copied faithfully; no solid to check)', n,
++                'closed solid geometry in the source model', SDA, f'{p} source surface models')
+         elif t == 'parts_without_solid':
+             add(f'{n} parts read back as surfaces, not solids', n, 'IFC writer: IfcShellBasedSurfaceModel of IfcClosedShell as CLOSED_SHELL / '
+                 'FACETED_BREP, close or heal open faceted shells (re-convert reused STEP)', CF, f'{p} parts without solid')
+@@ -1607,6 +1675,16 @@
+             add(f'{n} washers with nominal thickness', n, 'the washer catalog entry (exact thickness) for this bolt standard', PCM, 'washer catalog')
+         elif t == 'washer_side_inferred':
+             add(f'{n} bolts whose washer side is inferred from the assembly flags', n, 'decode the per-side washer flags', CF, f'washer side Tekla {eng}')
++        elif t in ('v6_L4-surface', 'v6_L3-partial-surface') and ((r.get('attrib') or {}).get('surface_source') or 0):
++            # [z3v rule 2] surface-fallback parts whose source element is a surface model / open shell: source_data_absent; the rest stays CF
++            ns_ = min(n or 0, r['attrib']['surface_source']); np_ = (n or 0) - ns_
++            if ns_:
++                add(f'{ns_} parts stored as surface models / open shells in the source, written as surfaces ({rt})', ns_, 'closed solid geometry in the source model', SDA, f'{p} source surface models')
++            if np_:
++                add(f'{np_} parts: {rt}', np_, 'exact solid repair / reconstruction in the IFC converter', CF, f'{p} {t}')
++        elif t == 'v6_open_in_source_healed':
++            # [z3v rule 2] the converter's own evidence: the source shell is open (closed by OCC healing): the source lacks the closed solid
++            add(f'{n} parts whose source shell is open (closed by OCC healing, not exact)', n, 'closed shells in the source model', SDA, f'{p} source open shells')
+         elif t.startswith('v6_'):
+             add(f'{n} parts: {rt}', n, 'exact solid repair / reconstruction in the IFC converter', CF, f'{p} {t}')
+         elif t == 'bolt_axial_position_fitted':
+@@ -1944,6 +2022,10 @@
+     res = {p: load_results(f'{ST}/{p}/results/') for p in ('ifc', 'db1', 'sds2')}
+     grades = load_results(f'{ST}/grade/results/')
+     try:
++        ATTRIB.clear(); ATTRIB.update(load_results(f'{ST}/ifc/attrib/'))
++    except Exception as e:
++        print('ifc attrib load error', type(e).__name__, flush=True)
++    try:
+         n_rejoin = rejoin_grades(grades)
+     except Exception as e:
+         n_rejoin = f'error {type(e).__name__}: {str(e)[:120]}'

@@ -1,0 +1,63 @@
+--- a/coord/build_index.py	2026-10-01 18:13:32
++++ b/coord/build_index.py	2026-10-01 18:51:10
+@@ -40,6 +40,12 @@
+     'sds2_weight_band_class3': [0.75, 1.3],
+     'sds2_family_weight_tolerance': 0.05,
+     'sds2_family_min_pieces': 5,
++    # proposal sds2-weights-failures (converter v5.5w manifests split the weight tally by geometry source): the 5 % class-1
++    # band and the family rule measure only untagged converter-built solids (stud / rod / bolt primitives); SDS2's own piece
++    # B-rep is the reference geometry and its difference from SDS2's recorded weight (catalog lb/ft vs k_det fillets,
++    # floor-plate / deck tables, ...) is listed as info; tagged stand-ins are already graded by the stand-in rule
++    'sds2_weight_converter_built_only': True,
++    'sds2_exact_family_band': [0.85, 1.2],
+     'tolerated_standin_types': [],
+     'v6_blocking_tags': ['L2-alt-source', 'L3-partial-surface', 'L4-surface', 'open-surface', 'unverified'],
+     'v6_info_tags': ['approx-curved', 'L1-triangulated'],          # e.g. ["joist_openweb_standin"]: listed, but do not block class 1 (owner decision pending)
+@@ -872,21 +878,44 @@
+     if w.get('dominant_outliers'):
+         row['issues_info'] = (row.get('issues_info') or []) + ['dominant weight outliers in the SDS/2 piece table (excluded from the ratio)']
+     row['weight_ratio'] = {'steel_ratio_vs_sds2': sr, 'by_family': w.get('by_family')}
++    # converter v5.5w: weight tally split into SDS2's own piece B-rep ('exact'), untagged converter-built solids ('built')
++    # and tagged stand-ins ('standin')
++    bs = w.get('by_source') if isinstance(w.get('by_source'), dict) else None
++    split = bool(bs) and RULES.get('sds2_weight_converter_built_only', True)
++    sr1 = sr
++    if split:
++        ex_, bu_, st_ = bs.get('exact') or {}, bs.get('built') or {}, bs.get('standin') or {}
++        ref = num(ex_.get('sds2_lb')) + num(st_.get('sds2_lb'))
++        den = ref + num(bu_.get('sds2_lb'))
++        if den > 0:
++            sr1 = round((ref + num(bu_.get('step_lb'))) / den, 4)   # only untagged converter-built solids move it
++        row['weight_ratio'].update(steel_ratio_converter_built=sr1, by_source=bs)
+     lo3, hi3 = RULES['sds2_weight_band_class3']; lo1, hi1 = RULES['sds2_weight_band_class1']
+     if sr is not None and not lo3 <= sr <= hi3:
+         row['reasons'].append(f'steel_weight_ratio_{sr}')
+-    elif sr is not None and not lo1 <= sr <= hi1:
+-        row['issues'].append(f'steel_weight_ratio_{sr}_outside_5pct')
++    elif sr1 is not None and not lo1 <= sr1 <= hi1:
++        row['issues'].append(f'steel_weight_ratio_{sr1}_outside_5pct')
+     tol = RULES['sds2_family_weight_tolerance']; nmin = RULES['sds2_family_min_pieces']
+-    off = [f for f, x in (w.get('by_family') if isinstance(w.get('by_family'), dict) else {}).items() if isinstance(x, dict) and x.get('ratio') is not None and (x.get('n') or 0) >= nmin and abs(x['ratio'] - 1) > tol]
++    fams = w.get('by_family') if isinstance(w.get('by_family'), dict) else {}
++    part = lambda x: (x.get('built') if split and 'built' in x else x) if isinstance(x, dict) else None
++    off = [f for f, x in fams.items() if isinstance(part(x), dict) and part(x).get('ratio') is not None and (part(x).get('n') or 0) >= nmin and abs(part(x)['ratio'] - 1) > tol]
+     if off:
+         row['issues'].append('family_weight_outside_5pct:' + ','.join(off[:6]))
++    lo_x, hi_x = RULES.get('sds2_exact_family_band', [0.85, 1.2])
++    conv = [f"{f} {x['exact']['ratio']}" for f, x in fams.items() if split and isinstance(x.get('exact'), dict) and x['exact'].get('ratio') is not None
++            and (x['exact'].get('n') or 0) >= nmin and not lo_x <= x['exact']['ratio'] <= hi_x]
+     row['manifest_class'] = {'class': man.get('class'), 'corpus': man.get('corpus'), 'reasons': man.get('class_reasons')}
+     cdup = max(num(man.get('converter_duplicates')), cn('converter_duplicates_skipped'))
+     row['converter_duplicates'] = cdup
+     if cdup > 0:
+         row['tags_extra'] = (row.get('tags_extra') or []) + ['converter_duplicates']
+     row['issues_info'] = ['welds are not modelled (no readable weld geometry in SDS/2 files)']
++    if conv:
++        row['issues_info'].append('SDS/2 recorded weight differs from its own piece B-rep (written exactly) for: ' + ', '.join(conv[:6])
++                                  + ' (SDS/2 weight tables / conventions, not converter geometry)')
++    if num(w.get('sds2_weight_outliers')):
++        row['issues_info'].append(f"{num(w.get('sds2_weight_outliers'))} piece(s) written from SDS/2's exact B-rep whose recorded weight "
++                                  "disagrees with SDS/2's own stock / section (listed in the manifest, kept out of the ratio)")
+     pk = (r.get('inventory') or {}).get('pieces_by_kind') or {}
+     has_conn = (pk.get('plate', 0) + pk.get('fastener', 0) + bolts) > 0 if pk else bolts > 0
+     for g in [g for g in (man.get('standin_groups') or []) if isinstance(g, dict)]:

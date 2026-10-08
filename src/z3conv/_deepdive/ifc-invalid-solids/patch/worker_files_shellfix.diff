@@ -1,0 +1,11 @@
+--- z3conv/ifc/worker.py	2026-10-01 16:06:50
++++ z3conv/ifc/worker.py (shellfix shipped)	2026-10-01 16:06:50
+@@ -55,7 +55,7 @@
+ TIMEOUT = int(os.environ.get('IFC_TIMEOUT_S', str(6 * 3600)))
+ STALL = 1800
+ THREADS = os.environ.get('IFC_THREADS', '2')
+-FILES = ('worker.py', 'convfleet.py', 'ifc2step5.py', 'ifc2step5_guard.py', 'ifc_concat_fix.py', 'ifc_crash_bisect.py',
++FILES = ('worker.py', 'convfleet.py', 'ifc2step5.py', 'ifc2step5_guard.py', 'shellfix.py', 'ifc_concat_fix.py', 'ifc_crash_bisect.py',
+          'ifc_exclude.py', 'step_check.py', 'ifc_census.py', 'grade_join.py', 'ifc2step6.py', 'ifc2step6_guard.py')
+ import grade_join
+ CRASH = (-11, 139, -6, 134, 124, 125)

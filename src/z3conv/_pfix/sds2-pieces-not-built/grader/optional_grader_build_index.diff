@@ -1,0 +1,20 @@
+--- build_index.orig.py	2026-10-01 17:44:44
++++ build_index.py	2026-10-01 17:44:44
+@@ -993,7 +993,16 @@
+         elif t == 'cuts_not_applied':
+             add(f'{n} cuts not applied', n, 'cut decoding fix', CF, 'db1 cuts')
+         elif t == 'pieces_not_built':
+-            add('pieces not built: ' + x.split(':', 1)[1][:120], None, 'converter support for those pieces', CF, f'{p} pieces not built')
++            # sds2 v5.5 manifests name source gaps 'source_*' (no piece file / no faces / zero size / open double-sided
++            # mesh): the job lacks that geometry, so it is source data absent, not a converter feature
++            rs_ = [(k_, int(n_)) for k_, n_ in re.findall(r'([a-z][a-z_0-9]+):(\d+)', x.split(':', 1)[1])]
++            src_ = [(k_, n_) for k_, n_ in rs_ if k_.startswith('source_')]
++            if src_:
++                ns_ = sum(n_ for _, n_ in src_)
++                add(f'{ns_} pieces with no buildable geometry in the source (' + ','.join(f'{k_}:{n_}' for k_, n_ in src_) + ')', ns_,
++                    'piece geometry in the source job (SDS/2 holds no faces, a zero size or an open mesh for them)', SDA, f'{p} piece geometry absent')
++            if not src_ or len(src_) < len(rs_):
++                add('pieces not built: ' + x.split(':', 1)[1][:120], None, 'converter support for those pieces', CF, f'{p} pieces not built')
+         elif t == 'family_weight_outside_5pct':
+             add('section families off the SDS/2 weight by > 5%: ' + x.split(':', 1)[1], None, 'exact geometry for those families', CF, 'sds2 family weight')
+         elif t.startswith('steel_weight_ratio'):

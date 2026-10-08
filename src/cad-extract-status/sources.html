@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>New source disks — live extraction status</title>
+<style>
+.viz-root{color-scheme:light;
+  --page:#f9f9f7;--surface-1:#fcfcfb;--text-primary:#0b0b0b;--text-secondary:#52514e;--muted:#898781;
+  --grid:#e1e0d9;--axis:#c3c2b7;--border:rgba(11,11,11,.10);--series-1:#2a78d6;--track:#e1e0d9;
+  --good:#0ca30c;--warning:#fab219;--serious:#ec835a;--critical:#d03b3b;--good-text:#006300}
+@media (prefers-color-scheme:dark){:root:where(:not([data-theme="light"])) .viz-root{color-scheme:dark;
+  --page:#0d0d0d;--surface-1:#1a1a19;--text-primary:#fff;--text-secondary:#c3c2b7;--muted:#898781;
+  --grid:#2c2c2a;--axis:#383835;--border:rgba(255,255,255,.10);--series-1:#3987e5;--track:#2c2c2a;--good-text:#0ca30c}}
+:root[data-theme="dark"] .viz-root{color-scheme:dark;--page:#0d0d0d;--surface-1:#1a1a19;--text-primary:#fff;
+  --text-secondary:#c3c2b7;--grid:#2c2c2a;--axis:#383835;--border:rgba(255,255,255,.10);--series-1:#3987e5;--track:#2c2c2a;--good-text:#0ca30c}
+*{box-sizing:border-box}
+body{margin:0}
+.viz-root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--page);color:var(--text-primary);min-height:100vh;padding:28px 20px 60px}
+.wrap{max-width:1180px;margin:0 auto}
+header{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:6px}
+h1{font-size:22px;margin:0;font-weight:650}
+.sub{color:var(--text-secondary);font-size:14px;margin:0 0 22px}
+.live{font-size:13px;color:var(--text-secondary);display:flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--good)}
+.dot.stale{background:var(--warning)}
+a{color:var(--series-1)}
+section{background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin:0 0 18px}
+h2{font-size:17px;margin:0 0 4px;font-weight:650}
+.note{color:var(--text-secondary);font-size:13px;margin:0 0 14px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:0 0 16px}
+.tile{border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+.tile .k{font-size:12px;color:var(--text-secondary)}
+.tile .v{font-size:24px;font-weight:650;margin-top:2px}
+.tile .d{font-size:12px;color:var(--muted);margin-top:2px}
+.meter{margin:8px 0 12px}
+.meter .row{display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;color:var(--text-secondary)}
+.meter .row b{color:var(--text-primary);font-weight:600}
+.track{height:10px;background:var(--track);border-radius:5px;overflow:hidden}
+.fill{height:100%;background:var(--series-1);border-radius:5px 4px 4px 5px;min-width:2px;transition:width .6s}
+.status{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;margin:6px 0 12px}
+.status span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:10px;height:10px;border-radius:2px;display:inline-block}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--grid)}
+th{color:var(--text-secondary);font-weight:600}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media (max-width:820px){.cols{grid-template-columns:1fr}}
+.ok{color:var(--good-text)} .muted{color:var(--muted)}
+.gh{font-size:13px;margin:10px 0 4px;color:var(--text-secondary);font-weight:600}
+.stage{display:flex;gap:8px;align-items:center;padding:4px 0;font-size:14px}
+.ic{width:18px;text-align:center;font-weight:700}
+footer{color:var(--muted);font-size:12px;margin-top:20px}
+.scroll{overflow-x:auto}
+</style>
+</head>
+<body>
+<div class="viz-root"><div class="wrap">
+<header><h1>New source disks — live extraction status</h1><span class="live"><span class="dot" id="dot"></span><span id="age">loading…</span></span></header>
+<p class="sub">Anonymous numbers only. Updated by the extraction publisher about every 2 minutes; this page refreshes every 30 s.
+Disk-1 / Disk-2 (finished 26 Sep 2026) are on the <a href="./">main status page</a>.</p>
+
+<section id="z3"><h2 id="z3-title">Disk Z3</h2><p class="note" id="z3-note">loading…</p>
+ <div id="z3-body" style="display:none">
+  <div id="z3-final" style="display:none;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin:0 0 14px"></div>
+  <div class="tiles" id="z3-tiles"></div>
+  <div id="z3-overall"></div>
+  <div class="status" id="z3-status"></div>
+  <p class="note" id="z3-verify"></p>
+  <div class="cols">
+    <div><h3 style="font-size:14px;margin:6px 0">Archives being extracted now</h3><table id="z3-running"></table></div>
+    <div><h3 style="font-size:14px;margin:6px 0">Nested archives unpacked, by depth</h3><table id="z3-nest"></table></div>
+  </div>
+  <h3 style="font-size:14px;margin:18px 0 6px">SDS2 models in Z3 (job folders)</h3><p class="note" id="z3-sds2-note"></p><div class="scroll"><table id="z3-sds2"></table></div>
+  <h3 style="font-size:14px;margin:18px 0 6px">Disk-1 / Disk-2 / Z4 vs Disk Z3 — what is new</h3><p class="note" id="z3-cmp-note"></p><div class="scroll"><table id="z3-cmp-table"></table></div>
+  <h3 style="font-size:14px;margin:18px 0 6px">All files at a glance (archive members at every nesting level + loose files)</h3><p class="note" id="z3-glance-note"></p><div class="scroll"><table id="z3-glance"></table></div>
+  <h3 style="font-size:14px;margin:18px 0 6px">File types</h3><p class="note" id="z3-types-note"></p>
+  <div class="scroll"><h3 class="gh">3D model files</h3><table id="z3-g-3d"></table></div>
+  <div class="scroll"><h3 class="gh">2D drawing files</h3><table id="z3-g-2d"></table></div>
+  <div class="scroll"><h3 class="gh">PDFs: CAD drawings vs documents</h3><table id="z3-pdfc"></table><p class="note" id="z3-pdfc-note" style="margin-top:6px"></p></div>
+  <div class="scroll"><h3 class="gh">Fabrication / CNC</h3><table id="z3-g-fab"></table></div>
+  <div class="scroll"><h3 class="gh">All types by category</h3><table id="z3-cats"></table></div>
+  <details style="margin-top:10px"><summary style="cursor:pointer;font-size:14px">Every extension found (full list)</summary><div class="scroll"><table id="z3-exts" style="margin-top:8px"></table></div></details>
+  <h3 style="font-size:14px;margin:18px 0 6px">Loose files on the drive (outside archives)</h3><p class="note" id="z3-loose-note"></p><div class="scroll"><table id="z3-loose-glance"></table></div>
+  <details style="margin-top:10px"><summary style="cursor:pointer;font-size:14px">Every loose-file extension (full list)</summary><div class="scroll"><table id="z3-l-all" style="margin-top:8px"></table></div></details>
+  <h3 style="font-size:14px;margin:18px 0 6px">Conversions to STEP (IFC · Tekla DB1 · SDS2) and quality classes · <a href="graded.html">see every graded model, its class and why →</a></h3><p class="note" id="z3-conv-note"></p><div class="scroll"><table id="z3-conv"></table></div><p class="note" id="z3-conv-why" style="margin-top:6px"></p><p class="note" id="z3-pkg" style="margin-top:6px"></p>
+ </div>
+</section>
+
+<section id="cmp"><h2>Disk-1 / Disk-2 vs Disk Z4 — what is new</h2>
+  <p class="note">Unique = distinct content (sha256). <b>New in Z4</b> = content that the Disk-1/Disk-2 extraction had not already stored, i.e. what Z4 actually adds. Disk-1/Disk-2 (Sep 2026) were extracted for CAD types only, so every other type in Z4 is new. PDF CAD/non-CAD for Disk-1/2 comes from that run's own classifier.</p>
+  <p id="src-identity" style="margin:0 0 8px"></p>
+  <table id="cmp-table"></table><p class="note" id="cmp-note" style="margin-top:6px"></p>
+</section>
+
+<section id="z4"><h2 id="z4-title">Disk Z4</h2><p class="note" id="z4-note"></p>
+  <div id="z4-final" style="display:none;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin:0 0 14px"></div>
+  <div class="tiles" id="z4-tiles"></div>
+  <div id="z4-overall"></div>
+  <div class="status" id="z4-status"></div>
+  <p class="note" id="z4-verify"></p>
+  <div class="cols">
+    <div><h3 style="font-size:14px;margin:6px 0">Progress by archive size</h3><div id="z4-bands"></div>
+      <h3 style="font-size:14px;margin:14px 0 6px">Raw copy of every archive and loose file into the bucket</h3><div id="z4-copy"></div></div>
+    <div><h3 style="font-size:14px;margin:6px 0">Archives being extracted now</h3><table id="z4-running"></table></div>
+  </div>
+  <h3 style="font-size:14px;margin:18px 0 6px">Conversions to STEP (new content only)</h3><p class="note" id="z4-conv-note"></p><table id="z4-conv"></table>
+  <h3 style="font-size:14px;margin:18px 0 6px">All files at a glance (inside archives)</h3><table id="z4-glance"></table>
+  <h3 style="font-size:14px;margin:18px 0 6px">File types coming out of the archives</h3><p class="note" id="z4-types-note"></p>
+  <div class="cols"><div><h3 class="gh">3D model files</h3><table id="z4-g-3d"></table></div><div><h3 class="gh">2D drawing files</h3><table id="z4-g-2d"></table></div></div>
+  <div class="cols"><div><h3 class="gh">PDFs: CAD drawings vs documents</h3><table id="z4-pdfc"></table><p class="note" id="z4-pdfc-note" style="margin-top:6px"></p></div><div></div></div>
+  <div class="cols"><div><h3 class="gh">Fabrication / CNC</h3><table id="z4-g-fab"></table></div><div><h3 class="gh">All other types (by category)</h3><table id="z4-cats"></table></div></div>
+  <details style="margin-top:10px"><summary style="cursor:pointer;font-size:14px">Every extension found inside archives (full list)</summary><table id="z4-exts" style="margin-top:8px"></table></details>
+  <h3 style="font-size:14px;margin:18px 0 6px">Loose files on the drive (outside archives)</h3><p class="note" id="z4-loose-note"></p><table id="z4-loose-glance"></table>
+  <div class="cols"><div><h3 class="gh">3D model files</h3><table id="z4-l-3d"></table></div><div><h3 class="gh">2D drawing files</h3><table id="z4-l-2d"></table></div></div>
+  <details style="margin-top:10px"><summary style="cursor:pointer;font-size:14px">Every loose-file extension (full list)</summary><table id="z4-l-all" style="margin-top:8px"></table></details>
+</section>
+
+<section id="z2"><h2 id="z2-title">Disk Z2</h2><p class="note">Smart 3D plant model (SQL Server backups) restored into SQL Server, plus the piping drawing set.</p>
+  <div class="cols">
+    <div><h3 style="font-size:14px;margin:6px 0">Database restore</h3><table id="z2-db"></table></div>
+    <div><h3 style="font-size:14px;margin:6px 0">Files and drawings</h3><div class="tiles" id="z2-tiles"></div></div>
+  </div>
+  <h3 style="font-size:14px;margin:16px 0 6px">Generated outputs</h3><div class="cols"><div><h3 class="gh">3D (from the plant model database)</h3><table id="z2-out3d"></table></div><div><h3 class="gh">2D (drawing set + drawings stored in the model)</h3><table id="z2-out2d"></table></div></div>
+  <h3 style="font-size:14px;margin:16px 0 6px">Drawings stored inside the plant model (exported from the database)</h3><p class="note" id="z2-md-note"></p><table id="z2-md"></table>
+  <div class="cols"><div><h3 class="gh">All files at a glance — drawing set</h3><table id="z2-glance-src"></table></div><div><h3 class="gh">All files at a glance — reference content (unpacked, incl. nested archives)</h3><table id="z2-glance-x"></table></div></div>
+  <div class="cols"><div><h3 style="font-size:14px;margin:12px 0 6px">File types — drawing set</h3><table id="z2-src-types"></table></div>
+    <div><h3 style="font-size:14px;margin:12px 0 6px">File types — S3D reference content (unpacked)</h3><table id="z2-sc-types"></table></div></div>
+</section>
+
+<section id="move" style="display:none"><h2>Storage move: earlier extraction output to the new bucket</h2><p class="note" id="move-note"></p><div class="tiles" id="move-tiles"></div><div id="move-meters"></div></section>
+<section><h2>Machines</h2><p class="note">Instances currently running for this work (team caps: Mumbai 700 vCPU, Hyderabad 320 vCPU).</p><table id="fleet"></table></section>
+<footer id="foot"></footer>
+</div></div>
+<script>
+const SRC=["sources.json","https://raw.githubusercontent.com/dhigdec/cad-extract-status/main/sources.json"];
+const nf=new Intl.NumberFormat("en-US");
+const n=x=>x==null?"–":nf.format(Math.round(x));
+const gb=x=>x==null?"–":(x>=1e12?(x/1e12).toFixed(2)+" TB":(x/1e9).toFixed(1)+" GB");
+const pct=(a,b)=>b?Math.min(100,100*a/b):0;
+const dur=s=>{if(s==null||!isFinite(s))return"–";s=Math.max(0,s);const h=Math.floor(s/3600),m=Math.round((s%3600)/60);return h?`${h} h ${m} min`:`${m} min`};
+function tile(k,v,d){return `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div>${d?`<div class="d">${d}</div>`:""}</div>`}
+function meter(label,a,b,fmt,extra){const p=pct(a,b);return `<div class="meter" title="${label}: ${fmt(a)} of ${fmt(b)} (${p.toFixed(1)}%)"><div class="row"><span>${label}</span><span><b>${fmt(a)}</b> / ${fmt(b)} · ${p.toFixed(1)}%${extra||""}</span></div><div class="track"><div class="fill" style="width:${p}%"></div></div></div>`}
+const G3D=["stp","step","ifc","ifczip","ifcxml","db1","db2","nwd","nwc","nwf","rvt","rfa","dgn","sat","sab","igs","iges","stl","obj","fbx","3ds","skp","3dm","sldprt","sldasm","ipt","iam","x_t","x_b","jt","glb","gltf","vue","zvf","tbp","tsep","tczip","sdnf","cis","std"];
+const G2D=["dwg","dxf","dg","dpm","pdf","dwf","dwfx","plt","sha","sym","igr","dgn2d"];
+const GFAB=["nc1","nc","dstv","kss","xsr","abm","bom","nc2","csv_nc"];
+const utc=s=>s?String(s).replace("T"," ").replace("Z"," UTC"):"–";
+// ---- Z3: raw / unique / new (vs Disk-1, Disk-2, Z4) tables ----
+const Z3F=["files","bytes","unique_files","unique_bytes","new_unique","new_unique_bytes","new_files"];
+const z3lab=t=>String(t).startsWith("(")?String(t):"."+t;
+const Z3HEAD=first=>`<tr><th>${first}</th><th class="n">Raw files</th><th class="n">Raw size</th><th class="n">Unique files</th><th class="n">Unique size</th><th class="n">New unique</th><th class="n">New unique size</th><th class="n">New raw</th></tr>`;
+function z3row(label,t,bold){const w=x=>bold?`<b>${x}</b>`:x;return `<tr><td>${w(label)}</td><td class="n">${w(n(t.files))}</td><td class="n">${w(gb(t.bytes))}</td><td class="n">${w(n(t.unique_files))}</td><td class="n">${w(gb(t.unique_bytes))}</td><td class="n">${w(n(t.new_unique))}</td><td class="n">${w(gb(t.new_unique_bytes))}</td><td class="n">${w(n(t.new_files))}</td></tr>`}
+function z3sum(a){const s={};Z3F.forEach(k=>{s[k]=a.reduce((x,t)=>x+(t[k]||0),0)});return s}
+const z3none=(msg)=>`<tr><td colspan="8" class="muted">${msg||"none yet"}</td></tr>`;
+function z3types(id,rows,list,label,empty){const el=document.getElementById(id);if(!el)return;const m=new Map((rows||[]).map(t=>[t.type,t]));
+  const a=list?list.map(e=>m.get(e)).filter(Boolean):(rows||[]);
+  el.innerHTML=Z3HEAD("Type")+(a.length?a.map(t=>z3row(z3lab(t.type),t)).join("")+(label?z3row(label,z3sum(a),true):""):z3none(empty))}
+function z3glance(id,rows){const el=document.getElementById(id);if(!el)return;
+  el.innerHTML=Z3HEAD("Kind")+((rows||[]).length?rows.map(r=>z3row(r.kind==="All files"&&r.distinct?"All files (each content once)":r.kind,r,r.kind==="All files")).join(""):z3none("counting…"))}
+function renderZ3(doc){
+  const $=id=>document.getElementById(id), z=doc.z3;
+  if(!z){$("z3-note").textContent="Z3 extraction status is not published yet.";$("z3-body").style.display="none";return}
+  $("z3-body").style.display="";
+  $("z3-title").textContent=z.label||"Disk Z3";
+  const s=z.source||{}, p=z.progress||{}, t=z.totals||{}, ft=z.file_types||{};
+  $("z3-note").innerHTML=`${n(s.archives)} archives (${gb(s.archive_bytes)} compressed, ${gb(s.uncompressed_bytes)} uncompressed, ${n(s.files_in_archives)} files by the drive's own listing) and ${n(s.loose_files)} loose files on the drive (${gb(s.bytes_on_drive)} in total). <b>Every archive is fully unpacked</b>, nested archives to the deepest level; loose files are hashed and classified where they are. Each distinct content is stored once; content that Disk-1, Disk-2 or Z4 already hold is recorded as a pointer and not uploaded again. Nothing is skipped: password-locked and ransomware-damaged files are recorded, not dropped.`+(z.state==="waiting"?" <b>Waiting for the job list.</b>":"");
+  const fv=z.final_verify, fe=$("z3-final");
+  if(z.state==="complete"&&fv){fe.style.display="block";const ft2=fv.totals||{},st2=fv.status||{},cv=fv.completeness_vs_drive_report||{};
+    fe.innerHTML=`<b style="color:var(--good-text)">✓ Extraction complete — verified ${utc(fv.checked_at)}</b><br>`+
+    `${n(fv.results)} / ${n(fv.jobs)} jobs have a result (${n(st2.ok||0)} ok, ${n(st2.partial||0)} partial = damage inside the source archive, recorded, ${n(st2.failed||0)} failed) · `+
+    `completeness vs the drive's own listing: ${n(cv.match||0)} match, ${n((cv.fewer_than_report||0)+(cv.more_than_report||0))} differ, ${n(cv.no_report_entry||0)} not in the listing · `+
+    `${n(fv.loose_files_hashed)} / ${n(fv.loose_files_listed)} loose files hashed · ${n(ft2.upload_error_count||0)} upload errors · ${fv.rows_match_results?"every manifest matches its result":"manifest rows differ from the results"}<br>`+
+    `${n(ft2.files)} files (${gb(ft2.bytes)}) · ${n(ft2.unique_files)} distinct contents, <b>${n(ft2.new_unique)} new vs Disk-1/2/Z4</b> (${gb(ft2.new_unique_bytes)}) · ${n(ft2.nested_count)} nested archives unpacked (deepest ${n(fv.max_nested_depth)} levels) · ${n(ft2.encrypted_nested)} password-locked nested archives and ${n(ft2.ransomware_files)} ransomware-encrypted files recorded · ${n(fv.distinct_extensions)} file extensions`+
+    (z.audit?(()=>{const a=z.audit,t3=a.totals||{},b3=a.total_bytes||{},ok3=(t3.stored_ok||0)+(t3.disk_but_own_object||0),bad=(t3.stored_missing||0)+(t3.no_manifest||0);return `<br><span style="color:${bad?'inherit':'var(--good-text)'}">${bad?'!':'✓'} Object audit ${utc(a.checked_at)}: every object under the ${n(a.archive_jobs)} archives' extraction folders listed in S3 and checked against the manifests — ${n(t3.objects)} objects (${gb(b3.objects)}) stored in bim · ${n(ok3)} manifest entries point at their own object with the right size · <b>${n(t3.stored_missing||0)} missing</b> · ${n(t3.orphans||0)} objects no manifest references${t3.no_manifest?` · ${n(t3.no_manifest)} archives without a manifest`:''}.</span>`})():'');}
+  else fe.style.display="none";
+  const all=(z.at_a_glance||[]).find(r=>r.kind==="All files")||{};
+  const mc=z.machines||{};
+  $("z3-tiles").innerHTML=
+    tile("Jobs done",`${n(p.jobs_done)} / ${n(p.jobs_total)}`,`${n(p.archive_jobs_done)} / ${n(p.archive_jobs_total)} archives · ${n(p.loose_jobs_done)} / ${n(p.loose_jobs_total)} loose-file folders`)+
+    tile("Files counted",n(t.files),`${gb(t.bytes)} · all nesting levels + loose files`)+
+    tile("Unique content",all.unique_files==null?"counting…":n(all.unique_files),all.new_unique==null?"":`${n(all.new_unique)} new vs Disk-1/2/Z4 (${gb(all.new_unique_bytes)})`)+
+    tile("Nested archives unpacked",n(t.nested_count),`${n(t.encrypted_nested)} password-locked (recorded) · deepest ${n(t.max_nested_depth)} levels`)+
+    tile("Estimated time left",p.eta_s==null?"estimating":dur(p.eta_s),p.eta_s==null?`shown once ${Math.round((p.eta_min_fraction||0.15)*100)}% of the data is done (large archives are still in flight)`:`${((p.rate_bytes_per_s||0)/1e6).toFixed(0)} MB/s of source data, last ${Math.round((p.rate_window_s||1800)/60)} min`)+
+    tile("Machines",n(mc.instances),`${n(mc.vcpu)} vCPU · ${n(z.boxes_alive)} reporting, ${n(z.worker_processes_alive)} worker processes`);
+  const am=ft.archive_members||{};
+  $("z3-overall").innerHTML=meter("Source data processed (archives + loose files)",p.bytes_done,p.bytes_total,gb)+
+    meter("Archives extracted",p.archive_jobs_done,p.archive_jobs_total,n)+
+    meter("Loose files hashed and classified",p.loose_files_done,p.loose_files_total,n)+
+    (am.top_level_files!=null&&s.files_in_archives?meter("Top-level archive members extracted vs the drive's listing",am.top_level_files,s.files_in_archives,n," · nested members come on top"):"");
+  const st=p.status||{};
+  $("z3-status").innerHTML=`<span><span class="sw" style="background:var(--good)"></span>✓ ok ${n(st.ok||0)}</span>`+
+    `<span><span class="sw" style="background:var(--warning)"></span>! partial ${n(st.partial||0)}</span>`+
+    `<span><span class="sw" style="background:var(--critical)"></span>✕ failed ${n(st.failed||0)}</span>`+
+    `<span class="muted">ransomware-encrypted files flagged: ${n(t.ransomware_files)} · zero-byte files: ${n(t.zero_byte_files)} · upload errors: ${n(t.upload_error_count)}</span>`;
+  const vf=ft.verify||{}, vi=ft.verify_report_listing_incomplete||{}, nvi=Object.values(vi).reduce((a,b)=>a+b,0);
+  $("z3-verify").innerHTML=Object.keys(vf).length?`<b>Completeness check</b> (${n(ft.archive_jobs_counted)} archives counted): ✓ ${n(vf.match||0)} have exactly as many top-level files as the drive's own 7-Zip listing · ${n(vf.fewer_than_report||0)} fewer · ${n(vf.more_than_report||0)} more · ${n(vf.no_report_entry||0)} not in the listing${nvi?` · ${n(nvi)} of these the drive report itself could not list completely`:""}.`:(ft.updated?"":"The completeness check starts with the first statistics round.");
+  const cs=z.conversions, cvt=$("z3-conv");
+  if(!cs||!cs.pipelines){$("z3-conv-note").textContent="Preparing: scanning data-3 for every IFC, Tekla DB1 and SDS2 model and building the conversion job lists.";cvt.innerHTML="";$("z3-conv-why").textContent="";}
+  else{const nm={ifc:"IFC",db1:"Tekla DB1",sds2:"SDS2 jobs"}, cl=x=>(x&&x.classes)||{};
+    const row=(lab,p,b)=>{const w=v=>b?`<b>${v}</b>`:v, c=cl(p);return `<tr><td>${w(lab)}</td><td class="n">${w(n(p.distinct))}</td><td class="n">${w(n(p.to_convert))}</td><td class="n">${w(n(p.reused))}</td><td class="n">${w(n(p.done))}${p.in_flight?` <span class="muted">(+${n(p.in_flight)} running)</span>`:""}</td><td class="n">${w(n(p.step_files))}</td><td class="n">${w(gb(p.step_bytes))}</td><td class="n">${w(n(p.graded))}</td><td class="n">${w(n(c["1"]||0))}</td><td class="n">${w(n(c["2"]||0))}</td><td class="n">${w(n(c["3"]||0))}</td></tr>`};
+    cvt.innerHTML=`<tr><th>Model type</th><th class="n">Distinct models</th><th class="n">To convert</th><th class="n">Reused STEP (Disk-1/2, Z4)</th><th class="n">Converted</th><th class="n">STEP files</th><th class="n">STEP size</th><th class="n">Graded</th><th class="n">Class 1 perfect</th><th class="n">Class 2 partial</th><th class="n">Class 3 bad</th></tr>`+
+      Object.entries(cs.pipelines).map(([k,p])=>row(nm[k]||k,p||{},false)).join("")+(cs.totals?row("Total",cs.totals,true):"");
+    const cv=cs.converters||{}, fl=cs.fleet||{};
+    $("z3-conv-note").innerHTML=`${cs.final?"<b style=\"color:var(--good-text)\">✓ Final.</b> ":""}Every distinct model is converted once; STEP already made for the same content in the Disk-1/2 or Z4 runs is reused (matched by checksum) and graded with the same rules. Converters: IFC ${cv.ifc||"–"}, DB1 ${cv.db1||"–"}, SDS2 ${cv.sds2||"–"}. ${fl.boxes?`${n(fl.boxes)} machines, ${n(fl.vcpu)} vCPU. `:""}Updated ${utc(cs.updated)}.`;
+    const why=Object.entries(cs.pipelines).map(([k,p])=>{const r=Object.entries((p||{}).top_reasons||{});return r.length?`<b>${nm[k]||k}</b>: `+r.map(([a,b])=>`${a} ${n(b)}`).join(" · "):""}).filter(Boolean).join("<br>");
+    const pk=cs.packaging||null, pe=$("z3-pkg");
+    if(!pk||!pk.active){pe.innerHTML=pk?"<b>Packaging</b>: tested on 3 projects (all checks passed); switching on for all projects.":"";}
+    else if(pk.error){pe.innerHTML=`<b>Packaging</b>: on · last round reported an error, being fixed.`;}
+    else{const done=pk.projects_packaged||0, tot=pk.projects_with_shipped_step||0;
+      pe.innerHTML=`<b>Packaging</b> (only class 1 perfect STEP, each with its archive's files, projpkg4 format; automatic for every newly perfect model): `+
+        `${n(done)} of ${n(tot)} projects packaged · ${n(pk.placements||0)} STEP placements of ${n(pk.shipped_models||0)} perfect models · `+
+        `${n(pk.pending_jobs||0)} package jobs waiting${pk.removals_pending?` · ${n(pk.removals_pending)} removals waiting for owner approval`:""}`+
+        `${pk.verify_failures?` · <span style="color:var(--critical-text,#b00)">${n(pk.verify_failures)} check failures</span>`:" · package checks: 0 failures"}. Updated ${utc(pk.updated)}.`;}
+    $("z3-conv-why").innerHTML=(cs.class_rule?`<b>Classes</b>: ${cs.class_rule}<br>`:"<b>Classes</b>: 1 perfect = opens, every part of the source present, all solids valid, no stand-ins · 2 partial = opens but parts missing / approximated or a needed file missing · 3 bad = failed, no geometry, or damaged source.<br>")+(why?`<b>Top reasons (classes 2–3)</b><br>${why}`:"");}
+  const run=(z.running||[]).slice().sort((a,b)=>(b.size||0)-(a.size||0)), phc={};
+  run.forEach(r=>{phc[r.phase]=(phc[r.phase]||0)+1});
+  $("z3-running").innerHTML=`<tr><td colspan="3" class="muted">${n(run.length)} jobs in flight${Object.keys(phc).length?" · "+Object.entries(phc).map(([k,v])=>`${k} ${n(v)}`).join(" · "):""}. Largest 10:</td></tr>`+
+    `<tr><th>Phase</th><th class="n">Source size</th><th class="n">Files uploaded</th></tr>`+
+    (run.length?run.slice(0,10).map(r=>`<tr><td>${r.phase||"–"}</td><td class="n">${gb(r.size)}</td><td class="n">${r.files_total?`${n(r.files_uploaded)} / ${n(r.files_total)}`:"–"}</td></tr>`).join(""):`<tr><td colspan="3" class="muted">none running</td></tr>`);
+  const ns=ft.nested||{}, nd=ns.by_depth||{};
+  $("z3-nest").innerHTML=`<tr><th>Depth</th><th class="n">Nested archives</th></tr>`+(Object.keys(nd).length?Object.entries(nd).sort((a,b)=>a[0]-b[0]).map(([d,c])=>`<tr><td>level ${d}</td><td class="n">${n(c)}</td></tr>`).join(""):`<tr><td colspan="2" class="muted">none yet</td></tr>`)+
+    (ns.unpacked!=null?`<tr><td><b>All levels</b></td><td class="n"><b>${n(ns.unpacked)}</b></td></tr><tr><td class="muted">password-locked (recorded, not opened)</td><td class="n">${n(ns.encrypted_blocked)}</td></tr><tr><td class="muted">drive report: nested archives</td><td class="n">${n(s.nested_archives)}</td></tr>`:"");
+  const sd=z.sds2, so=z.source||{};
+  if(sd){$("z3-sds2").innerHTML=`<tr><th></th><th class="n">Z3 raw</th><th class="n">Z3 unique</th><th class="n"><b>New in Z3</b></th><th class="n">Drive report (whole disk)</th></tr>`+
+    `<tr><td>SDS2 jobs (job folders)</td><td class="n">${n(sd.jobs_raw)}</td><td class="n">${n(sd.jobs_unique)}</td><td class="n"><b>${n(sd.jobs_new_unique)}</b></td><td class="n">${n(so.sds2_jobs)} jobs · ${n(so.sds2_distinct)} distinct</td></tr>`+
+    `<tr><td>Files inside SDS2 jobs</td><td class="n">${n(sd.files)}</td><td class="n">–</td><td class="n"><b>${n(sd.files_new)}</b></td><td class="n">${n(so.sds2_files)}</td></tr>`+
+    `<tr><td>Size of SDS2 job files</td><td class="n">${gb(sd.bytes)}</td><td class="n">–</td><td class="n">–</td><td class="n">${gb(so.sds2_bytes)}</td></tr>`;
+    $("z3-sds2-note").textContent=`SDS2 stores each model as a job folder of extension-less records (members, materials, bolts, holes), so it is counted by job, not by file type. A job is detected by its main/jsetup (or mem/mem_idx) file; unique = distinct jsetup content; new = not stored by Disk-1/2/Z4 (Disk-1/2 kept CAD file types only). Z4 had 173 distinct SDS2 jobs. Found so far: ${n(sd.jobs_raw)} of the ${n(so.sds2_jobs)} jobs in the drive report; the count grows as archives finish.`;}
+  else {$("z3-sds2").innerHTML=`<tr><td class="muted">SDS2 counts appear after the next stats round</td></tr>`;}
+  const cm=(z.comparison||{}).rows||[];
+  $("z3-cmp-table").innerHTML=`<tr><th>Type</th><th class="n">Disk-1+2 unique</th><th class="n">Z4 unique</th><th class="n">Z4 added (new vs Disk-1/2)</th><th class="n">Earlier disks together</th><th class="n">Z3 raw</th><th class="n">Z3 unique</th><th class="n"><b>New in Z3</b> (unique)</th><th class="n">New in Z3 (raw)</th></tr>`+
+    (cm.length?cm.map(r=>{const b=r.total||r.group==="Other";const w=x=>b?`<b>${x}</b>`:x;const sep=r.total?' style="border-bottom:2px solid var(--axis)"':'';
+      return `<tr${sep}><td>${w(r.type)}</td><td class="n">${w(n(r.d12_unique))}</td><td class="n">${w(n(r.z4_unique))}</td><td class="n">${w(n(r.z4_new_unique))}</td><td class="n">${w(n(r.earlier_unique))}</td><td class="n">${w(n(r.z3_raw))}</td><td class="n">${w(n(r.z3_unique))}</td><td class="n"><b>${n(r.z3_new_unique)}</b></td><td class="n">${w(n(r.z3_new_raw))}</td></tr>`}).join(""):`<tr><td colspan="9" class="muted">counting…</td></tr>`);
+  $("z3-cmp-note").textContent=`Unique = distinct content (sha256). "Earlier disks together" = Disk-1+2 unique plus what Z4 added. New in Z3 = content that none of Disk-1, Disk-2 or Z4 holds, i.e. what Z3 actually adds. Disk-1/Disk-2 were extracted for CAD types only, so other types can only be known from Z4. The last row counts each distinct content once across all types (earlier disks: the shared content index).`;
+  z3glance("z3-glance",z.at_a_glance);
+  $("z3-glance-note").textContent=`Raw = every file path; Unique = distinct content (sha256) of that kind across the whole disk; New = content Disk-1, Disk-2 and Z4 do not hold. PDFs are split by the extraction worker's CAD/document classification.`;
+  $("z3-types-note").textContent=ft.updated?`From ${n(ft.jobs_counted)} finished jobs (${n(ft.rows_counted)} file rows): ${n(ft.distinct_extensions)} distinct extensions; deepest nesting ${n(ft.max_nested_depth)} levels. Statistics updated ${utc(ft.updated)}.`:"counting… (statistics start with the first aggregation round)";
+  const ex=ft.by_extension||[];
+  z3types("z3-g-3d",ex,G3D,"All 3D");z3types("z3-g-2d",ex,G2D,"All 2D");z3types("z3-g-fab",ex,GFAB,"All fabrication");
+  const pr=(z.at_a_glance||[]).filter(r=>/PDF/.test(r.kind));
+  $("z3-pdfc").innerHTML=Z3HEAD("PDF kind")+(pr.length?pr.map(r=>z3row(r.kind,r)).join("")+z3row("All PDFs",z3sum(pr),true):z3none());
+  const pc=z.pdf_classes||{};
+  $("z3-pdfc-note").textContent=pc.rule?`Rule: ${pc.rule}.`:"";
+  const cats=ft.by_category||[];
+  $("z3-cats").innerHTML=Z3HEAD("Category")+(cats.length?cats.map(c=>z3row(c.type,c)).join("")+z3row("All types (per-type sums)",z3sum(cats),true):z3none());
+  z3types("z3-exts",ex,null,null);
+  const L=z.loose||{};
+  $("z3-loose-note").textContent=`${n(L.files_listed)} files (${gb(L.bytes_listed)}) sit directly on the drive; ${n(L.files_hashed)} hashed and classified so far. They stay where they are (not copied again). "Unique" = distinct content by checksum; "New" = not held by Disk-1/2/Z4.`;
+  z3glance("z3-loose-glance",L.at_a_glance);
+  z3types("z3-l-all",L.by_extension,null,null);
+}
+function renderMove(doc){
+  const m=doc.move, el=document.getElementById("move");
+  if(!m){el.style.display="none";return}
+  el.style.display="";
+  document.getElementById("move-note").textContent=`Earlier extraction output is being copied to the new bucket with identical keys; every object is verified after the copy. ${m.updated?"Last chunk finished "+utc(m.updated)+".":""}`;
+  document.getElementById("move-tiles").innerHTML=tile("Objects copied",n(m.objects),gb(m.bytes))+tile("Verified",n(m.verified),`${n(m.mismatch)} mismatches`)+tile("Shard errors",n(m.shard_errors),"retried by the move workers");
+  document.getElementById("move-meters").innerHTML=meter("Chunks done",m.chunks_done,m.chunks_total,n)+(m.shards_total?meter("Shards done",m.shards_done,m.shards_total,n):"");
+}
+async function load(){
+  let doc=null;
+  for(const u of SRC){try{const r=await fetch(u+"?t="+Date.now(),{cache:"no-store"});if(r.ok){doc=await r.json();break}}catch(e){}}
+  if(!doc){document.getElementById("age").textContent="could not load sources.json";return}
+  const ageS=(Date.now()-Date.parse(doc.generated_at))/1000;
+  document.getElementById("age").textContent=`updated ${dur(ageS)} ago (${doc.generated_at.replace("T"," ").replace("Z"," UTC")})`;
+  document.getElementById("dot").className="dot"+(ageS>900?" stale":"");
+  try{renderZ3(doc)}catch(e){console.error("z3",e);document.getElementById("z3-note").textContent="Z3 section could not be rendered from this sources.json."}
+  try{renderMove(doc)}catch(e){console.error("move",e)}
+  const z=doc.z4;
+  document.getElementById("z4-title").textContent=z.label;
+  document.getElementById("z4-note").innerHTML=`${n(z.source_archives)} archives (${gb(z.source_bytes)}) and ${n(z.loose_files)} loose files on the drive. <b>Every archive is fully unpacked</b>, nested archives to the deepest level: phase A = ${n((z.phases.A||{}).archives)} archives found only on this drive; phase B = ${n((z.phases.B||{}).archives)} archives that also exist on Disk-1 (Disk-1 kept only CAD types, so all their files are extracted here). Archives with IFC/STEP go first. Each distinct file content is stored once; repeats are recorded as pointers. Nothing is skipped: password-locked and ransomware-damaged files are recorded, not dropped.`;
+  const fv=z.final_verify;
+  if(z.state==="complete"&&fv){const el=document.getElementById("z4-final");el.style.display="block";const t=fv.totals||{},st=fv.status||{},cv=fv.completeness_vs_drive_report||{};
+    el.innerHTML=`<b style="color:var(--good-text)">✓ Extraction complete — verified ${fv.checked_at.replace("T"," ").replace("Z"," UTC")}</b><br>`+
+    `${n(fv.results)} / ${n(fv.jobs)} archives have a result (${n(st.ok||0)} ok, ${n(st.partial||0)} partial = damage inside the source archive, recorded) · `+
+    `completeness vs the drive's own listing: ${n(cv.match||0)} match, ${n((cv.fewer_than_report||0)+(cv.more_than_report||0))} differ, ${n(cv.no_report_entry||0)} not in the listing · `+
+    `${n(fv.source_objects_copied)} / ${n(fv.source_objects_on_drive)} original files copied · ${n(t.upload_error_count||0)} upload errors<br>`+
+    `${n(t.files)} files extracted (${gb(t.bytes)}) · ${n(t.stored_files)} unique objects stored (${gb(t.stored_bytes)}) · ${n(t.dedup_files)} duplicates recorded as pointers, ${n(t.already_in_disk12_files)} of them already in Disk-1/2 · `+
+    `${n(t.nested_count)} nested archives unpacked (deepest ${n(fv.max_nested_depth)} levels) · ${n(t.encrypted_nested)} password-locked nested archives and ${n(t.ransomware_files)} ransomware-encrypted files recorded · ${n(fv.distinct_extensions)} file extensions`+
+    (fv.marker_audit?(()=>{const m=fv.marker_audit;const done=m.restored>=m.missing;return `<br><span style="color:${done?'var(--good-text)':'inherit'}">${done?'✓':'⟳'} Post-run audit (${n(m.checked)} dedup pointers checked against S3): ${n(m.missing)} stored contents (${gb(m.missing_bytes)}) were missing — a worker stopped between recording and uploading them. `+
+      `${done?'All restored':'Restoring'} from the source archives: ${n(m.restored)} / ${n(m.missing)} restored, ${n(m.archives_done)} / ${n(m.archives)} archives re-read${m.not_found?` · ${n(m.not_found)} not found yet`:''}${m.recheck_at?` · re-check after repair: ${n(m.recheck_checked)} checked, <b>${n(m.recheck_missing)} missing</b>`:''}.</span>`})():'');}
+  const dedupPct=z.files?100*z.dedup_files/z.files:0;
+  document.getElementById("z4-tiles").innerHTML=
+    tile("Archives done",`${n(z.archives_done)} / ${n(z.new_archives)}`,`${gb(z.source_bytes_done)} of ${gb(z.new_archive_bytes)} compressed`)+
+    tile("Files extracted",n(z.files),`${gb(z.bytes)} uncompressed`)+
+    tile("Unique files stored",n(z.stored_files),`${gb(z.stored_bytes)} · ${dedupPct.toFixed(1)}% were duplicates`)+
+    tile("Nested archives unpacked",n(z.nested_count),`${n(z.encrypted_nested)} password-locked (recorded)`)+
+    tile("Estimated time left",z.eta_s==null?"estimating":dur(z.eta_s),z.eta_s==null?"shown once 20% of the data is done (large archives are still in flight)":`${(z.rate_source_bytes_per_s_20min/1e6).toFixed(0)} MB/s compressed, last 20 min`);
+  document.getElementById("z4-overall").innerHTML=meter("Compressed data extracted (all archives)",z.source_bytes_done,z.new_archive_bytes,gb)+
+    Object.entries(z.phases||{}).sort().map(([k,x])=>meter(`Phase ${k}: ${k==="A"?"archives only on this drive":"archives also on Disk-1, full unpack"} (${n(x.archives)} archives)`,x.done_bytes,x.bytes,gb,` · ${n(x.done)} / ${n(x.archives)} archives`)).join("");
+  const st=z.archives_status||{};
+  document.getElementById("z4-status").innerHTML=
+    `<span><span class="sw" style="background:var(--good)"></span>✓ ok ${n(st.ok||0)}</span>`+
+    `<span><span class="sw" style="background:var(--warning)"></span>! partial ${n(st.partial||0)}</span>`+
+    `<span><span class="sw" style="background:var(--critical)"></span>✕ failed ${n(st.failed||0)}</span>`+
+    `<span class="muted">ransomware-encrypted files flagged: ${n(z.ransomware_files)} · upload errors: ${n(z.upload_error_count)}</span>`;
+  const vf=(z.file_types||{}).verify||{};
+  document.getElementById("z4-verify").innerHTML=Object.keys(vf).length?`<b>Completeness check:</b> ✓ ${n(vf.match||0)} finished archives have exactly as many top-level files as the drive's own 7-Zip listing · ${n((vf.fewer_than_report||0)+(vf.more_than_report||0))} differ · ${n(vf.no_report_entry||0)} were not in the drive listing.`:"";
+  const order=["<1 GB","1-20 GB",">=20 GB"];
+  document.getElementById("z4-bands").innerHTML=order.filter(b=>z.size_bands[b]).map(b=>{const x=z.size_bands[b];return meter(`${b} (${n(x.archives)} archives)`,x.done,x.archives,n)}).join("");
+  const c=z.raw_copy||{};
+  document.getElementById("z4-copy").innerHTML=c.total_objects?meter("Archives + loose files copied",(c.done_objects||0)+(c.skipped_objects||0),c.total_objects,n,c.final?" · done":""):'<span class="muted">not started</span>';
+  const run=(z.running||[]).slice().sort((a,b)=>(b.size||0)-(a.size||0));
+  const phc={}; run.forEach(r=>{phc[r.phase]=(phc[r.phase]||0)+1});
+  const top=run.slice(0,20);
+  document.getElementById("z4-running").innerHTML=`<tr><td colspan="3" class="muted">${n(run.length)} archives in flight · ${Object.entries(phc).map(([k,v])=>`${k} ${n(v)}`).join(" · ")} · ${n(z.boxes_alive)} machines, ${n(z.worker_processes_alive)} worker processes. Largest 20:</td></tr>`+
+    `<tr><th>Phase</th><th class="n">Archive size</th><th class="n">Files uploaded</th></tr>`+
+    (top.length?top.map(r=>`<tr><td>${r.phase}</td><td class="n">${gb(r.size)}</td><td class="n">${r.files_total?`${n(r.files_uploaded)} / ${n(r.files_total)}`:"–"}</td></tr>`).join(""):`<tr><td colspan="3" class="muted">none running</td></tr>`);
+  const ft=z.file_types||{};
+  document.getElementById("z4-types-note").textContent=ft.archives_counted?`From ${n(ft.archives_counted)} finished archives: ${n(ft.distinct_extensions)} distinct extensions; deepest nesting unpacked: ${n(ft.max_nested_depth)} levels. "Raw" = every file path extracted; "Unique" = distinct content (sha256) of that type across the whole disk; "Already in Disk-1/2" = files whose content the Disk-1/Disk-2 extraction already holds (not uploaded again for archives processed after 23:15 UTC).`:"counting…";
+
+  const GHEAD=(d12)=>`<tr><th>Kind</th><th class="n">Raw files</th><th class="n">Raw size</th><th class="n">Unique files</th><th class="n">Unique size</th>${d12?'<th class="n">Already in Disk-1/2</th>':''}</tr>`;
+  const grow=(r,d12)=>{const b=r.kind==="All files";const w=x=>b?`<b>${x}</b>`:x;return `<tr><td>${w(r.kind)}</td><td class="n">${w(n(r.files))}</td><td class="n">${w(gb(r.bytes))}</td><td class="n">${w(n(r.unique_files))}</td><td class="n">${w(gb(r.unique_bytes))}</td>${d12?`<td class="n">${w(n(r.in_disk12_files))}</td>`:''}</tr>`};
+  const glance=(id,rows,d12)=>{const el=document.getElementById(id); if(el) el.innerHTML=GHEAD(d12)+((rows||[]).length?(rows||[]).map(r=>grow(r,d12)).join(""):`<tr><td colspan="6" class="muted">counting…</td></tr>`)};
+  glance("z4-glance",z.at_a_glance,true); glance("z4-loose-glance",z.loose_at_a_glance,false);
+  const pc=z.pdf_classes||{}, cl=pc.classes||{};
+  const pr=(z.at_a_glance||[]).filter(r=>/PDF/.test(r.kind));
+  document.getElementById("z4-pdfc").innerHTML=`<tr><th>PDF kind</th><th class="n">Raw files</th><th class="n">Unique files</th><th class="n">Raw size</th></tr>`+
+    pr.map(r=>`<tr><td>${r.kind}</td><td class="n">${n(r.files)}</td><td class="n">${n(r.unique_files)}</td><td class="n">${gb(r.bytes)}</td></tr>`).join("")+
+    `<tr><td><b>All PDFs</b></td><td class="n"><b>${n(pr.reduce((a,r)=>a+r.files,0))}</b></td><td class="n"><b>${n(pr.reduce((a,r)=>a+r.unique_files,0))}</b></td><td class="n"><b>${gb(pr.reduce((a,r)=>a+r.bytes,0))}</b></td></tr>`;
+  document.getElementById("z4-pdfc-note").textContent=pc.rule?`Rule: ${pc.rule}. Each unique PDF is classified once (by the extraction worker from the local file, or by a backlog pass reading its first/last 64 KB); "not yet classified" shrinks as the backlog pass catches up (${n(pc.pdf_unique||0)} unique classified so far).`:"classification starting…";
+  const HEAD=`<tr><th>Type</th><th class="n">Raw files</th><th class="n">Raw size</th><th class="n">Unique files</th><th class="n">Unique size</th><th class="n">Already in Disk-1/2</th></tr>`;
+  const row=t=>`<tr><td>.${t.type}</td><td class="n">${n(t.files)}</td><td class="n">${gb(t.bytes)}</td><td class="n">${t.stored_files==null?"–":n(t.stored_files)}</td><td class="n">${t.stored_bytes==null?"–":gb(t.stored_bytes)}</td><td class="n">${t.in_disk12_files==null?"–":n(t.in_disk12_files)}</td></tr>`;
+  const sumrow=(arr,label)=>{const s=arr.reduce((a,t)=>({f:a.f+t.files,b:a.b+t.bytes,sf:a.sf+(t.stored_files||0),sb:a.sb+(t.stored_bytes||0),d:a.d+(t.in_disk12_files||0)}),{f:0,b:0,sf:0,sb:0,d:0});return `<tr><td><b>${label}</b></td><td class="n"><b>${n(s.f)}</b></td><td class="n"><b>${gb(s.b)}</b></td><td class="n"><b>${n(s.sf)}</b></td><td class="n"><b>${gb(s.sb)}</b></td><td class="n"><b>${n(s.d)}</b></td></tr>`};
+  const exts=ft.by_extension||[];
+  const pick=list=>list.map(e=>exts.find(t=>t.type===e)).filter(Boolean);
+  const table=(id,list,label)=>{const a=pick(list);document.getElementById(id).innerHTML=HEAD+(a.length?a.map(row).join("")+sumrow(a,label):`<tr><td colspan="5" class="muted">none yet</td></tr>`)};
+  table("z4-g-3d",G3D,"All 3D");table("z4-g-2d",G2D,"All 2D");table("z4-g-fab",GFAB,"All fabrication");
+  const known=new Set([...G3D,...G2D,...GFAB]);
+  document.getElementById("z4-cats").innerHTML=`<tr><th>Category</th><th class="n">Raw files</th><th class="n">Raw size</th><th class="n">Unique files</th><th class="n">Unique size</th></tr>`+
+    (ft.by_category||[]).filter(c=>!["3D model","2D drawing","PDF","CNC / fabrication"].includes(c.type)).map(t=>`<tr><td>${t.type}</td><td class="n">${n(t.files)}</td><td class="n">${gb(t.bytes)}</td><td class="n">${n(t.stored_files)}</td><td class="n">${gb(t.stored_bytes)}</td></tr>`).join("");
+  document.getElementById("z4-exts").innerHTML=HEAD+exts.map(row).join("");
+  const lz=z.loose_file_types||[];
+  document.getElementById("z4-loose-note").textContent=`${n(z.loose_files)} files (${gb(z.loose_bytes)}) sit directly on the drive; all are copied to the bucket as-is. "Unique" here = distinct content by checksum.`;
+  const pickL=list=>list.map(e=>lz.find(t=>t.type===e)).filter(Boolean);
+  const tableL=(id,list,label)=>{const a=pickL(list);document.getElementById(id).innerHTML=HEAD+(a.length?a.map(row).join("")+sumrow(a,label):`<tr><td colspan="5" class="muted">none</td></tr>`)};
+  tableL("z4-l-3d",G3D,"All 3D");tableL("z4-l-2d",G2D,"All 2D");
+  document.getElementById("z4-l-all").innerHTML=HEAD+lz.map(row).join("");
+
+
+  const cv=z.conversions||{}, cvp=Object.entries(cv).filter(([k,v])=>v&&typeof v==="object"&&"jobs" in v);
+  document.getElementById("z4-conv-note").textContent=cvp.length?`New IFC / IFCZIP / Tekla DB1 / SDS2 content in Z4 (not already converted from Disk-1/2) converted with the same pipelines as Disk-1/2; every STEP is read back with OpenCASCADE. Updated ${(cv.updated||"").replace("T"," ").replace("Z"," UTC")}.`:"Preparing conversion job lists and pipelines (IFC, IFCZIP, Tekla DB1, SDS2 → STEP)…";
+  document.getElementById("z4-conv").innerHTML=cvp.length?`<tr><th>Pipeline</th><th class="n">Jobs</th><th class="n">Done</th><th class="n">OK</th><th class="n">Failed</th><th class="n">STEP files</th><th class="n">STEP size</th><th class="n">Validated</th></tr>`+
+    cvp.map(([k,v])=>{const f=v.failed_by_reason?Object.values(v.failed_by_reason).reduce((a,b)=>a+b,0):(v.failed||0);return `<tr><td>${k.toUpperCase()} → STEP</td><td class="n">${n(v.jobs)}</td><td class="n">${n(v.done)}</td><td class="n">${n(v.ok)}</td><td class="n" title="${v.failed_by_reason?JSON.stringify(v.failed_by_reason).replace(/"/g,''):''}">${n(f)}</td><td class="n">${n(v.step_files)}</td><td class="n">${gb(v.step_bytes)}</td><td class="n">${n(v.validated)}</td></tr>`}).join(""):"";
+  const cm=(z.comparison||{}).rows||[];
+  document.getElementById("cmp-table").innerHTML=`<tr><th>Type</th><th class="n">Disk-1 unique</th><th class="n">Disk-2 unique</th><th class="n">Disk-1+2 unique</th><th class="n">Z4 raw</th><th class="n">Z4 unique</th><th class="n"><b>New in Z4</b> (unique)</th><th class="n">New in Z4 (raw)</th></tr>`+
+    cm.map(r=>{const b=r.total||r.group==="Other";const w=x=>b?`<b>${x}</b>`:x;const sep=r.total?' style="border-bottom:2px solid var(--axis)"':'';
+      return `<tr${sep}><td>${w(r.type)}</td><td class="n">${w(n(r.disk1_unique))}</td><td class="n">${w(n(r.disk2_unique))}</td><td class="n">${w(n(r.combined_unique))}</td><td class="n">${w(n(r.d4_raw))}</td><td class="n">${w(n(r.d4_unique))}</td><td class="n"><b>${n(r.d4_new_unique)}</b></td><td class="n">${w(n(r.d4_new_raw))}</td></tr>`}).join("");
+  document.getElementById("cmp-note").textContent=(z.comparison||{}).disk12_note||"";
+  const si=z.source_identity;if(si){const a=si.shared_archives,l=si.shared_loose,o=si.data4_only;document.getElementById("src-identity").innerHTML=`<b>Source check (every file, by checksum):</b> all ${n(a.count)} Disk-1 archives are on Z4 <b>byte-identical</b> (${gb(a.bytes)}; ${n(a.different)} differ), plus ${n(l.identical)} identical loose files · <b>new on Z4: ${n(o.archives)} archives (${gb(o.archive_bytes)})</b> + ${n(o.loose)} loose files. Disk-1 kept only CAD types when it was extracted, so the full Z4 extraction still found content Disk-1 never stored; every row below is deduplicated by content.`;}
+  const y=doc.z2;
+
+
+  const md=y.model_drawings||{}, mdl={sha:"Isometric drawings (.sha, Smart 3D drawing documents)",pcf:"Original Smart 3D PCF (per pipeline isometric)",xml:"Isogen isometric XML",pod:"Isogen POD output",mes:"Isogen messages",log:"Isometric generation logs",txt:"Text reports",xls:"Excel reports",sat:"ACIS 3D models (.sat)"};
+  document.getElementById("z2-md-note").textContent=md.documents_total?`${n(md.documents_exported)} / ${n(md.documents_total)} documents exported${md.final?" — complete":" (running)"} · stored zip-compressed in the model database, written out as the original files. These are Smart 3D's own drawings of this same plant, so they pair with the rebuilt 3D (by pipeline line number).`:"export starting…";
+  document.getElementById("z2-md").innerHTML=`<tr><th>Document type</th><th class="n">Documents</th><th class="n">Size</th></tr>`+Object.entries(md.by_type||{}).sort((a,b)=>b[1].documents-a[1].documents).map(([t,v])=>`<tr><td>${mdl[t]||"."+t}</td><td class="n">${n(v.documents)}</td><td class="n">${gb(v.bytes)}</td></tr>`).join("");
+  glance("z2-glance-src",y.at_a_glance_drawing_set,false); glance("z2-glance-x",y.at_a_glance_extracted,false);
+  const o3=y.outputs_3d||{}, o2=y.outputs_2d||{};
+  const orow=(l,v)=>`<tr><td>${l}</td><td class="n">${v==null?"–":n(v)}</td></tr>`;
+  document.getElementById("z2-out3d").innerHTML=`<tr><th>Output</th><th class="n">Files</th></tr>`+
+    [["Pipelines in the model",o3.pipelines_total],["Parsed JSON (per pipeline)",o3.json_written],["PCF piping files",o3.pcf_written],["Structure JSON files (per area)",o3.structure_area_files],["Equipment JSON files (per area)",o3.equipment_area_files],["IFC models",o3.ifc_files],["STEP models",o3.step_files],["STEP read-back validated",o3.step_validated],["glTF (.glb)",o3.gltf_files],["OBJ",o3.obj_files],["Rendered PNGs",o3.png]].map(([l,v])=>orow(l,v)).join("");
+  document.getElementById("z2-out2d").innerHTML=`<tr><th>Output</th><th class="n">Files</th></tr>`+
+    Object.entries({"DXF from DWG":o2.dxf_from_dwg,"PNG pages rendered from PDFs":o2.png_pages,"Vector DXF from PDFs (pages)":o2.dxf_from_pdf_pages,"Drawing title blocks (.sha → JSON)":o2.sha_title_block_json,
+      "Model isometrics: .sha → DXF":o2.model_isometrics_dxf_from_sha,"Model isometrics: .sha → PNG":o2.model_isometrics_png_from_sha,"Model isometrics drawn from original PCF → DXF":o2.model_isometrics_dxf_from_original_pcf,"Model isometrics drawn from original PCF → PNG":o2.model_isometrics_png_from_original_pcf,"Model drawing title blocks → JSON":o2.model_drawing_title_block_json,...Object.fromEntries(Object.entries(o2).filter(([k])=>!["dxf_from_dwg","png_pages","dxf_from_pdf_pages","sha_title_block_json","model_isometrics_dxf_from_sha","model_isometrics_png_from_sha","model_isometrics_dxf_from_original_pcf","model_isometrics_png_from_original_pcf","model_drawing_title_block_json"].includes(k)).map(([k,v])=>[k.replace(/_/g," "),v]))}).map(([l,v])=>orow(l,v)).join("");
+  const t2=(arr)=>HEAD+(arr||[]).slice(0,40).map(row).join("")+((arr||[]).length?sumrow(arr,"All types"):"");
+  document.getElementById("z2-src-types").innerHTML=t2(y.file_types_source);
+  document.getElementById("z2-sc-types").innerHTML=t2(y.file_types_sharedcontent);
+  document.getElementById("z2-title").textContent=y.label;
+  document.getElementById("z2-db").innerHTML=`<tr><th>Database</th><th>State</th><th class="n">Tables</th><th class="n">Views</th></tr>`+
+    y.databases.map(d=>`<tr><td>${d.name}</td><td>${d.restored?'<span class="ok">✓ restored</span>':'<span class="muted">… '+(d.name.startsWith("model")?y.stage:"pending")+'</span>'}</td><td class="n">${d.restored?n(d.tables):"–"}</td><td class="n">${d.restored?n(d.views):"–"}</td></tr>`).join("");
+  const f=y.files||{};
+  document.getElementById("z2-tiles").innerHTML=
+    tile("Source files",n(f.source_files),`${n(f.distinct_files)} distinct · ${n(f.duplicate_groups)} duplicate groups`)+
+    tile("Reference content unpacked",n(f.sharedcontent_files),"files (S3D symbols, templates, styles)")+
+    tile("DWG → DXF",f.dxf_ok==null?"–":n(f.dxf_ok),f.dxf_failed==null?"pending":`${n(f.dxf_failed)} failed`)+
+    tile("PDF pages rendered",n(f.pdf_pages_png),f.pdfs==null?"pending":`from ${n(f.pdfs)} PDFs`);
+  const fl=doc.fleet||{};
+  document.getElementById("fleet").innerHTML=`<tr><th>Group</th><th class="n">Instances</th><th class="n">vCPU</th><th>Types</th></tr>`+
+    Object.entries(fl).map(([g,x])=>`<tr><td>${g}</td><td class="n">${n(x.instances)}</td><td class="n">${n(x.vcpu)}</td><td>${Object.entries(x.types).map(([t,c])=>`${c} × ${t}`).join(", ")}</td></tr>`).join("")+
+    `<tr><td><b>Total</b></td><td class="n"><b>${n(Object.values(fl).reduce((a,x)=>a+x.instances,0))}</b></td><td class="n"><b>${n(Object.values(fl).reduce((a,x)=>a+x.vcpu,0))}</b></td><td></td></tr>`;
+  document.getElementById("foot").textContent=`sources.json generated ${doc.generated_at} · publisher interval ${doc.interval_s} s`;
+}
+load();setInterval(load,30000);
+</script>
+</body>
+</html>

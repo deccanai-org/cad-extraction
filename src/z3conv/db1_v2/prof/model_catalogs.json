@@ -1,0 +1,2124 @@
+{
+"0632e878d57c36f00cc695fdce9a2516bc87f23c644d98cb777132a96e463edc": {
+"D4534": {
+"kind": "CIRC",
+"dims": [
+2267.0
+],
+"tier": "C",
+"src": "tier C: Tekla D/ROD round bar, size from the name; Tekla built-in D<d> = solid round bar of diameter d, verified in this environment by Tekla reports (1620-D-029 D3376 L10120 710,655 kg; 1620-C-003 D2212 L9050 272,830 kg; 1620-D-016 D2530 L8205 323,604 kg)"
+}
+},
+"0bbac8fc66cca79b883bc825560ba18d3f7edf11103736a50d6a9f0b127059b2": {
+"D2392": {
+"kind": "CIRC",
+"dims": [
+1196.0
+],
+"tier": "C",
+"src": "tier C: Tekla D/ROD round bar, size from the name; Tekla built-in D<d> = solid round bar of diameter d, verified in this environment by Tekla reports (1620-D-029 D3376 L10120 710,655 kg; 1620-C-003 D2212 L9050 272,830 kg; 1620-D-016 D2530 L8205 323,604 kg)"
+}
+},
+"14e4060080fa1aff53c9f6c1a4c504c2e7edf6c8725f6b43f02b8e360c7a34bd": {
+"R.B \u00d820": {
+"kind": "CIRC",
+"dims": [
+10.0
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 6 type 6001 (unique_dimension_block): diameter 20.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+},
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+}
+},
+"172ffb7a9ab8a81db5e4c8cd352faf278494c16ddb925d371c24e4b039174f9a": {
+"R.B \u00d820": {
+"kind": "CIRC",
+"dims": [
+10.0
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 6 type 6001 (unique_dimension_block): diameter 20.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L125*75*10": {
+"kind": "L",
+"dims": [
+125.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+},
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+}
+},
+"2fdaa7dae6e47ee0da5b0b901ed576d010663281896eb5402cd4a711f50a5cb0": {
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L150*90*9": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+9.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+}
+},
+"305be94d6a71af34f44bb3fcad89fff262c9cbab9257e17a6c8a13ec8fa15785": {
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L125*75*10": {
+"kind": "L",
+"dims": [
+125.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+},
+"D2019": {
+"kind": "CIRC",
+"dims": [
+1009.5
+],
+"tier": "C",
+"src": "tier C: Tekla D/ROD round bar, size from the name; Tekla built-in D<d> = solid round bar of diameter d, verified in this environment by Tekla reports (1620-D-029 D3376 L10120 710,655 kg; 1620-C-003 D2212 L9050 272,830 kg; 1620-D-016 D2530 L8205 323,604 kg)"
+}
+},
+"3355ebac77ad5e11a45d368209d0c4b69d52aab8c45b15bc665d8fbeb276a693": {
+"D4534": {
+"kind": "CIRC",
+"dims": [
+2267.0
+],
+"tier": "C",
+"src": "tier C: Tekla D/ROD round bar, size from the name; Tekla built-in D<d> = solid round bar of diameter d, verified in this environment by Tekla reports (1620-D-029 D3376 L10120 710,655 kg; 1620-C-003 D2212 L9050 272,830 kg; 1620-D-016 D2530 L8205 323,604 kg)"
+}
+},
+"33f2e0efa201264d64161c16b05307568ab03615ef522f0346ec24a7ab78888f": {
+"R.B \u00d820": {
+"kind": "CIRC",
+"dims": [
+10.0
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 6 type 6001 (unique_dimension_block): diameter 20.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+},
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+}
+},
+"3585d86a380deaca7d38355585e8ac82257aba42f30a7f1b7e042cc755ae1d16": {
+"D2248": {
+"kind": "CIRC",
+"dims": [
+1124.0
+],
+"tier": "A",
+"src": "tier A: Tekla D/ROD round bar, size from the name; diameter continuity: ELD3268*3268*2248*2248 end d2248 meets this part end"
+},
+"D4594": {
+"kind": "CIRC",
+"dims": [
+2297.0
+],
+"tier": "A",
+"src": "tier A: Tekla D/ROD round bar, size from the name; diameter continuity: ELD4594*4594*3268*3268 end d4594 meets this part end"
+},
+"D3268": {
+"kind": "CIRC",
+"dims": [
+1634.0
+],
+"tier": "A",
+"src": "tier A: Tekla D/ROD round bar, size from the name; diameter continuity: ELD4594*4594*3268*3268 end d3268 meets this part end"
+}
+},
+"39a8f23724f8e28befacf930780f5aabf87c91cfe7e716ba1ab9baf52de72b00": {
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L150*90*9": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+9.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+},
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+}
+},
+"43c0c3667a1167c952ea80580781b784f01d2459d071360bbe17bedd29a04f19": {
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+},
+"L150*150*12": {
+"kind": "L",
+"dims": [
+150.0,
+150.0,
+12.0,
+14.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 14.0 r2 7.0"
+},
+"D2940": {
+"kind": "CIRC",
+"dims": [
+1470.0
+],
+"tier": "B",
+"src": "tier B: Tekla D/ROD round bar, size from the name; stacked rounds: meets 1 other D/ROD part end(s) on the same axis (vessel shell run); D<d>/ROD<d> = solid round per the environment reports"
+},
+"D4048": {
+"kind": "CIRC",
+"dims": [
+2024.0
+],
+"tier": "C",
+"src": "tier C: Tekla D/ROD round bar, size from the name; Tekla built-in D<d> = solid round bar of diameter d, verified in this environment by Tekla reports (1620-D-029 D3376 L10120 710,655 kg; 1620-C-003 D2212 L9050 272,830 kg; 1620-D-016 D2530 L8205 323,604 kg)"
+},
+"D1626": {
+"kind": "CIRC",
+"dims": [
+813.0
+],
+"tier": "B",
+"src": "tier B: Tekla D/ROD round bar, size from the name; stacked rounds: meets 2 other D/ROD part end(s) on the same axis (vessel shell run); D<d>/ROD<d> = solid round per the environment reports"
+}
+},
+"4671ea5620030089a37717982a0e440baa90e01bb362da2a02e4a68e1e1c4dae": {
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+},
+"D3368": {
+"kind": "CIRC",
+"dims": [
+1684.0
+],
+"tier": "A",
+"src": "tier A: Tekla D/ROD round bar, size from the name; own Tekla report part_list.xsr: D3368 L6400 447299 kg = solid round d3368 (447593 kg)"
+}
+},
+"48e010c8ec254a6dfb61173717dbada5bbd31c24ac54003d521de2929f56ba49": {
+"D2248": {
+"kind": "CIRC",
+"dims": [
+1124.0
+],
+"tier": "A",
+"src": "tier A: Tekla D/ROD round bar, size from the name; diameter continuity: ELD3268*3268*2248*2248 end d2248 meets this part end"
+},
+"D4594": {
+"kind": "CIRC",
+"dims": [
+2297.0
+],
+"tier": "A",
+"src": "tier A: Tekla D/ROD round bar, size from the name; diameter continuity: ELD4594*4594*3268*3268 end d4594 meets this part end"
+},
+"D3268": {
+"kind": "CIRC",
+"dims": [
+1634.0
+],
+"tier": "A",
+"src": "tier A: Tekla D/ROD round bar, size from the name; diameter continuity: ELD4594*4594*3268*3268 end d3268 meets this part end"
+}
+},
+"4d6bf9393269b7b3b9a321585768a3af1c336e54160bd4ec3a9b748c5511c546": {
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+},
+"D2530": {
+"kind": "CIRC",
+"dims": [
+1265.0
+],
+"tier": "A",
+"src": "tier A: Tekla D/ROD round bar, size from the name; own Tekla report material_list_1.xsr: D2530 L8205 323604 kg = solid round d2530 (323802 kg)"
+},
+"D2523": {
+"kind": "CIRC",
+"dims": [
+1261.5
+],
+"tier": "A",
+"src": "tier A: Tekla D/ROD round bar, size from the name; own Tekla report material_list_1.xsr: D2523 L4100 160802 kg = solid round d2523 (160908 kg)"
+}
+},
+"575da79b6096c7606f304e5892e6d43d0d3bd58fa24b73ede050488b2cba32ae": {
+"R.B \u00d820": {
+"kind": "CIRC",
+"dims": [
+10.0
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 6 type 6001 (unique_dimension_block): diameter 20.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+},
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+}
+},
+"5a2284473e4ee127e519c7d2bdbfe51bff49d04096045a66d9cf26a154922cd4": {
+"R.B \u00d820": {
+"kind": "CIRC",
+"dims": [
+10.0
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 6 type 6001 (unique_dimension_block): diameter 20.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+},
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+}
+},
+"60df895b03277a5214bdcd4d4377dfe2a8be27318ceda198fe4a025245e56cd2": {
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"R.B \u00d820": {
+"kind": "CIRC",
+"dims": [
+10.0
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 6 type 6001 (unique_dimension_block): diameter 20.0"
+},
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+}
+},
+"61cd047972de192ba0882fb68f28014e64e841908ec3ad43e65074233e2801b3": {
+"R.B \u00d820": {
+"kind": "CIRC",
+"dims": [
+10.0
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 6 type 6001 (unique_dimension_block): diameter 20.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+},
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+}
+},
+"6304887153755ea37f9ecd371127ce10ddb0c35b40c508d76166c0f14a6aa0ed": {
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+},
+"D1622": {
+"kind": "CIRC",
+"dims": [
+811.0
+],
+"tier": "C",
+"src": "tier C: Tekla D/ROD round bar, size from the name; Tekla built-in D<d> = solid round bar of diameter d, verified in this environment by Tekla reports (1620-D-029 D3376 L10120 710,655 kg; 1620-C-003 D2212 L9050 272,830 kg; 1620-D-016 D2530 L8205 323,604 kg)"
+}
+},
+"6872ea14ba0ceee8a8822dc2f8ab60017480afbeef7599cfbf9b3c00eef31c6d": {
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"R.B \u00d820": {
+"kind": "CIRC",
+"dims": [
+10.0
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 6 type 6001 (unique_dimension_block): diameter 20.0"
+},
+"R.B \u00d821": {
+"kind": "CIRC",
+"dims": [
+10.5
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 6 type 6001 (unique_dimension_block): diameter 21.0"
+}
+},
+"6a44b409f977d7c20b848a149bb70d3101bd361ec27677ca95d774ac566745a7": {
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+},
+"L150*150*12": {
+"kind": "L",
+"dims": [
+150.0,
+150.0,
+12.0,
+14.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 14.0 r2 7.0"
+},
+"D2940": {
+"kind": "CIRC",
+"dims": [
+1470.0
+],
+"tier": "B",
+"src": "tier B: Tekla D/ROD round bar, size from the name; stacked rounds: meets 1 other D/ROD part end(s) on the same axis (vessel shell run); D<d>/ROD<d> = solid round per the environment reports"
+},
+"D1626": {
+"kind": "CIRC",
+"dims": [
+813.0
+],
+"tier": "B",
+"src": "tier B: Tekla D/ROD round bar, size from the name; stacked rounds: meets 2 other D/ROD part end(s) on the same axis (vessel shell run); D<d>/ROD<d> = solid round per the environment reports"
+}
+},
+"6f0dcc7daa096f454bb2b2e362c20689b3447b81ba4b38ac196d0e18a18117bf": {
+"D4740": {
+"kind": "CIRC",
+"dims": [
+2370.0
+],
+"tier": "A",
+"src": "tier A: Tekla D/ROD round bar, size from the name; own Tekla report part_list-111.xsr: D4740 L15401 2.13193e+06 kg = solid round d4740 (2133365 kg)"
+}
+},
+"748b957ceaceeb17fb5208b4517b999dea66cc1a5a509a43ce83ee31b74659c2": {
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L125*75*10": {
+"kind": "L",
+"dims": [
+125.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+},
+"D2019": {
+"kind": "CIRC",
+"dims": [
+1009.5
+],
+"tier": "C",
+"src": "tier C: Tekla D/ROD round bar, size from the name; Tekla built-in D<d> = solid round bar of diameter d, verified in this environment by Tekla reports (1620-D-029 D3376 L10120 710,655 kg; 1620-C-003 D2212 L9050 272,830 kg; 1620-D-016 D2530 L8205 323,604 kg)"
+}
+},
+"772329a2d97dcdcbd2c8f30ce1cd4cf58c0b487468081bcaaabec831952eb3fd": {
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L125*75*10": {
+"kind": "L",
+"dims": [
+125.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+},
+"D3432": {
+"kind": "CIRC",
+"dims": [
+1716.0
+],
+"tier": "C",
+"src": "tier C: Tekla D/ROD round bar, size from the name; Tekla built-in D<d> = solid round bar of diameter d, verified in this environment by Tekla reports (1620-D-029 D3376 L10120 710,655 kg; 1620-C-003 D2212 L9050 272,830 kg; 1620-D-016 D2530 L8205 323,604 kg)"
+}
+},
+"7c68f0c9874e29395b7680d4ac69a7162f75b285e356f0d064d7879492f3bb68": {
+"D2204": {
+"kind": "CIRC",
+"dims": [
+1102.0
+],
+"tier": "A",
+"src": "tier A: Tekla D/ROD round bar, size from the name; own Tekla report KSS_ASSEMBLY_LIST-AREA.CSV: D2204 L3950 118221 kg = solid round d2204 (118299 kg)"
+},
+"D2196": {
+"kind": "CIRC",
+"dims": [
+1098.0
+],
+"tier": "A",
+"src": "tier A: Tekla D/ROD round bar, size from the name; own Tekla report KSS_ASSEMBLY_LIST-AREA.CSV: D2196 L5050 150048 kg = solid round d2196 (150147 kg)"
+},
+"D2188": {
+"kind": "CIRC",
+"dims": [
+1094.0
+],
+"tier": "A",
+"src": "tier A: Tekla D/ROD round bar, size from the name; own Tekla report KSS_ASSEMBLY_LIST-AREA.CSV: D2188 L7000 206474 kg = solid round d2188 (206610 kg)"
+},
+"D2212": {
+"kind": "CIRC",
+"dims": [
+1106.0
+],
+"tier": "A",
+"src": "tier A: Tekla D/ROD round bar, size from the name; own Tekla report KSS_ASSEMBLY_LIST-AREA.CSV: D2212 L9050 272830 kg = solid round d2212 (273010 kg)"
+}
+},
+"863be0aa5b95f0f165f6026c5d78c9db7fc3d78e8f536f075042989bd1347f9b": {
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+},
+"ROD2120": {
+"kind": "CIRC",
+"dims": [
+1060.0
+],
+"tier": "A",
+"src": "tier A: Tekla D/ROD round bar, size from the name; diameter continuity: ELD3848*3848*2120*2120 end d2120 meets this part end"
+},
+"ROD2104": {
+"kind": "CIRC",
+"dims": [
+1052.0
+],
+"tier": "B",
+"src": "tier B: Tekla D/ROD round bar, size from the name; stacked rounds: meets 2 other D/ROD part end(s) on the same axis (vessel shell run); D<d>/ROD<d> = solid round per the environment reports"
+},
+"ROD2088": {
+"kind": "CIRC",
+"dims": [
+1044.0
+],
+"tier": "B",
+"src": "tier B: Tekla D/ROD round bar, size from the name; stacked rounds: meets 2 other D/ROD part end(s) on the same axis (vessel shell run); D<d>/ROD<d> = solid round per the environment reports"
+},
+"ROD2028": {
+"kind": "CIRC",
+"dims": [
+1014.0
+],
+"tier": "B",
+"src": "tier B: Tekla D/ROD round bar, size from the name; stacked rounds: meets 1 other D/ROD part end(s) on the same axis (vessel shell run); D<d>/ROD<d> = solid round per the environment reports"
+},
+"ROD2040": {
+"kind": "CIRC",
+"dims": [
+1020.0
+],
+"tier": "B",
+"src": "tier B: Tekla D/ROD round bar, size from the name; stacked rounds: meets 2 other D/ROD part end(s) on the same axis (vessel shell run); D<d>/ROD<d> = solid round per the environment reports"
+},
+"ROD2056": {
+"kind": "CIRC",
+"dims": [
+1028.0
+],
+"tier": "B",
+"src": "tier B: Tekla D/ROD round bar, size from the name; stacked rounds: meets 2 other D/ROD part end(s) on the same axis (vessel shell run); D<d>/ROD<d> = solid round per the environment reports"
+},
+"ROD2072": {
+"kind": "CIRC",
+"dims": [
+1036.0
+],
+"tier": "B",
+"src": "tier B: Tekla D/ROD round bar, size from the name; stacked rounds: meets 2 other D/ROD part end(s) on the same axis (vessel shell run); D<d>/ROD<d> = solid round per the environment reports"
+}
+},
+"9cf26a05e061dcba85b17473493756dbccb992897c34c5651b3b91608bd5b401": {
+"D2019": {
+"kind": "CIRC",
+"dims": [
+1009.5
+],
+"tier": "C",
+"src": "tier C: Tekla D/ROD round bar, size from the name; Tekla built-in D<d> = solid round bar of diameter d, verified in this environment by Tekla reports (1620-D-029 D3376 L10120 710,655 kg; 1620-C-003 D2212 L9050 272,830 kg; 1620-D-016 D2530 L8205 323,604 kg)"
+}
+},
+"a0a1b3769d873aa312fdc2c6aaf945940b95a1fe7e2def5d59127582d2931c1c": {
+"D4344": {
+"kind": "CIRC",
+"dims": [
+2172.0
+],
+"tier": "C",
+"src": "tier C: Tekla D/ROD round bar, size from the name; Tekla built-in D<d> = solid round bar of diameter d, verified in this environment by Tekla reports (1620-D-029 D3376 L10120 710,655 kg; 1620-C-003 D2212 L9050 272,830 kg; 1620-D-016 D2530 L8205 323,604 kg)"
+}
+},
+"a576f15078978f6d796a99a35ccf82de1e7f422b7a2d4afa70cffe277b88dd1f": {
+"D2450": {
+"kind": "CIRC",
+"dims": [
+1225.0
+],
+"tier": "A",
+"src": "tier A: Tekla D/ROD round bar, size from the name; own Tekla report KSS_ASSEMBLY_LIST-AREA.CSV: D2450 L5150 190464 kg = solid round d2450 (190589 kg)"
+},
+"D2433": {
+"kind": "CIRC",
+"dims": [
+1216.5
+],
+"tier": "A",
+"src": "tier A: Tekla D/ROD round bar, size from the name; own Tekla report KSS_ASSEMBLY_LIST-AREA.CSV: D2433 L4950 180536 kg = solid round d2433 (180655 kg)"
+}
+},
+"ba7492de88bdc22bca2312502477bd2e863d6ba022d77df3d39895fc028d23b3": {
+"D3376": {
+"kind": "CIRC",
+"dims": [
+1688.0
+],
+"tier": "A",
+"src": "tier A: Tekla D/ROD round bar, size from the name; Tekla report of the same model (another upload of this model folder) UPLOADS FROM MOLDTEK/OCTOBER-2011/1620-D-029_SHOP DRAWINGS_SUBMITTAL#1-01.10.11/MODEL/1620-D-029/part_list.xsr: D3376 L10120 710655 kg = solid round d3376 (711123 kg)"
+}
+},
+"ba9ad43ba624ada53542c99f4e2d759ba544cbb7e6e1acef70eb2609ef7394db": {
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+},
+"L150*150*12": {
+"kind": "L",
+"dims": [
+150.0,
+150.0,
+12.0,
+14.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 14.0 r2 7.0"
+},
+"D2940": {
+"kind": "CIRC",
+"dims": [
+1470.0
+],
+"tier": "B",
+"src": "tier B: Tekla D/ROD round bar, size from the name; stacked rounds: meets 1 other D/ROD part end(s) on the same axis (vessel shell run); D<d>/ROD<d> = solid round per the environment reports"
+},
+"D1626": {
+"kind": "CIRC",
+"dims": [
+813.0
+],
+"tier": "B",
+"src": "tier B: Tekla D/ROD round bar, size from the name; stacked rounds: meets 2 other D/ROD part end(s) on the same axis (vessel shell run); D<d>/ROD<d> = solid round per the environment reports"
+}
+},
+"bceea537cbdae377caf844d8bfd60275b2f956c57f256b6d233364f0f4b8a838": {
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L150*90*9": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+9.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+}
+},
+"bfe89b2c24ca6f64e2077f9882ddb67b3d18f373f11a28b0e975aece4df6f540": {
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+},
+"L150*150*12": {
+"kind": "L",
+"dims": [
+150.0,
+150.0,
+12.0,
+14.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 14.0 r2 7.0"
+},
+"D1626": {
+"kind": "CIRC",
+"dims": [
+813.0
+],
+"tier": "B",
+"src": "tier B: Tekla D/ROD round bar, size from the name; stacked rounds: meets 2 other D/ROD part end(s) on the same axis (vessel shell run); D<d>/ROD<d> = solid round per the environment reports"
+},
+"D2940": {
+"kind": "CIRC",
+"dims": [
+1470.0
+],
+"tier": "B",
+"src": "tier B: Tekla D/ROD round bar, size from the name; stacked rounds: meets 1 other D/ROD part end(s) on the same axis (vessel shell run); D<d>/ROD<d> = solid round per the environment reports"
+}
+},
+"c114f84dc319c8b631a8dcba23177af67db60863947a0d3b7e2301e8b6b3003b": {
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+},
+"ROD2120": {
+"kind": "CIRC",
+"dims": [
+1060.0
+],
+"tier": "A",
+"src": "tier A: Tekla D/ROD round bar, size from the name; diameter continuity: ELD3848*3848*2120*2120 end d2120 meets this part end"
+},
+"ROD2104": {
+"kind": "CIRC",
+"dims": [
+1052.0
+],
+"tier": "B",
+"src": "tier B: Tekla D/ROD round bar, size from the name; stacked rounds: meets 2 other D/ROD part end(s) on the same axis (vessel shell run); D<d>/ROD<d> = solid round per the environment reports"
+},
+"ROD2088": {
+"kind": "CIRC",
+"dims": [
+1044.0
+],
+"tier": "B",
+"src": "tier B: Tekla D/ROD round bar, size from the name; stacked rounds: meets 2 other D/ROD part end(s) on the same axis (vessel shell run); D<d>/ROD<d> = solid round per the environment reports"
+},
+"ROD2028": {
+"kind": "CIRC",
+"dims": [
+1014.0
+],
+"tier": "B",
+"src": "tier B: Tekla D/ROD round bar, size from the name; stacked rounds: meets 1 other D/ROD part end(s) on the same axis (vessel shell run); D<d>/ROD<d> = solid round per the environment reports"
+},
+"ROD2040": {
+"kind": "CIRC",
+"dims": [
+1020.0
+],
+"tier": "B",
+"src": "tier B: Tekla D/ROD round bar, size from the name; stacked rounds: meets 2 other D/ROD part end(s) on the same axis (vessel shell run); D<d>/ROD<d> = solid round per the environment reports"
+},
+"ROD2056": {
+"kind": "CIRC",
+"dims": [
+1028.0
+],
+"tier": "B",
+"src": "tier B: Tekla D/ROD round bar, size from the name; stacked rounds: meets 2 other D/ROD part end(s) on the same axis (vessel shell run); D<d>/ROD<d> = solid round per the environment reports"
+},
+"ROD2072": {
+"kind": "CIRC",
+"dims": [
+1036.0
+],
+"tier": "B",
+"src": "tier B: Tekla D/ROD round bar, size from the name; stacked rounds: meets 2 other D/ROD part end(s) on the same axis (vessel shell run); D<d>/ROD<d> = solid round per the environment reports"
+}
+},
+"ceeafb221d65dd73fe61edf324c71d0a147f9632cdfaff3b4d6243786f2358c6": {
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+},
+"D3368": {
+"kind": "CIRC",
+"dims": [
+1684.0
+],
+"tier": "A",
+"src": "tier A: Tekla D/ROD round bar, size from the name; own Tekla report KWIK Assembly_list.xsr: D3368 1.11825e+06 kg = solid round d3368 x this part length L16000 (1118984 kg)"
+}
+},
+"ddc899a97b51fa07e39a8d367042f1f9af025007fd5ee4c2597c3d16902fb699": {
+"R.B \u00d820": {
+"kind": "CIRC",
+"dims": [
+10.0
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 6 type 6001 (unique_dimension_block): diameter 20.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+},
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+}
+},
+"de964ed8ad271225aacbaf795410b27739fa384815488c4bf8206fa6ca97cb9d": {
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+},
+"L150*150*12": {
+"kind": "L",
+"dims": [
+150.0,
+150.0,
+12.0,
+14.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 14.0 r2 7.0"
+},
+"D1626": {
+"kind": "CIRC",
+"dims": [
+813.0
+],
+"tier": "B",
+"src": "tier B: Tekla D/ROD round bar, size from the name; stacked rounds: meets 2 other D/ROD part end(s) on the same axis (vessel shell run); D<d>/ROD<d> = solid round per the environment reports"
+},
+"D2940": {
+"kind": "CIRC",
+"dims": [
+1470.0
+],
+"tier": "B",
+"src": "tier B: Tekla D/ROD round bar, size from the name; stacked rounds: meets 1 other D/ROD part end(s) on the same axis (vessel shell run); D<d>/ROD<d> = solid round per the environment reports"
+}
+},
+"e151a8faacbce446e516f0188e38efa94bacaa6d0e2db876c895efb829626f60": {
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"R.B \u00d820": {
+"kind": "CIRC",
+"dims": [
+10.0
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 6 type 6001 (unique_dimension_block): diameter 20.0"
+},
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+}
+},
+"eb3f448cc9b3bcc0cebc15daefebc91fdd6b0e4c02c240f40458268733c99722": {
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L125*75*10": {
+"kind": "L",
+"dims": [
+125.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+},
+"D2723": {
+"kind": "CIRC",
+"dims": [
+1361.5
+],
+"tier": "A",
+"src": "tier A: Tekla D/ROD round bar, size from the name; own Tekla report KWIK material_list.xsr: D2723 L10700 488824 kg = solid round d2723 (489146 kg)"
+}
+},
+"f2644296e8289ae15419fed6ed1d8648feeefbc44bc3c2ee9746cb5e550f137a": {
+"D3376": {
+"kind": "CIRC",
+"dims": [
+1688.0
+],
+"tier": "A",
+"src": "tier A: Tekla D/ROD round bar, size from the name; own Tekla report part_list.xsr: D3376 L10120 710655 kg = solid round d3376 (711123 kg)"
+}
+},
+"f31a33fc6fae05e756868e50bf47ceeee00b6ac8a5403e4d2659fd81ae763cf2": {
+"D2019": {
+"kind": "CIRC",
+"dims": [
+1009.5
+],
+"tier": "C",
+"src": "tier C: Tekla D/ROD round bar, size from the name; Tekla built-in D<d> = solid round bar of diameter d, verified in this environment by Tekla reports (1620-D-029 D3376 L10120 710,655 kg; 1620-C-003 D2212 L9050 272,830 kg; 1620-D-016 D2530 L8205 323,604 kg)"
+}
+},
+"fade48f92ad8f955d8eed2bed9c5e420e6f57419d482686f226d97de7d82026b": {
+"D4244": {
+"kind": "CIRC",
+"dims": [
+2122.0
+],
+"tier": "C",
+"src": "tier C: Tekla D/ROD round bar, size from the name; Tekla built-in D<d> = solid round bar of diameter d, verified in this environment by Tekla reports (1620-D-029 D3376 L10120 710,655 kg; 1620-C-003 D2212 L9050 272,830 kg; 1620-D-016 D2530 L8205 323,604 kg)"
+}
+},
+"fd58a67779803740fe0517ebe7af4f8c86b6b3bb44e0bf614760ea79ccf3d77a": {
+"L150*90*10": {
+"kind": "L",
+"dims": [
+150.0,
+90.0,
+10.0,
+12.0,
+6.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 12.0 r2 6.0"
+},
+"L100*75*10": {
+"kind": "L",
+"dims": [
+100.0,
+75.0,
+10.0,
+10.0,
+7.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 10.0 r2 7.0"
+},
+"L65*65*6": {
+"kind": "L",
+"dims": [
+65.0,
+65.0,
+6.0,
+8.5,
+4.0,
+null,
+null,
+null
+],
+"tier": "P",
+"src": "model folder profdb.bin: profdb.bin family 2 type 2001 (index_record): r1 8.5 r2 4.0"
+}
+}
+}

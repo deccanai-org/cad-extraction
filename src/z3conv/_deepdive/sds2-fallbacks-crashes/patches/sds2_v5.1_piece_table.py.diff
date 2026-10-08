@@ -1,0 +1,65 @@
+--- a/sds2-step-pipeline/decode/piece_table.py
++++ b/sds2-step-pipeline/decode/piece_table.py
+@@ -2,7 +2,7 @@
+   +0x110 i32 section index into job_mtrl (0 for plates/bars), +0x12E ASCII name (e.g. W18x35, L4x4x3/8, FL3/8x9),
+   +0x144 f64 weight lb, +0x14C f64 surface area, +0x16C f64 length, +0x174 f64 width/depth, +0x17C f64 thickness.
+ Also classifies each placed instance and prints coverage stats."""
+-import os, re, struct, sys, collections
++import os, re, struct, sys, collections, math
+ 
+ # slot size, name offset, section (fmt, off), weight/L/W/T (fmt, offsets)
+ LAYOUTS = {
+@@ -25,15 +25,34 @@
+     _v.setdefault("slot", _k)
+ 
+ 
+-def slot_size(b):
+-    """Pick the layout whose name field is filled for the most of the first 200 pieces. Returns the LAYOUTS key
+-    (the slot size, except "8.0" for the 2019+ record that shares 1024-B slots with 7.5/7.6)."""
+-    def filled(key):
++# a piece name SDS2 can write: section / material designations (W, HSS, L, PL, FL, Conc, bolts, studs, joists ...)
++NAME_OK = re.compile(rb"(W|M|S|HP|C|MC|L|WT|MT|ST|HSS|TS|PIPE|PL|FL|BAR|RD|SQ|BLT|HS|NS|WS|TWS|AB|RB|DBA|THD|STUD|Conc|GT|GR|"
++                     rb"PLG|WBX|WPS|BP|CP|SP|BPL|[0-9]+(K|LH|DLH|G|BG|VG))[0-9A-Za-z. /x-]")
++
++
++def slot_size(b, size=None):
++    """Pick the layout whose name field holds a plausible piece name for the most of the first 200 slots; ties (empty
++    or near-empty tables) go to a layout whose slot size divides the file (size - 256), then to the most filled.
++    v4 counted any printable byte, so on empty tables (DWF-import / training jobs: 111 of 3,728 data-3 jobs) noise
++    picked a wrong layout (7.425 NVX & 5 others: 1024 instead of 902) and the garbage records crashed plate_outline.
++    Returns the LAYOUTS key (the slot size, except "8.0" for the 2019+ record that shares 1024-B slots with 7.5/7.6).
++    size: full subm_idx size when b is only its head (default len(b))."""
++    size = len(b) if size is None else size
++    def score(key):
+         S, o = LAYOUTS[key]["slot"], LAYOUTS[key]["name"]
+-        return sum(bool(re.match(rb"[!-~]", b[k * S + o:k * S + o + 1])) for k in range(1, min(200, len(b) // S)))
+-    return max(LAYOUTS, key=filled)
++        ks = range(1, min(200, len(b) // S))
++        return (sum(bool(NAME_OK.match(b[k * S + o:k * S + o + 6])) for k in ks), size >= 256 and (size - 256) % S == 0,
++                sum(bool(re.match(rb"[!-~]", b[k * S + o:k * S + o + 1])) for k in ks))
++    return max(LAYOUTS, key=score)
+ 
+ 
++def _num(x):
++    """Piece-table number or 0.0 when it cannot be a dimension / weight (unused or deleted slots hold arbitrary bytes:
++    7.619 Seaport L4 has 3,362 such records; T = 4.6e20 with wt = 8.7e-311 made wt / 0.2836 / T underflow to 0.0 and
++    crashed plate_outline with ZeroDivisionError)."""
++    return float(x) if math.isfinite(x) and (x == 0 or 1e-6 <= abs(x) < 1e7) else 0.0
++
++
+ def read_pieces(job):
+     b = open(os.path.join(job, "subm", "subm_idx"), "rb").read()
+     key = slot_size(b); Lo = LAYOUTS[key]; SLOT = Lo["slot"]
+@@ -46,7 +65,11 @@
+         if not name:
+             continue
+         sec = struct.unpack(sf, s[so:so + struct.calcsize(sf)])[0]
+-        out[k] = dict(name=name, sec=sec, L=rd(s, Lo["L"]), W=rd(s, Lo["W"]), T=rd(s, Lo["T"]), wt=rd(s, Lo["wt"]))
++        raw = [rd(s, Lo[f]) for f in ("L", "W", "T", "wt")]
++        L, W, T, wt = (_num(x) for x in raw)
++        if [L, W, T, wt] != raw and not NAME_OK.match(name.encode("latin-1")):
++            continue                  # garbage slot: implausible name and impossible numbers -> not a piece
++        out[k] = dict(name=name, sec=sec, L=L, W=W, T=T, wt=wt)
+     return out
+ 
+ 

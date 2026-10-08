@@ -1,0 +1,13 @@
+--- ../kit_orig/db1old.py	2026-10-01 15:12:36
++++ db1old.py	2026-10-01 15:44:24
+@@ -45,6 +45,10 @@
+         return np.array(sorted(recs), np.int64)
+ 
+     def cstr(self, o, n):
++        # db1prof-patch: Latin-1 letters kept ('R.B \xd820' = 'R.B Ø20'; the ASCII-only cut gave 'R.B ')
++        if True:
++            import db1prof
++            return db1prof.latin1_cstr(self.b, o, n)
+         e = self.b.find(b'\0', o, o + n)
+         s = self.b[o:e if e >= 0 else o + n]
+         out = []

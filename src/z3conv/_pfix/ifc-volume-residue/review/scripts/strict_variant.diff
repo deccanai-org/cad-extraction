@@ -1,0 +1,4 @@
+3084c3084
+<                     if pairs and bad1 < bad0:
+---
+>                     if pairs and bad1 == 0 and bad0 > 0:      # REVIEWER VARIANT: only when the shell becomes 2-manifold

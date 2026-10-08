@@ -1,0 +1,7 @@
+## 2. ValueErrors (15 rows, class 3 `failed`)
+
+| jobs | fleet record | root cause | after |
+|---|---|---|---|
+| 15-027 CSU 7.312 (347cb74f) | v5.4.1 `mem_idx: member work points not found` | 810 of 10,452 structural records have NaN end points. `sparse_layout` rejected the whole validated 2,944-B layout on the first one, and `calibrate()` found no work-point key either | patched v5.5.3: stage 2 accepted, 14,438 / 14,438 valid, steel 1.030, **class 2 C** (needs: approx pieces 7.3, 72 pieces gated as > 5x fallbacks, 1 built-up estimate, 3 envelopes). The hunk is the fixer's v5.5.4 draft code, byte for byte |
+| 100_Binney_Slab_Job 7.243 (a47a1307) | v5.5.0 same message | three MISC members, two of them with zero work points: no key match for `calibrate()`, and `sparse_layout` knew 2,494-B slots only for 7.245 | the module's own documented 7.243 layout (validated on 50_Binney against its IFC) is now a sparse fallback. The job holds one concrete slab: 1 solid, **class 2 C** (`source_data_absent: concrete shapes`) |
+| BG PODIUM x12, Boston Garden Checkers x1 (7.331) | **v4** runs: `PLG12x14x300: built-up dimensions match neither name nor weight` | v4's built-up profile check; fixed in v5.0 (all 13 have a complete piece table) | re-run on v5.x. BG_PODIUM_Job 436d09 on v5.4 sat in `assembly_check` for > 2 h 20 min at 52 GB RSS (py-spy: `assembly_check <- convert`); the temporary assembly STEP had 67.7 M entities. BG_PODIUM_AFTER |

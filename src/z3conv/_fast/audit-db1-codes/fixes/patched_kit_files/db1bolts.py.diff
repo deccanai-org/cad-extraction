@@ -1,0 +1,20 @@
+--- kits/j/db1bolts.py	2026-10-01 23:12:18.000000000 +0000
++++ kits/jfix2/db1bolts.py	2026-10-02 00:48:50.056508629 +0000
+@@ -22,7 +22,7 @@
+ 
+ NUM = r'(\d+(?:\.\d+)?)'
+ P_BOLTPROF = re.compile(r'^MM\s*' + NUM + r'\s*\*\s*' + NUM)
+-BOLT_ENGINES = {'6.87', '7.01', '7.24'}
++BOLT_ENGINES = {'6.87', '7.01', '7.24', '7.30'}          # audit P3: 7.30 bolt groups use the same record
+ 
+ 
+ def bolt_dims(prof):
+@@ -95,6 +95,8 @@
+     if not e or not e.get('bolt') or not (e.get('nut1') or {}).get('m'):
+         return None
+     b, n1, w1 = e['bolt'], e['nut1'], e.get('washer1') or {}
++    if not all(isinstance(b.get(k), (int, float)) for k in ('s', 'k')):
++        return None                      # audit P2: head ambiguous in the model catalog -> standard table / nominal (tagged), never a crash
+     return {'d': float(d), 'head_af': b['s'], 'head_h': b['k'], 'nut_af': n1.get('s', b['s']), 'nut_h': n1['m'],
+             'washer_t': w1.get('t'), 'washer_od': w1.get('do'), 'washer_id': w1.get('di'), 'hole_clearance': clearance(float(d)),
+             'family': f"model catalog ({a.get('bolt_std') or '?'}, nut {a.get('nut1')}, washer {a.get('washer1')})", 'mapping': standard,

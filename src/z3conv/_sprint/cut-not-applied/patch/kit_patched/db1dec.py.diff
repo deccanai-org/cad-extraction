@@ -1,0 +1,34 @@
+--- /Users/dhiren/Downloads/Deccan/z3conv/db1/db1dec.py	2026-10-01 17:59:56
++++ kit_patched/db1dec.py	2026-10-01 18:49:00
+@@ -870,7 +870,30 @@
+             c = self.I(recs + fc); p = self.I(recs + fp)
+             ok = inkeys(ck, c) & inkeys(pk, p)
+             for a, b in zip(p[ok], c[ok]): links[int(a)].append(int(b))
+-        self.cut_layout = dict(stride=s, cut=fc, parent=fp, linked=int(sum(len(v) for v in links.values())), cuts=len(cuts))
++        # cut-not-applied P5: isolated relation records. Objects edited after the last full save are written one by one at the end of
++        # the file, outside the fixed-stride runs, so the run scan above misses their relation record (1d8972fb: 18 of 21 unlinked cut
++        # parts). Same field layout (header flag byte 1/4/5 at +8, ids > 0 at +0/+4, cut key at fc, decoded non-cut part key at fp);
++        # taken only when every such record naming the cut names the same parent.
++        linked = {c for v in links.values() for c in v}
++        K = np.array(sorted({int(c) for c in ck if int(c) not in linked}), np.int64)
++        salv = 0
++        if len(K):
++            pks = set(int(x) for x in pk); found = collections.defaultdict(set); u8 = self.u8
++            for a in range(4):
++                n = (self.L - a) // 4
++                for c0 in range(0, n, 16_000_000):
++                    v = np.frombuffer(self.b, '<i4', count=min(16_000_000, n - c0), offset=a + 4 * c0)
++                    i = np.searchsorted(K, v); i[i >= len(K)] = 0
++                    for j in np.nonzero(K[i] == v)[0]:
++                        st = a + 4 * (c0 + int(j)) - fc
++                        if st < 0 or st + max(fp, fc) + 4 > self.L or int(u8[st + 8]) not in self.FLAGS: continue
++                        if int(self.I([st])[0]) <= 0 or int(self.I([st + 4])[0]) <= 0: continue
++                        par = int(self.I([st + fp])[0])
++                        if par in pks: found[int(v[j])].add(par)
++            for c, ps in found.items():
++                if len(ps) == 1:
++                    links[ps.pop()].append(c); salv += 1
++        self.cut_layout = dict(stride=s, cut=fc, parent=fp, linked=int(sum(len(v) for v in links.values())), cuts=len(cuts), linked_isolated=salv)
+         return {k: sorted(set(v)) for k, v in links.items()}
+ 
+     def attr_strings(self, lay, pa_seq):

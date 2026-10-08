@@ -1,0 +1,1 @@
+/opt/conv/env/bin/python -c "import scipy" 2>/dev/null && echo has-scipy || { /opt/conv/env/bin/python -m pip install -q scipy > /opt/conv/scipy.log 2>&1 && echo installed || tail -2 /opt/conv/scipy.log; }

@@ -1,0 +1,146 @@
+292a293,295
+>     SEG_FLAGS = (4,)        # v2 (eng): record-header flag bytes taken as run starts (variant retry: 1, 4, 5)
+>     CSYS_SPREAD = False     # v2 (eng): judge a known csys table on a spread sample (variant retry only)
+> 
+295c298
+<         cand = np.nonzero(u8[8:] == 4)[0]
+---
+>         cand = np.nonzero(u8[8:] == 4)[0] if tuple(self.SEG_FLAGS) == (4,) else np.nonzero(np.isin(u8[8:], np.array(self.SEG_FLAGS, np.uint8)))[0]
+410,412c413,417
+<     @staticmethod
+<     def _plaus(v):
+<         return np.isfinite(v) & (np.abs(v) < 1e8) & ((v == 0) | (np.abs(v) > 1e-30))
+---
+>     # v2 (eng): coordinate bound. 1e8 mm (100 km) on the normal paths; decode() retries with GEO_MAX when
+>     # nothing decodes, for models placed at georeferenced (state-plane) coordinates: 8.85 'no_member_layout'
+>     # models with points at x 2.0e8, y 2.3e8 mm.
+>     PLAUS_MAX = 1e8
+>     GEO_MAX = 1e10
+413a419,421
+>     def _plaus(self, v):
+>         return np.isfinite(v) & (np.abs(v) < self.PLAUS_MAX) & ((v == 0) | (np.abs(v) > 1e-30))
+> 
+471c479,488
+<                 if self._orthonormal(v1, v2).mean() < 0.5: continue   # unused slots hold zeros (7.64: 83% filled)
+---
+>                 if self._orthonormal(v1, v2).mean() < 0.5:   # unused slots hold zeros (7.64: 83% filled)
+>                     # v2 (eng): with a KNOWN table location (layout) a run may open with a block of other
+>                     # stride-61 records (8.85: 40+ non-orthogonal pairs, dot 0.0045, before the part csys);
+>                     # judge the table on an even sample of the whole run instead. Rows are still tested
+>                     # one by one below (strict), and full discovery (only=None) is unchanged.
+>                     if not only or not self.CSYS_SPREAD or len(recs) <= 48: continue
+>                     spr = recs[np.linspace(0, len(recs) - 1, 256).astype(np.int64)]
+>                     w1 = np.stack([self.D(spr + k + 8 * i) for i in range(3)], 1)
+>                     w2 = np.stack([self.D(spr + k + 24 + 8 * i) for i in range(3)], 1)
+>                     if self._orthonormal(w1, w2).mean() < 0.5: continue
+691a709,722
+>         if best is None:
+>             # v2 (eng): 9.50 stores the outline arrays as float64 (u[10]@25, v[10]@105 in a stride-465 record behind the
+>             # same 2-hop link); chamfer x/y stay float32 and the type array follows them
+>             for f, T, ro, Lk in hop1:
+>                 for g in range(9, T - 3):
+>                     v2 = self.I(ro + g)
+>                     if np.mean(v2 > 0) < 0.8: continue
+>                     for T2 in self._strides_holding(np.unique(v2[v2 > 0]), 0.8)[:3]:
+>                         r2o = self.lookup(v2, T2); ok2 = r2o >= 0
+>                         if ok2.mean() < 0.8: continue
+>                         r2 = self._uv_detect64(r2o[ok2], Lk[ok2], T2)
+>                         if r2 and (best is None or r2[0] > best[0]):
+>                             best = (r2[0], dict(poly_field=f, poly_stride=T, poly_field2=g, poly_stride2=T2,
+>                                                 poly_ub=r2[1], poly_vb=r2[2], poly_cap=r2[3], poly_f64=True))
+695a727,749
+> 
+>     def _uv_detect64(self, ro, Lk, T):
+>         """float64 variant of _uv_detect (cap 10 only, as validated on 9.50)"""
+>         best = None
+>         for ub in range(9, T - 160):
+>             if np.mean(np.abs(self.D(ro + ub)) < 1e-6) < 0.75: continue          # pre-filter only; _outline_ok >= 0.8 decides
+>             cap = 10; vb = ub + 8 * cap
+>             if vb + 8 * cap > T: break
+>             if np.mean((np.abs(self.D(ro + vb)) < 1e-6) & (np.abs(self.D(ro + vb + 8)) < 1e-6)) < 0.75: continue
+>             U = np.stack([self.D(ro + ub + 8 * i) for i in range(cap)], 1)
+>             V = np.stack([self.D(ro + vb + 8 * i) for i in range(cap)], 1)
+>             frac = float(np.mean(_outline_ok(U, V, Lk)))
+>             if frac >= 0.8 and (best is None or frac > best[0]): best = (frac, ub, vb, cap)
+>             if frac >= 0.8: break
+>         return best
+> 
+>     @staticmethod
+>     def _poly_offsets(lay):
+>         """-> (element size, cx, cy, type offsets) of a contour record layout"""
+>         cap, ub = lay['poly_cap'], lay['poly_ub']
+>         if lay.get('poly_f64'):
+>             cx = ub + 24 * cap; return 8, cx, cx + 4 * cap, cx + 8 * cap
+>         A = 4 * cap; return 4, ub + 3 * A, ub + 4 * A, ub + 5 * A
+700a755
+>         es, cxo, cyo, tyo = self._poly_offsets(lay); RD = self.D if es == 8 else self.F
+709c764
+<                 u = self.F(r + ub + 4 * np.arange(cap)); v = self.F(r + lay['poly_vb'] + 4 * np.arange(cap))
+---
+>                 u = RD(r + ub + es * np.arange(cap)); v = RD(r + lay['poly_vb'] + es * np.arange(cap))
+714c769
+<                 ty = self.I(r + ub + 5 * A + 4 * np.arange(cap))
+---
+>                 ty = self.I(r + tyo + 4 * np.arange(cap))
+753a809
+>         es, cxo, cyo, tyo = self._poly_offsets(lay); RD = self.D if es == 8 else self.F
+761c817
+<             u = self.F(r + ub + 4 * np.arange(cap)); v = self.F(r + vb + 4 * np.arange(cap))
+---
+>             u = RD(r + ub + es * np.arange(cap)); v = RD(r + vb + es * np.arange(cap))
+763c819
+<                 ty = self.I(r + ub + 5 * A + 4 * np.arange(cap)); cx = self.F(r + ub + 3 * A + 4 * np.arange(cap)); cy = self.F(r + ub + 4 * A + 4 * np.arange(cap))
+---
+>                 ty = self.I(r + tyo + 4 * np.arange(cap)); cx = self.F(r + cxo + 4 * np.arange(cap)); cy = self.F(r + cyo + 4 * np.arange(cap))
+960a1017,1019
+>     r = _variant_retry(data, layout, variants, tried)
+>     if r is not None:
+>         return r
+973a1033,1075
+> # v2 (eng): record variants that the fixed layouts miss although the field layout is the same.
+> # Tried only after the normal fast and semi paths found nothing, so files that decode today are unchanged.
+> #   geo    : points at georeferenced coordinates beyond 1e8 mm (8.85: x 2.0e8, y 2.3e8 mm)
+> #   spread : the part csys run opens with other stride-61 records (8.85: 40+ pairs with dot 0.0045), so the
+> #            first-48 sample of the known csys table fails; judge it on a spread sample (rows still strict)
+> #   flag1  : live records carry header flag 0x01 (or 0x05) instead of 0x04 (8.07: 8,781 of 9,321 parts)
+> RETRY = (('spread', (4,), False, True), ('geo+spread', (4,), True, True), ('flag1+spread', (1, 4, 5), False, True),
+>          ('flag1+geo+spread', (1, 4, 5), True, True))
+> 
+> 
+> def _variant_retry(data, layout, variants, tried):
+>     seen = set()
+>     cands = []
+>     for cand in [layout] + [v for v in variants if v != layout]:
+>         if not cand or not cand.get('csys_stride') or not cand.get('attr_stride'): continue
+>         sig = tuple(cand.get(k) for k in ('stride', 'xyz', 'p1', 'p2', 'csys', 'csys_key', 'csys_stride', 'csys_k', 'pts_stride', 'pts_k',
+>                                          'attr', 'attr_stride', 'prof_off', 'rest_ref', 'rest_stride', 'rest_off'))
+>         if sig in seen: continue
+>         seen.add(sig); cands.append(cand)
+>     for name, flags, geo, spread in RETRY:
+>         db = Db(data); db.SEG_FLAGS = flags; db.CSYS_SPREAD = spread
+>         if geo: db.PLAUS_MAX = db.GEO_MAX
+>         db.segment()
+>         for cand in cands:
+>             pts = db.find_points(fixed=(cand['pts_stride'], cand['pts_k']))
+>             if not pts: continue
+>             cs = db.find_csys(only=(cand['csys_stride'], cand['csys_k']))
+>             lay = dict(cand); lay['pts'] = 0
+>             recs = db.bystride.get(lay['stride'])
+>             if recs is None or not len(recs): continue
+>             db._member_run = recs
+>             m = members(db, pts, cs, lay)
+>             tried.append((name, cand.get('stride'), cand.get('csys'), len(m)))
+>             ag = _axis_agreement(db, pts, lay, m) if m else None
+>             seqs = [x['seq'] for x in m]
+>             if _accept(db, lay, m) and ag is not None and ag >= 0.9 and len(set(seqs)) == len(seqs):
+>                 lay['fast'] = True; lay['fast_members'] = len(m); lay['axis_agreement'] = ag
+>                 lay['variant'] = name; lay['tried'] = tried
+>                 if not lay.get('poly_stride'): db.find_polygons(lay, m)
+>                 return db, pts, cs, lay
+>     return None
+> 
+> 
+989c1091
+<         ok = (np.all(np.isfinite(X), 1) & (X[:, 3] > 0) & (np.abs(X[:, :3]) < 1e8).all(1)
+---
+>         ok = (np.all(np.isfinite(X), 1) & (X[:, 3] > 0) & (np.abs(X[:, :3]) < db.PLAUS_MAX).all(1)

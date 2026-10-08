@@ -1,0 +1,14 @@
+--- box/ab/db1bolts.kit_i.py	2026-10-01 16:12:18
++++ box/ab/db1bolts.py	2026-10-01 16:50:38
+@@ -94,6 +94,11 @@
+     e = sz.get(f'{float(d):.1f}') or sz.get(str(d)) or sz.get(f'{float(d):g}')
+     if not e or not e.get('bolt') or not (e.get('nut1') or {}).get('m'):
+         return None
++    # coverage-regression fix: catalog builder records an unresolved head as {'ambiguous': n} (no s / k). Such an entry is
++    # not exact catalog geometry -> None (caller falls back to the decoded-standard table) instead of KeyError 's', which
++    # crashed the whole decode (convert_error) for 7c68f0c9874e / 3585d86a380d / 48e010c8ec25 on code z3-db1-2026-10-01i
++    if not isinstance(e['bolt'], dict) or e['bolt'].get('s') is None or e['bolt'].get('k') is None:
++        return None
+     b, n1, w1 = e['bolt'], e['nut1'], e.get('washer1') or {}
+     return {'d': float(d), 'head_af': b['s'], 'head_h': b['k'], 'nut_af': n1.get('s', b['s']), 'nut_h': n1['m'],
+             'washer_t': w1.get('t'), 'washer_od': w1.get('do'), 'washer_id': w1.get('di'), 'hole_clearance': clearance(float(d)),

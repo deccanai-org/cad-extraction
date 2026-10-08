@@ -1,0 +1,5 @@
+numpy
+scipy
+cadquery-ocp
+ifcopenshell
+py7zr

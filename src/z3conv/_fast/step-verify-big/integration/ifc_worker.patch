@@ -1,0 +1,54 @@
+--- ifc/worker.py.orig	2026-10-01 16:46:39
++++ ifc/worker.py	2026-10-01 16:47:28
+@@ -50,13 +50,15 @@
+     CODE = CODE + '+s6'
+ VSUF = '.v6' if CODE.endswith('+s6') else ''         # a re-run with another converter never overwrites the earlier STEP (best-of)
+ CHECK = os.path.join(HERE, 'step_check.py'); CENSUS = os.path.join(HERE, 'ifc_census.py')
++BIG = os.path.join(HERE, 'step_verify_big.py')     # streamed read-back: same signals as step_check, bounded memory
++SVB_WORKERS = int(os.environ.get('SVB_WORKERS', '4')); SVB_MEM_GB = float(os.environ.get('SVB_MEM_GB', '8'))
+ DET = cf.ROOT + '/_state/conv/ifc/detail'
+ RB_MAX = int(os.environ.get('RB_MAX_MB', '1024')) << 20
+ TIMEOUT = int(os.environ.get('IFC_TIMEOUT_S', str(6 * 3600)))
+ STALL = 1800
+ THREADS = os.environ.get('IFC_THREADS', '2')
+ FILES = ('worker.py', 'convfleet.py', 'ifc2step5.py', 'ifc2step5_guard.py', 'ifc_concat_fix.py', 'ifc_crash_bisect.py',
+-         'ifc_exclude.py', 'step_check.py', 'ifc_census.py', 'grade_join.py', 'ifc2step6.py', 'ifc2step6_guard.py')
++         'ifc_exclude.py', 'step_check.py', 'ifc_census.py', 'grade_join.py', 'ifc2step6.py', 'ifc2step6_guard.py', 'step_verify_big.py')
+ import grade_join
+ CRASH = (-11, 139, -6, 134, 124, 125)
+ 
+@@ -239,6 +241,17 @@
+     ok = rc == 0 and os.path.exists(stp) and (st.get('parts') or 0) > 0
+     return {'rc': rc, 'ok': ok, 'sec': round(time.time() - t, 1), 'mode': mode, 'kernel': '0.8.4.post1' if py == PY84 else '0.9.0',
+             'converter': os.path.basename(conv), 'parts': st.get('parts'), 'stats': st}
++
++
++def svb_check(fl, jid, stp, chk, sparts, d):
++    """OCC read-back of a STEP too large for one read (>= RB_MAX, or memory-killed twice): step_verify_big.py reads it in
++    self-contained chunks under SVB_MEM_GB and writes step_check's JSON / parts records (no render)"""
++    rc = fl.run(jid, [PY, BIG, stp, chk, '--parts', sparts, '--workers', str(SVB_WORKERS), '--mem-gb', str(SVB_MEM_GB),
++                      '--workdir', os.path.join(d, 'svb')], os.path.join(d, 'val.log'), 12 * 3600, mem_frac=0.85)
++    try:
++        return json.load(open(chk)) if rc == 0 else {'error': f'read-back rc {rc}', 'rc': rc, 'streamed': True}
++    except Exception:
++        return {'error': f'read-back rc {rc}', 'rc': rc, 'streamed': True}
+ 
+ 
+ def tail_of(logf, n=1500):
+@@ -399,13 +412,10 @@
+                 v = json.load(open(chk)) if rc == 0 else {'error': f'read-back rc {rc}', 'rc': rc}
+             except Exception:
+                 v = {'error': f'read-back rc {rc}', 'rc': rc}
++        if rc == -9:                              # memory kill again: streamed read-back (bounded memory)
++            v = svb_check(fl, jid, stp, chk, sparts, d)
+     else:
+-        rc = fl.run(jid, [PY, CHECK, stp, chk, '--no-occ'], os.path.join(d, 'val.log'), 3600)
+-        try:
+-            v = json.load(open(chk))
+-        except Exception:
+-            v = {}
+-        v['skipped'] = f'STEP >= {RB_MAX >> 20} MB: text checks only (markers, products), no OCC read-back'
++        v = svb_check(fl, jid, stp, chk, sparts, d)
+     v['flavour_ok'] = flavour; v['markers_kit'] = mk
+     if v.get('read_status') == 'ok' and 'solids' in v:
+         grade = 'ok_solid' if v.get('solids', 0) > 0 else ('ok_surface' if v.get('faces', 0) > 0 else 'empty')

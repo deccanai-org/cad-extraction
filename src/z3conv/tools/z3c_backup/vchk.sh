@@ -1,0 +1,1 @@
+ls /opt/conv/ | grep -i verify; tail -n 5 /opt/conv/setup-assist-verify.log 2>/dev/null; tail -n 8 /opt/conv/worker-assist-verify.log 2>/dev/null | cut -c1-200; cat /opt/conv/run/assist-verify.pid 2>/dev/null; pgrep -af "kit/verify" | head -3 | cut -c1-160; grep -a "assist" /opt/conv/worker-sds2.log | tail -n 3 | cut -c1-200

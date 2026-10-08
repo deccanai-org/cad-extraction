@@ -1,0 +1,7 @@
+SET NOCOUNT ON;
+SELECT TABLE_NAME, STRING_AGG(COLUMN_NAME, ', ') FROM [MLNG@1_CDB_SCHEMA].INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME IN ('AttributeInfoView','CodelistValueView','InterfaceInfoView','RelationInfoView','ClassInfoView','CodelistInfoView') GROUP BY TABLE_NAME;
+SELECT COUNT(*) FROM [MLNG@1_CDB_SCHEMA].dbo.CodelistValueView;
+SELECT COUNT(*) FROM [MLNG@1_CDB_SCHEMA].dbo.AttributeInfoView;
+SELECT COUNT(*) nMdbPC FROM dbo.REFDATPipeComponent;
+SELECT COUNT(*) nSites FROM dbo.CORESite;
+SELECT TOP 3 * FROM [MLNG@1_CDB_SCHEMA].dbo.AttributeInfoView WHERE CodeListTableOID IS NOT NULL;

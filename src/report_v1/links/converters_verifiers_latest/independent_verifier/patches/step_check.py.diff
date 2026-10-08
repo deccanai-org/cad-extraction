@@ -1,0 +1,102 @@
+--- orig/step_check.py	2026-10-02 13:29:24
++++ new/step_check.py	2026-10-02 13:30:08
+@@ -95,6 +95,18 @@
+ if _v6:
+     out['v6_tags'] = _v6
+ out['text_sec'] = round(time.time() - T0, 1)
++
++
++# [z3v port 1 - ifc-step-verifier F_NOT_STEP / F_COMPRESSED / F_TRUNCATED / F_SCHEMA] file-level integrity, independent of OCC
++# (OCC reads a cut-off file up to the cut without complaint: END-ISO-10303-21 is the only proof the file is complete)
++with open(a.step, 'rb') as _fh:
++    _head = _fh.read(65536); _fh.seek(max(0, out['bytes'] - 4096)); _tail = _fh.read()
++out['iso_header'] = _head.lstrip(b'\xef\xbb\xbf \t\r\n').startswith(b'ISO-10303-21')
++out['compressed'] = _head[:2] == b'\x1f\x8b' or _head[:4] == b'PK\x03\x04'
++out['end_marker'] = b'END-ISO-10303-21' in _tail
++_sc = re.search(rb"FILE_SCHEMA\s*\(\s*\(\s*'([^']*)'", _head)
++out['schema_geometry'] = bool(_sc and re.search(rb'AP2(03|14|42)|CONFIG_CONTROL|AUTOMOTIVE_DESIGN|MANAGED_MODEL_BASED_3D_ENGINEERING', _sc.group(1), re.I))
++del _head, _tail
+ 
+ 
+ def product_of(eid):
+@@ -201,6 +213,7 @@
+ tot = dict(transferred=0, empty_roots=0, solids=0, shells=0, faces=0, checked=0, valid=0, invalid=0, nonpos_vol=0, nonfinite=0)
+ parts = []
+ invalid_names = []
++impossible_names = []
+ rshapes = []
+ t_occ = time.time()
+ for i in range(1, nroots + 1):
+@@ -272,6 +285,15 @@
+                 tot['nonpos_vol'] += 1
+         tot['checked'] += len(sols); tot['valid'] += val; tot['invalid'] += len(sols) - val
+         rec['valid'] = val; rec['volume'] = round(vol, 3)
++        # [z3v port 2 - ifc-step-verifier W_BROKEN_SOLID] a solid's volume can never exceed its own bounding box (x 1.001): a
++        # self-overlapping solid (ifc2step hole loops wound like the outer loop) passes BRepCheck but has volume > box
++        _bb = rec.get('bbox')
++        if _bb and vol > 0:
++            _bv = max(0.0, _bb[3] - _bb[0]) * max(0.0, _bb[4] - _bb[1]) * max(0.0, _bb[5] - _bb[2])
++            if vol > _bv * 1.001 + 1e-6:
++                tot['impossible'] = tot.get('impossible', 0) + 1; rec['impossible'] = True
++                if len(impossible_names) < 50:
++                    impossible_names.append([rec.get('pid'), rec.get('name'), round(vol, 1), round(_bv, 1)])
+         if val < len(sols) and len(invalid_names) < 50:
+             invalid_names.append([rec.get('pid'), rec.get('name')])
+     parts.append(rec)
+@@ -283,6 +305,56 @@
+     out['invalid_frac'] = round(tot['invalid'] / tot['checked'], 6)
+ out['sampled'] = check_p < 1.0
+ out['invalid_examples'] = invalid_names
++out['impossible_solids'] = tot.get('impossible', 0); out['impossible_examples'] = impossible_names
++# [z3v port 3 - duplicates] a product written twice (same source id) and exactly coincident parts (same box centre + volume;
++# db1-step-verifier W_DUPLICATES)
++import collections as _col
++_pn = _col.Counter(p.get('pid') for p in parts if p.get('pid') and (p.get('solids') or p.get('faces')))
++out['duplicate_pid_parts'] = sum(n - 1 for n in _pn.values() if n > 1)
++out['duplicate_pid_examples'] = [k for k, n in _pn.most_common(10) if n > 1]
++_kn = _col.Counter()
++for p in parts:
++    _bb = p.get('bbox'); _v = p.get('volume')
++    if _bb and _v:
++        _kn[(round((_bb[0] + _bb[3]) / 2, 1), round((_bb[1] + _bb[4]) / 2, 1), round((_bb[2] + _bb[5]) / 2, 1), round(_v, -1))] += 1
++out['coincident_duplicates'] = sum(n - 1 for n in _kn.values() if n > 1)
++# [z3v port 4 - db1-step-verifier W_STRAY_PARTS / W_FAR_STRAY] parts cut off from the model (its _strays, unchanged): box centres
++# linked within r = max(20 m, 10 x the 75th-percentile 3rd-neighbour spacing) via a grid of cell r + 26-neighbour union-find;
++# a part is a stray when its cluster holds <= max(1, min(50, 1 %)) of the parts. Needs scipy (cKDTree); reported unavailable otherwise
++try:
++    import numpy as _np
++    from scipy.spatial import cKDTree as _KD
++    _pp = [p for p in parts if p.get('bbox')]
++    _C = _np.array([[(p['bbox'][k] + p['bbox'][k + 3]) / 2 for k in range(3)] for p in _pp]) if _pp else _np.zeros((0, 3))
++    _n = len(_C); _stray = _np.zeros(_n, bool)
++    if _n >= 3:
++        _k = min(4, _n); _kd, _ = _KD(_C).query(_C, k=_k)
++        _r = max(20000.0, 10.0 * float(_np.percentile(_kd[:, _k - 1], 75)))
++        _cell = _np.floor(_C / _r).astype(_np.int64)
++        _keys, _inv = _np.unique(_cell, axis=0, return_inverse=True); _inv = _inv.ravel()
++        _idx = {tuple(c): i for i, c in enumerate(_keys)}; _par = list(range(len(_keys)))
++        def _find(x):
++            while _par[x] != x:
++                _par[x] = _par[_par[x]]; x = _par[x]
++            return x
++        for i, c in enumerate(_keys):
++            for o in [(dx, dy, dz) for dx in (-1, 0, 1) for dy in (-1, 0, 1) for dz in (-1, 0, 1) if (dx, dy, dz) > (0, 0, 0)]:
++                j = _idx.get((c[0] + o[0], c[1] + o[1], c[2] + o[2]))
++                if j is not None:
++                    ra, rb = _find(i), _find(j)
++                    if ra != rb: _par[ra] = rb
++        _root = _np.array([_find(i) for i in range(len(_keys))])[_inv]
++        _, _ri, _cnt = _np.unique(_root, return_inverse=True, return_counts=True)
++        _stray = _cnt[_ri.ravel()] <= max(1, min(50, int(0.01 * _n)))
++    out['stray_parts'] = int(_stray.sum())
++    out['stray_examples'] = [[_pp[i].get('pid'), _pp[i].get('name'), [round(x, 1) for x in _C[i]]] for i in _np.flatnonzero(_stray)[:10]]
++    if _n:
++        _core = _C[~_stray] if (~_stray).any() else _C
++        out['core_extent_mm'] = [round(float(x), 1) for x in _np.percentile(_core, 99, axis=0) - _np.percentile(_core, 1, axis=0)]
++except ImportError:
++    out['stray_check'] = 'unavailable (scipy not installed)'
++except Exception as _e:
++    out['stray_check'] = f'error {type(_e).__name__}: {str(_e)[:120]}'
+ out['roots_mapped_to_products'] = sum(1 for p in parts if p.get('pid') is not None or p.get('name') is not None)
+ if not gbox.IsVoid():
+     out['bbox'] = [round(v + (OFF[k % 3] if OFF else 0), 3) for k, v in enumerate(gbox.Get())]

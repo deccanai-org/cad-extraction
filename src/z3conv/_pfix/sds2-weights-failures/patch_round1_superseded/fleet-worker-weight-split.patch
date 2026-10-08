@@ -1,0 +1,28 @@
+--- a/sds2/worker.py	2026-10-01 18:13:32
++++ b/sds2/worker.py	2026-10-01 18:51:10
+@@ -233,11 +233,24 @@
+                        'dominant_outliers': (wc.get('dominant_outliers') or [])[:10] if isinstance(wc.get('dominant_outliers'), list) else wc.get('dominant_outliers'),
+                        'step_steel_t': wc.get('step_steel_t'), 'sds2_piece_weight_t': wc.get('sds2_piece_weight_t'),
+                        'joist_standin_t': wc.get('joist_standin_t'),
+-                       'by_family': {k: {'ratio': v.get('ratio'), 'n': v.get('n')} for k, v in (wc.get('by_family') or {}).items()}},
++                       'by_family': {k: {'ratio': v.get('ratio'), 'n': v.get('n'), **{s_: _wpart(v.get(s_)) for s_ in ('exact', 'built', 'standin') if s_ in v}}
++                                     for k, v in (wc.get('by_family') or {}).items()},
++                       # converter v5.5w: the tally split by geometry source (exact = SDS2's own piece B-rep, built = untagged converter-built
++                       # solids, standin = tagged approximations) and the stud / rod pieces switched to their B-rep; absent in older manifests
++                       'by_source': {k: _wpart(v) for k, v in wc['by_source'].items()} if isinstance(wc.get('by_source'), dict) else None,
++                       'turned_brep': wc.get('turned_brep'),
++                       'sds2_weight_outliers': len(wc['sds2_weight_outliers']) if isinstance(wc.get('sds2_weight_outliers'), list) else None},
+             'readback': m.get('readback'), 'class': m.get('class'), 'corpus': m.get('corpus'), 'class_reasons': m.get('class_reasons'),
+             'holes': holes_summary(m.get('holes'))}
+ 
+ 
++def _wpart(x):
++    """one part of the v5.5w weight split -> {ratio, n, step_lb, sds2_lb} (None stays None)"""
++    if not isinstance(x, dict):
++        return None
++    return {k: x.get(k) for k in ('ratio', 'n', 'step_lb', 'sds2_lb')}
++
++
+ def holes_summary(h):
+     """v5.4 manifest `holes`: derived (bolt record + coaxial hole) and not-cut counts, compact (scalars and totals only)"""
+     if not isinstance(h, dict):

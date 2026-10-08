@@ -1,0 +1,33 @@
+{
+ "code": "z3-db1-2026-10-01v+g (completion)",
+ "kit": "kit_g",
+ "base_kit": "kit_v",
+ "base_code": "z3-db1-2026-10-01v",
+ "base_manifest": "kitsnap_v_1006.manifest.json",
+ "changed_vs_base": [
+  "convert_complete.py",
+  "db1step.py"
+ ],
+ "changes": {
+  "db1step.py": "restoration log (RESTORE / RESTORE_GROUPS); fitting guard (< 50 % length kept -> not applied); exact stadium slot outline when the corner radius is half the slot width (IfcRoundedRectangleProfileDef with zero-length sides was cut as nothing by the kernel); _despike for self-touching outlines; polybeam corner chamfer types logged",
+  "convert_complete.py": "new: convert_one.py + completion env defaults (DB1_FITTINGS_NEW=1, DB1_V2_SLOT_ENGINES, DB1_SLOT_ENGINES) + STATS.restore.json"
+ },
+ "files": {
+  "attrlink.py": "8bc733efaa485d57898d7e30c4748f89",
+  "bolt_catalog.json": "9ce449082129a1d0174d87331125454c",
+  "convert_complete.py": "6a357f12a6ca0a2dc3015ace5005e1da",
+  "convert_one.py": "33263dd6d220458a3ebe94ee8924e854",
+  "db1bolts.py": "c6ae19dd404e0e4b2114cbf2cbb471da",
+  "db1bolts2.py": "3b3bfec3cdde7acee3898a86ab086fc7",
+  "db1dec.py": "67365890a87de1d55cf5259256e467b3",
+  "db1old.py": "d1319b3c24f0e7471249950cf675c65d",
+  "db1prof.py": "0d3d9a57328267ad0903ca2421507159",
+  "db1step.py": "39299ca8bef3275504c3e398513ac081",
+  "fittings.py": "cfc6cd23b9354728d183ceeb4e757fd6",
+  "ifc2step6.py": "d0e8fcc19093e90fdd5ee35f3610f96a",
+  "layouts.json": "19eec795b76c7d7a68623d532fabc638",
+  "tekla_bolt_assemblies.json": "fede6403840bc3e587a7cf0669a1f52f",
+  "tekla_profiles.json": "44bdfb9ade08228058655e4d29c22efc",
+  "tekla_profiles_overlay.json": "0394baae9e9792dd7f98c16d89c48933"
+ }
+}

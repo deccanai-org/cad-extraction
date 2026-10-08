@@ -1,0 +1,21 @@
+--- a/sds2-step-pipeline/decode/instances.py
++++ b/sds2-step-pipeline/decode/instances.py
+@@ -106,14 +106,16 @@
+     only the orthonormal-rotation / finite-origin checks decide. Chosen from the job's subm_idx layout (440-B)."""
+     if job not in cache:
+         from piece_table import slot_size
+-        cache[job] = slot_size(open(os.path.join(job, "subm", "subm_idx"), "rb").read(64 * 1024)) in (440, 384)  # 7.1 / 7.0
++        fp = os.path.join(job, "subm", "subm_idx")
++        cache[job] = slot_size(open(fp, "rb").read(64 * 1024), os.path.getsize(fp)) in (440, 384)  # 7.1 / 7.0
+     return cache[job]
+ 
+ 
+ def _is_70(job, cache={}):
+     if job not in cache:
+         from piece_table import slot_size
+-        cache[job] = slot_size(open(os.path.join(job, "subm", "subm_idx"), "rb").read(64 * 1024)) == 384
++        fp = os.path.join(job, "subm", "subm_idx")
++        cache[job] = slot_size(open(fp, "rb").read(64 * 1024), os.path.getsize(fp)) == 384
+     return cache[job]
+ 
+ 

@@ -1,0 +1,400 @@
+--- ifc/ifc2step5.py
++++ ifc/ifc2step5.py
+@@ -89,6 +89,11 @@
+         self.noplane = False
+         self.bb = [1e30, 1e30, 1e30, -1e30, -1e30, -1e30]
+         self.sc = 1.0   # multiply incoming coords by this to get millimetres
++        # z3 lump split: per face id the loops (point ids) as written + point coords, consumed by solids()
++        self.split_lumps = True
++        self._floops = {}
++        self._fxyz = {}
++        self.lump_stats = {}
+         self._header(name, length_unit_prefix, uncertainty)
+ 
+     # ---- low level
+@@ -149,6 +154,8 @@
+     def new_scope(self):
+         # bound memory: points are shared within a product, rarely across
+         self.pt_cache = {}
++        self._floops = {}
++        self._fxyz = {}
+ 
+     def pt(self, x, y, z):
+         if self.sc != 1.0:
+@@ -210,6 +217,7 @@
+         """loops: list of (point_id_list, is_outer). Returns face id or None."""
+         bounds = []
+         normal = None
++        written = []
+         for pids, pts, outer in loops:
+             # z4 fix: drop repeated points (zero-length edges, e.g. after 0.01 mm rounding) and loops that
+             # enclose no area; OpenCASCADE 8.0.1 segfaults transferring such faces. Geometry is unchanged.
+@@ -226,6 +234,10 @@
+                     return None
+                 continue
+             pids, pts = cp, cq
++            if self.split_lumps:
++                written.append(pids)
++                for p, q in zip(pids, pts):
++                    self._fxyz[p] = q
+             lp = self.e("POLY_LOOP('',(%s))" % ",".join("#%d" % p for p in pids))
+             bounds.append(self.e("%s('',#%d,.T.)"
+                                  % ("FACE_OUTER_BOUND" if outer else "FACE_BOUND", lp)))
+@@ -236,6 +248,8 @@
+         if self.noplane:
+             f = self.e("FACE('',(%s))" % ",".join("#%d" % b for b in bounds))
+             self.n_faces += 1
++            if self.split_lumps:
++                self._floops[f] = written
+             return f
+         if normal is None:
+             return None
+@@ -244,6 +258,8 @@
+         f = self.e("FACE_SURFACE('',(%s),#%d,.T.)"
+                    % (",".join("#%d" % b for b in bounds), pl))
+         self.n_faces += 1
++        if self.split_lumps:
++            self._floops[f] = written
+         return f
+ 
+     def solid(self, face_ids, closed=True):
+@@ -254,6 +270,34 @@
+         if closed:
+             return self.e("FACETED_BREP('',#%d)" % sh), True
+         return sh, False
++
++    def solids(self, face_ids):
++        """closed faceted shell -> [FACETED_BREP id, ...], one per closed lump (z3: non_positive_volume_solids).
++        A STEP closed_shell is a connected_face_set (ISO 10303-42): one lump per shell. SDS/2 IFC puts a whole bolt
++        (head, washers, shank, nut), a shear stud (head + shank) or a mitred fillet weld (glued triangular prisms) in
++        ONE IfcClosedShell; copied verbatim, OpenCASCADE's read-time healing splits the shell and nests touching /
++        interpenetrating lumps as voids (negative or under-counted volume) or shreds the non-manifold weld into
++        dozens of fragment solids (invalid, inside-out, duplicated). _split_lumps(): coincident opposite internal
++        face pairs dropped where that leaves closed shells, each closed lump its own FACETED_BREP, open lumps kept
++        together as before. Faces are never rewritten or re-oriented; a clean single lump is written as before."""
++        if not face_ids:
++            return []
++        loops = [self._floops.pop(f, None) for f in face_ids]
++        if not self.split_lumps or self.nodedup or any(l is None for l in loops) or len(face_ids) > 400000:
++            return [self.solid(face_ids, True)[0]]
++        try:
++            comps, info = _split_lumps(loops, self._fxyz)
++        except Exception:
++            self.lump_stats["errors"] = self.lump_stats.get("errors", 0) + 1
++            return [self.solid(face_ids, True)[0]]
++        for k in ("cancelled_faces", "radial_edges", "cancel_rejected", "kept_whole", "open_lumps_kept_together", "voids_kept"):
++            if info.get(k):
++                self.lump_stats[k] = self.lump_stats.get(k, 0) + info[k]
++        if len(comps) < 2 and not info["cancelled_faces"]:
++            return [self.solid(face_ids, True)[0]]
++        self.lump_stats["breps_split"] = self.lump_stats.get("breps_split", 0) + (len(comps) > 1)
++        self.lump_stats["breps_written"] = self.lump_stats.get("breps_written", 0) + len(comps)
++        return [self.solid([face_ids[i] for i in c["faces"]], True)[0] for c in comps]
+ 
+     def part(self, name, items, faceted=True, pid=None, desc=None):
+         """items: list of brep ids (faceted) or open shell ids. pid = source part id (IFC GlobalId) written as
+@@ -300,6 +344,252 @@
+     return (nx / l, ny / l, nz / l, pts[0])
+ 
+ 
++# ---------------------------------------------------------------- lump split (z3: non_positive_volume_solids)
++# = _deepdive/ifc-nonpositive-volume/patch/lumpsplit.py (decompose -> _split_lumps), inlined: the kit stays one file
++from collections import defaultdict as _ls_dd
++
++
++
++
++def _ls_sub(a, b):
++    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
++
++
++def _ls_cross(a, b):
++    return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
++
++
++def _ls_dot(a, b):
++    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
++
++
++def _ls_norm(a):
++    l = math.sqrt(_ls_dot(a, a))
++    return (a[0] / l, a[1] / l, a[2] / l) if l > 1e-300 else None
++
++
++def _ls_newell(loop, xyz):
++    nx = ny = nz = 0.0
++    n = len(loop)
++    for i in range(n):
++        x1, y1, z1 = xyz[loop[i]]
++        x2, y2, z2 = xyz[loop[(i + 1) % n]]
++        nx += (y1 - y2) * (z1 + z2); ny += (z1 - z2) * (x1 + x2); nz += (x1 - x2) * (y1 + y2)
++    return _ls_norm((nx, ny, nz))
++
++
++def _ls_signed_volume(faces, loops_per_face, xyz):
++    v = 0.0
++    for fi in faces:
++        for lp in loops_per_face[fi]:
++            if len(lp) < 3:
++                continue
++            p0 = xyz[lp[0]]
++            for i in range(1, len(lp) - 1):
++                v += _ls_dot(p0, _ls_cross(xyz[lp[i]], xyz[lp[i + 1]]))
++    return v / 6.0
++
++
++def _ls_bbox(faces, loops_per_face, xyz):
++    P = [xyz[k] for fi in faces for lp in loops_per_face[fi] for k in lp]
++    return [min(p[c] for p in P) for c in range(3)] + [max(p[c] for p in P) for c in range(3)]
++
++
++def _ls_opposite_pairs(loops_per_face, faces):
++    """coincident faces with opposite orientation (same cyclic vertex sequence, reversed) -> {face: partner}"""
++    canon = {}
++    for fi in faces:
++        loops = loops_per_face[fi]
++        if len(loops) != 1 or len(loops[0]) < 3:
++            continue
++        lp = loops[0]
++        k = frozenset(lp)
++        if len(k) != len(lp):
++            continue
++        i0 = lp.index(min(lp))
++        canon.setdefault(k, []).append((fi, tuple(lp[i0:] + lp[:i0])))
++    partner = {}
++    for lst in canon.values():
++        if len(lst) < 2:
++            continue
++        for a in range(len(lst)):
++            if lst[a][0] in partner:
++                continue
++            fa = lst[a][1]
++            rev = (fa[0],) + tuple(reversed(fa[1:]))
++            for b in range(a + 1, len(lst)):
++                if lst[b][0] not in partner and lst[b][1] == rev:
++                    partner[lst[a][0]] = lst[b][0]; partner[lst[b][0]] = lst[a][0]
++                    break
++    return partner
++
++
++def _ls_half_edges(loops_per_face, faces):
++    he = _ls_dd(list)                     # undirected edge -> [(face, from, to)]
++    for fi in faces:
++        for lp in loops_per_face[fi]:
++            n = len(lp)
++            for i in range(n):
++                u, w = lp[i], lp[(i + 1) % n]
++                if u != w:
++                    he[(u, w) if u < w else (w, u)].append((fi, u, w))
++    return he
++
++
++class _LsUF:
++    def __init__(self, items):
++        self.p = {i: i for i in items}
++
++    def find(self, x):
++        p = self.p
++        while p[x] != x:
++            p[x] = p[p[x]]; x = p[x]
++        return x
++
++    def union(self, a, b):
++        ra, rb = self.find(a), self.find(b)
++        if ra != rb:
++            self.p[ra] = rb
++
++    def groups(self):
++        g = _ls_dd(list)
++        for i in self.p:
++            g[self.find(i)].append(i)
++        return list(g.values())
++
++
++def _ls_closed(faces, loops_per_face):
++    cnt = _ls_dd(int); dirs = _ls_dd(int)
++    for fi in faces:
++        for lp in loops_per_face[fi]:
++            n = len(lp)
++            for i in range(n):
++                u, w = lp[i], lp[(i + 1) % n]
++                if u == w:
++                    continue
++                k = (u, w) if u < w else (w, u)
++                cnt[k] += 1; dirs[k] += 1 if k == (u, w) else -1
++    closed = all(v == 2 for v in cnt.values())
++    return closed, closed and all(v == 0 for v in dirs.values())
++
++
++def _ls_split(faces, loops_per_face, xyz, info):
++    """solids of one edge-connected face set: join across 2-use edges (any orientation: OpenCASCADE shares the edge
++    and re-orients, e.g. SDS/2 tube inner walls written inside-out); at an edge with more uses and balanced
++    orientation pair each half-edge with the next face met rotating into the solid's interior (radial order).
++    If that yields more than one piece and any piece is open, the set is kept whole (as it was written)."""
++    uf = _LsUF(faces)
++    nrm = {}
++    for e, uses in _ls_half_edges(loops_per_face, faces).items():
++        if len(uses) < 2:
++            continue
++        if len(uses) == 2:
++            uf.union(uses[0][0], uses[1][0]); continue
++        info['nonmanifold_edges'] += 1
++        d = _ls_norm(_ls_sub(xyz[e[1]], xyz[e[0]]))
++        fwd = sum(1 for x in uses if x[1] == e[0])
++        ang = []
++        if d is not None and 2 * fwd == len(uses):
++            ref = ref2 = None
++            for (fi, u, w) in uses:
++                if fi not in nrm:
++                    nrm[fi] = _ls_newell(loops_per_face[fi][0], xyz)
++                n = nrm[fi]
++                if n is None:
++                    break
++                t = _ls_norm(_ls_cross(n, d) if u == e[0] else _ls_cross(d, n))   # in-face direction away from the edge
++                if t is None:
++                    break
++                s = 1.0 if _ls_dot(_ls_cross(t, (-n[0], -n[1], -n[2])), d) > 0 else -1.0   # sense from t into the solid (-n)
++                if ref is None:
++                    ref = t; ref2 = _ls_cross(d, t)
++                ang.append((fi, u, w, math.atan2(_ls_dot(t, ref2), _ls_dot(t, ref)), s))
++        if len(ang) != len(uses):
++            for x in uses[1:]:
++                uf.union(uses[0][0], x[0])      # unbalanced / degenerate non-manifold edge: keep together
++            continue
++        info['radial_edges'] += 1
++        for (fi, u, w, th, s) in ang:
++            best, bd = None, 9.0
++            for (fj, uj, wj, thj, sj) in ang:
++                if fj == fi or not (uj == w and wj == u):
++                    continue
++                dth = (s * (thj - th)) % (2 * math.pi)
++                if dth < 1e-9:
++                    dth = 2 * math.pi
++                if dth < bd:
++                    best, bd = fj, dth
++            if best is not None:
++                uf.union(fi, best)
++    parts = uf.groups()
++    if len(parts) > 1 and not all(_ls_closed(p, loops_per_face)[0] for p in parts):
++        info['kept_whole'] += 1
++        return [list(faces)]
++    return parts
++
++
++def _split_lumps(loops_per_face, xyz):
++    """-> (components, info). components: [{'faces': [face index], 'vol', 'closed', 'oriented'}]; faces not listed in
++    any component are internal coincident opposite pairs that were dropped."""
++    info = {'cancelled_faces': 0, 'nonmanifold_edges': 0, 'radial_edges': 0, 'kept_whole': 0, 'cancel_rejected': 0}
++    nf = len(loops_per_face)
++    # edge-lumps: faces joined across any shared edge
++    uf = _LsUF(range(nf))
++    for uses in _ls_half_edges(loops_per_face, range(nf)).values():
++        for x in uses[1:]:
++            uf.union(uses[0][0], x[0])
++    comps = []
++    for lump in uf.groups():
++        partner = _ls_opposite_pairs(loops_per_face, lump)
++        if partner:
++            # internal faces (weld prisms glued on a mitre face, bolt parts sharing a face) cancel out; accepted only
++            # when every remaining piece is a closed shell (a double-sided / zero-volume sheet is left as it is)
++            rest = [f for f in lump if f not in partner]
++            parts = _ls_split(rest, loops_per_face, xyz, info) if rest else []
++            if parts and all(_ls_closed(p, loops_per_face)[0] for p in parts):
++                info['cancelled_faces'] += len(lump) - len(rest)
++                comps += parts
++            else:
++                info['cancel_rejected'] += 1
++                comps.append(list(lump))
++            continue
++        comps += _ls_split(lump, loops_per_face, xyz, info)
++    # closed lumps become their own solids; every open lump (source defect: T-junctions, double-sided sheets,
++    # missing faces) stays together in one shell exactly as before, so OpenCASCADE heals it the way it always did
++    out = []; rest = []
++    for c in comps:
++        closed, oriented = _ls_closed(c, loops_per_face)
++        if not closed:
++            rest += c; continue
++        out.append({'faces': sorted(c), 'vol': _ls_signed_volume(c, loops_per_face, xyz), 'bbox': _ls_bbox(c, loops_per_face, xyz),
++                    'host': None, 'closed': True, 'oriented': oriented})
++    if rest:
++        info['open_lumps_kept_together'] = len(comps) - len(out)
++        out.append({'faces': sorted(rest), 'vol': _ls_signed_volume(rest, loops_per_face, xyz), 'bbox': None,
++                    'host': None, 'closed': False, 'oriented': False})
++    # a closed, consistently oriented lump with negative volume inside a positive one is its void: same shell
++    pos = [o for o in out if o['oriented'] and o['vol'] > 0]
++    for o in out:
++        if o['oriented'] and o['vol'] < 0:
++            hosts = [p for p in pos if all(p['bbox'][q] <= o['bbox'][q] + 1e-9 for q in range(3)) and
++                     all(p['bbox'][q + 3] >= o['bbox'][q + 3] - 1e-9 for q in range(3))]
++            if hosts:
++                o['host'] = min(hosts, key=lambda p: p['vol'])
++    res = []
++    for o in out:
++        if o['host'] is not None:
++            continue
++        faces = list(o['faces']); vol = o['vol']
++        for v in out:
++            if v['host'] is o:
++                faces += v['faces']; vol += v['vol']; info['voids_kept'] = info.get('voids_kept', 0) + 1
++        res.append({'faces': faces, 'vol': vol, 'closed': o['closed'], 'oriented': o['oriented']})
++    res.sort(key=lambda c: c['faces'][0])
++    info['components'] = len(res)
++    info['open_components'] = sum(1 for o in res if not o['closed'])
++    return res, info
++
++
+ # ---------------------------------------------------------------- transcode
+ 
+ FACETED_TYPES = ("IfcFacetedBrep", "IfcFacetedBrepWithVoids",
+@@ -349,10 +639,7 @@
+         fl = shell_faces(item.Outer, m, w)
+         if fl is None:
+             return None
+-        res = []
+-        s = w.solid(fl, True)
+-        if s:
+-            res.append(s[0])
++        res = w.solids(fl)
+         if t == "IfcFacetedBrepWithVoids":
+             for v in item.Voids:
+                 vf = shell_faces(v, m, w)
+@@ -401,8 +688,10 @@
+         if not faces:
+             return None
+         closed = (item.Closed is True) if hasattr(item, "Closed") else True
+-        s = w.solid(faces, bool(closed))
+-        return ([s[0]], bool(closed))
++        if closed:
++            return (w.solids(faces), True)
++        s = w.solid(faces, False)
++        return ([s[0]], False)
+     if t == "IfcMappedItem":
+         src = item.MappingSource
+         tgt = item.MappingTarget
+@@ -576,8 +865,8 @@
+             if fid:
+                 faces.append(fid)
+         if faces:
+-            br = w.solid(faces, True)
+-            w.part(sh.name or sh.guid, [br[0]], True, pid=sh.guid, desc=getattr(sh, "type", None))
++            brs = w.solids(faces)
++            w.part(sh.name or sh.guid, brs, True, pid=sh.guid, desc=getattr(sh, "type", None))
+             n += 1
+         if not it.next():
+             break
+@@ -651,6 +940,7 @@
+     w.nodedup = a.nodedup
+     w.noplane = a.noplane
+     w.prec = a.prec
++    w.split_lumps = not a.nodedup and os.environ.get("IFC2STEP_NO_LUMP_SPLIT", "") != "1"
+ 
+     skipped = None
+     if a.mode in ("transcode", "hybrid"):
+@@ -672,6 +962,7 @@
+     stats["peak_rss_mb"] = rss()
+     stats["bbox"] = [round(v, 3) for v in w.bb]
+     stats["degenerate_faces_dropped"] = getattr(w, "n_degenerate", 0)
++    stats["lump_split"] = dict(w.lump_stats, enabled=w.split_lumps)
+     stats["bytes_per_face"] = round(stats["out_bytes"] / max(1, w.n_faces), 1)
+     stats["expansion"] = round(stats["out_bytes"] / max(1, stats["in_bytes"]), 2)
+     if a.gzip:

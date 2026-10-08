@@ -1,0 +1,10 @@
+{
+ "pipe": "db1",
+ "at": "2026-09-30T05:17:43Z",
+ "results": 1463,
+ "scanned": 284,
+ "scanned_bytes": 332924675581,
+ "affected": 0,
+ "ids": {},
+ "sec": 388
+}

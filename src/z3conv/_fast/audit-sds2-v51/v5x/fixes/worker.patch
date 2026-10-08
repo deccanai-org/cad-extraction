@@ -1,0 +1,44 @@
+--- base/worker.py	2026-10-01 17:10:43
++++ worker.py	2026-10-01 17:10:43
+@@ -426,18 +426,29 @@
+     return dict(rec, status='fail', reason=reason, log_tail=keep[-1500:])
+ 
+ 
++def best_key(r):
++    """est_class with the weight term rounded to 0.01 (audit-sds2-v5x): |ratio-1| differences below that are weight noise. Raw
++    values kept the untagged v4 STEP over an otherwise identical v5.1 STEP on VOID 2263534c (1.0 vs 1.0004) and 401 CONGRESS
++    693974d8 (1.011 vs 1.0112), and the v5.2 STEP over v5.3 on SHERIFFS OFFICE e730aa98 although v5.3 removed 4 more converter
++    duplicates (15,324 -> 15,308 solids; 1.0177 vs 1.0178). Rounded, those are ties and the newer converter wins."""
++    c, bad, sk, dev = est_class(r)
++    return (c, bad, sk, round(dev, 2))
++
++
+ def process(fl, job, d):
+     """best-of policy across converter versions: when this job already has a result of another converter, keep the better
+     of the two (failure < stage-1 members only < stage 2; then class estimate, invalid solids, skipped pieces, weight ratio);
+-    both are recorded (alternatives) and the history keeps the per-version counts"""
++    both are recorded (alternatives) and the history keeps the per-version counts.
++    audit-sds2-v5x: a finished earlier result is always compared (also when it carries this code because an earlier run of this
++    label kept it), ties go to the new run, and the weight term ignores noise below 0.01."""
+     prev = fl.getj(f'{fl.ST}/results/{job["id"]}.json')
+     new = _process(fl, job, d)
+-    if not prev or str(prev.get('code', '')).startswith(f'z3-sds2-{LABEL}-') or prev.get('status') not in ('ok', 'ok_stage1'):
+-        if prev and prev.get('status') not in ('ok', 'ok_stage1') and not str(prev.get('code', '')).startswith(f'z3-sds2-{LABEL}-'):
++    if not prev or prev.get('status') not in ('ok', 'ok_stage1'):
++        if prev and not str(prev.get('code', '')).startswith(f'z3-sds2-{LABEL}-'):
+             new['alternatives'] = {(prev.get('converter') or {}).get('label', 'v4'): {'status': prev.get('status'), 'reason': prev.get('reason')}}
+         return new
+     pl = (prev.get('converter') or {}).get('label', 'v4')
+-    a, b = est_class(new), est_class(prev)
++    a, b = best_key(new), best_key(prev)
+     summ = lambda r: {'status': r.get('status'), 'reason': r.get('reason'), 'est': list(est_class(r)), 'step': r.get('step'),
+                       'qa': r.get('qa'), 'ratio': (r.get('stage2') or {}).get('steel_ratio'), 'manifest_class': (r.get('manifest') or {}).get('class')}
+     if a <= b:
+@@ -451,5 +462,6 @@
+ 
+ if __name__ == '__main__':
+     os.environ.setdefault('CONV_SLOTS', str(max(1, min((os.cpu_count() or 4) - 2, (cf.mem()[0] >> 30) // 6))))
+-    fl = cf.Fleet('sds2', CODE, process, need_bytes, FILES, need_disk=need_disk, redo=redo, redo_ids_key=f'{cf.CTLROOT}/sds2/redo_ids.json')
++    kw = {'label': LABEL} if 'label' in cf.Fleet.__init__.__code__.co_varnames else {}     # audit-sds2-v5x: label for alternatives{}
++    fl = cf.Fleet('sds2', CODE, process, need_bytes, FILES, need_disk=need_disk, redo=redo, redo_ids_key=f'{cf.CTLROOT}/sds2/redo_ids.json', **kw)
+     sys.exit(fl.main())

@@ -1,0 +1,13 @@
+--- a/sds2-step-pipeline/decode/sds2job.py
++++ b/sds2-step-pipeline/decode/sds2job.py
+@@ -309,6 +309,10 @@
+ # members that hold an imported reference model (DWF / IFC import): one member file places thousands of piece files
+ # that have no piece-table entry (data-3 SDS_Jobs_2015.25 / 7.331 jobs.7z: 50 of 71 jobs are such models)
+ REFERENCE_TYPES = {"DWF Import", "IFC Import", "SDNF Import", "DGN Import", "Reference Model", "ReferenceModel"}
++# the spelling varies by version: 7.720 "IFC_RH Palo_Grand Stair" stores "REFERENCE MODEL" (44 placements of curved C15x40
++# stringers with L = 0 / no weight -> written as straight extrusions [approx] instead of their stored B-rep)
++REFERENCE_TYPES |= {t.upper() for t in REFERENCE_TYPES}
++KNOWN_TYPES |= REFERENCE_TYPES
+ 
+ 
+ def _sparse_try(job, idx, ids, shapes, slot, ver):

@@ -1,0 +1,24 @@
+--- kits/j/db1old.py	2026-10-01 22:47:26.000000000 +0000
++++ kits/jfix2/db1old.py	2026-10-02 00:48:50.046508627 +0000
+@@ -58,6 +58,9 @@
+         return ''.join(out)
+ 
+ 
++REL = {}                 # audit P1: relation pairs of the last read(): {10: [(id1, id2)], 11: [...]}
++
++
+ def read(path_or_bytes, engine):
+     data = load(path_or_bytes) if isinstance(path_or_bytes, str) else path_or_bytes
+     o = Old(data); N = len(o.I_all) - 400
+@@ -112,7 +115,10 @@
+     # ---- relation (stride 17): type 11 = part cut, id1 = parent part, id2 = cutting part
+     rv = np.zeros(N, bool); Mr = N - 20
+     rv[:Mr] = (I[:Mr] > 0) & (I[4:Mr + 4] >= 0) & (I[4:Mr + 4] <= 2000) & (I[8:Mr + 8] > 0) & (I[12:Mr + 12] > 0)
+-    rel_off = o.runs(rv, 17)
++    rel_off = o.runs(rv, 61 if engine >= 7.1 else 17)          # audit P1: 7.1-7.4x relation records are stride 61 (id, type, id1, id2 + 44-byte tail)
++    REL.clear()
++    for q in rel_off:
++        if int(I[q + 4]) in (10, 11): REL.setdefault(int(I[q + 4]), []).append((int(I[q + 8]), int(I[q + 12])))
+     cut_rel = collections.defaultdict(list)
+     for q in rel_off:
+         if int(I[q + 4]) == 11: cut_rel[int(I[q + 8])].append(int(I[q + 12]))

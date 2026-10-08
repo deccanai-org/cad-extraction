@@ -1,0 +1,93 @@
+--- a/sds2-step-pipeline/decode/brep.py
++++ b/sds2-step-pipeline/decode/brep.py
+@@ -315,11 +315,77 @@
+                 F3 = drop_covered(V, F2)
+                 if len(F3) < len(F2):
+                     sh = _solid_parts(V, conform(V, F3), M, o)
++        except Exception:
++            sh = None
++    if sh is None:
++        # keyhole faces: a face whose single loop runs out along a bridge edge, around an inner loop (hole / cut-out)
++        # and back along the same edge (401 CONGRESS 7.613 HSS12x4x1/2 end faces; 7.135 BAHAMAR concrete walls with
++        # openings). OCC keeps the doubled bridge as two free edges, so the shell never closes. Split such loops into
++        # outer + inner loops (the bridge disappears) and retry; pieces that already close are never touched.
++        try:
++            FK = [unkeyhole(f) for f in faces]
++            if FK != faces:
++                sh = _solid_parts(V, FK, M, o)
++                if sh is None:
++                    sh = _solid_parts(V, conform(V, FK), M, o)
+         except Exception:
+             sh = None
+     return sh
++
++
++def split_keyhole(loop):
++    """One stored loop that revisits a vertex -> [outer, inner, ...] (the bridge edge walked out and back is dropped)."""
++    out, cur = [], []
++    for i in loop:
++        if cur and i == cur[-1]:
++            continue
++        if i in cur:
++            j = cur.index(i); seg = cur[j:]; cur = cur[:j + 1]
++            if len(seg) >= 3:
++                out.append(seg)
++        else:
++            cur.append(i)
++    if len(cur) >= 3 and cur[0] == cur[-1]:
++        cur = cur[:-1]
++    return ([cur] if len(cur) >= 3 else []) + out
++
++
++def unkeyhole(f):
++    """Face entries with keyhole loops re-encoded as separate loops, each closed by repeating its first vertex
++    (the multi-loop encoding loops_of() reads); faces without a revisited vertex are returned unchanged."""
++    ls = loops_of(f)
++    if all(len(set(l)) == len(l) for l in ls):
++        return f
++    loops = [x for l in ls for x in (split_keyhole(l) if len(set(l)) != len(l) else [l])]
++    loops.sort(key=len, reverse=True)
++    nf = []
++    for l in loops:
++        nf += l + [l[0]]
++    return nf
+ 
+ 
++def _fixed_solid(sh):
++    """ShapeFix_Shape on an invalid solid -> the single valid solid with positive volume it yields, else None."""
++    from OCP.ShapeFix import ShapeFix_Shape
++    from OCP.BRepCheck import BRepCheck_Analyzer
++    from OCP.TopExp import TopExp_Explorer
++    from OCP.TopAbs import TopAbs_SOLID
++    from OCP.TopoDS import TopoDS
++    from OCP.GProp import GProp_GProps
++    from OCP.BRepGProp import BRepGProp
++    try:
++        fs = ShapeFix_Shape(sh); fs.Perform(); r = fs.Shape()
++        ex = TopExp_Explorer(r, TopAbs_SOLID); sols = []
++        while ex.More():
++            sols.append(TopoDS.Solid(ex.Current())); ex.Next()
++        if len(sols) != 1 or not BRepCheck_Analyzer(sols[0]).IsValid():
++            return None
++        g = GProp_GProps(); BRepGProp.VolumeProperties_s(sols[0], g)
++        return sols[0] if g.Mass() > 0 else None
++    except Exception:
++        return None
++
++
+ def _solid_parts(V, faces, M=None, o=None):
+     parts = bodies(faces)
+     if len(parts) > 1:
+@@ -404,7 +470,11 @@
+             ms = BRepBuilderAPI_MakeSolid(TopoDS.Shell(ex.Current()))
+             if not ms.IsDone(): return None
+             fx = ShapeFix_Solid(ms.Solid()); fx.Perform(); sh = fx.Solid()
+-            if not BRepCheck_Analyzer(sh).IsValid(): return None
++            if not BRepCheck_Analyzer(sh).IsValid():
++                # closed shell whose solid fails BRepCheck although every face is valid (RH PALO ALTO 7.720
++                # HSS4x4x1/4 piece 14761): one ShapeFix_Shape pass; kept only if it yields exactly one valid solid
++                sh = _fixed_solid(sh)
++                if sh is None: return None
+             out.append(sh); ex.Next()
+         if not out:
+             return None

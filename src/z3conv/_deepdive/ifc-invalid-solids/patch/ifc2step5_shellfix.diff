@@ -1,0 +1,297 @@
+--- /Users/dhiren/Downloads/Deccan/z3conv/ifc/ifc2step5.py	2026-10-01 13:31:58
++++ kit/ifc2step5.py	2026-10-01 15:30:47
+@@ -14,8 +14,10 @@
+ 
+ Writes a JSON stats blob to <out>.stats.json
+ """
+-import sys, os, json, time, math, argparse, datetime
++import sys, os, json, time, math, argparse, datetime, collections
+ import re as _re
++sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
++import shellfix
+ 
+ 
+ def step_str(v, limit=120):
+@@ -56,10 +58,12 @@
+ # ---------------------------------------------------------------- real fmt
+ 
+ def _r(v):
+-    # compact STEP REAL: must contain '.'
++    # compact STEP REAL: must contain '.'. 15 significant digits: points are already rounded to --prec decimals, so
++    # this prints exactly those digits; '%.9g' cut georeferenced coordinates (state-plane feet -> 3e9 mm) to a 10 mm
++    # grid and folded small faces into self-intersecting loops (z3 shellfix README, model 1481043e)
+     if v == 0.0:
+         return "0."
+-    s = "%.9g" % v
++    s = "%.15g" % v
+     if "e" in s or "E" in s:
+         m, _, e = s.partition("e")
+         if "." not in m:
+@@ -89,6 +93,9 @@
+         self.noplane = False
+         self.bb = [1e30, 1e30, 1e30, -1e30, -1e30, -1e30]
+         self.sc = 1.0   # multiply incoming coords by this to get millimetres
++        self.shellfix = True                   # repair closed shells before writing (shellfix.repair_shell)
++        self.repair = collections.Counter()    # what the repair did, for <out>.stats.json
++        self.pending_open = []                 # OPEN_SHELLs of the current product (pieces that are not closed)
+         self._header(name, length_unit_prefix, uncertainty)
+ 
+     # ---- low level
+@@ -149,6 +156,7 @@
+     def new_scope(self):
+         # bound memory: points are shared within a product, rarely across
+         self.pt_cache = {}
++        self.pending_open = []
+ 
+     def pt(self, x, y, z):
+         if self.sc != 1.0:
+@@ -206,13 +214,12 @@
+         ax_i = self.e("AXIS2_PLACEMENT_3D('',#%d,#%d,#%d)" % (origin_id, nd, rd))
+         return self.e("PLANE('',#%d)" % ax_i)
+ 
+-    def face(self, loops):
+-        """loops: list of (point_id_list, is_outer). Returns face id or None."""
+-        bounds = []
+-        normal = None
++    def face_spec(self, loops):
++        """loops: list of (point_id_list, pts, is_outer) -> cleaned [(pids, pts, is_outer)], outer loop first, or None.
++        z4 fix: repeated points (zero-length edges, e.g. after 0.01 mm rounding) and loops that enclose no area are
++        dropped; OpenCASCADE 8.0.1 segfaults transferring such faces. Geometry is unchanged."""
++        out = []
+         for pids, pts, outer in loops:
+-            # z4 fix: drop repeated points (zero-length edges, e.g. after 0.01 mm rounding) and loops that
+-            # enclose no area; OpenCASCADE 8.0.1 segfaults transferring such faces. Geometry is unchanged.
+             cp, cq = [], []
+             for p, q in zip(pids, pts):
+                 if cp and p == cp[-1]:
+@@ -225,7 +232,17 @@
+                     self.n_degenerate = getattr(self, 'n_degenerate', 0) + 1
+                     return None
+                 continue
+-            pids, pts = cp, cq
++            if outer and not any(o for _, _, o in out):
++                out.insert(0, (cp, cq, True))
++            else:
++                out.append((cp, cq, outer))
++        return out or None
++
++    def emit_face(self, spec):
++        """cleaned loops (face_spec) -> FACE_SURFACE id or None"""
++        bounds = []
++        normal = None
++        for pids, pts, outer in spec:
+             lp = self.e("POLY_LOOP('',(%s))" % ",".join("#%d" % p for p in pids))
+             bounds.append(self.e("%s('',#%d,.T.)"
+                                  % ("FACE_OUTER_BOUND" if outer else "FACE_BOUND", lp)))
+@@ -245,6 +262,63 @@
+                    % (",".join("#%d" % b for b in bounds), pl))
+         self.n_faces += 1
+         return f
++
++    def face(self, loops):
++        """loops: list of (point_id_list, pts, is_outer). Returns face id or None."""
++        spec = self.face_spec(loops)
++        return self.emit_face(spec) if spec else None
++
++    def closed_breps(self, specs):
++        """faces (face_spec results) of ONE closed shell -> list of FACETED_BREP ids. shellfix.repair_shell first
++        (inner loops against the outer loop, double-sided meshes collapsed, internal walls removed, T-junctions split,
++        tiny gaps closed, faces re-oriented consistently and outward, one brep per closed piece); vertices are never
++        moved. A piece that is still not a closed 2-manifold (open source surface: DWF-import meshes, zero-thickness
++        faces) is written as an OPEN_SHELL surface (self.pending_open, picked up by part()) instead of a FACETED_BREP
++        that OpenCASCADE reads as an invalid solid. Closed shells that need no repair are written exactly as before."""
++        specs = [sp for sp in specs if sp]
++        if not specs:
++            return []
++        if not self.shellfix or self.nodedup:      # --nodedup: no shared vertex ids, no topology to repair
++            r = self.solid([f for f in (self.emit_face(sp) for sp in specs) if f], True)
++            return [r[0]] if r else []
++        Psrc = {}
++        for sp in specs:
++            for pids, pts, outer in sp:
++                Psrc.update(zip(pids, pts))
++        sc, d = self.sc, self.prec
++        # millimetres, rounded exactly as pt() writes them: the repair sees the coordinates OpenCASCADE will read
++        P = {p: (round(q[0] * sc, d), round(q[1] * sc, d), round(q[2] * sc, d)) for p, q in Psrc.items()}
++        faces = [[list(pids) for pids, pts, outer in sp] for sp in specs]
++        try:
++            pieces, info = shellfix.repair_shell(faces, P)
++        except Exception as e:                      # never lose a part to the repair
++            self.repair['repair_error'] += 1
++            sys.stderr.write("[shellfix] %s: %s\n" % (type(e).__name__, e))
++            r = self.solid([f for f in (self.emit_face(sp) for sp in specs) if f], True)
++            return [r[0]] if r else []
++        if info:
++            self.repair.update(info); self.repair['breps_repaired'] += 1
++        out = []
++        for pc in pieces:
++            closed = shellfix.piece_closed(faces, pc)
++            fids = []
++            for fi, rev in pc:
++                if not rev and fi < len(specs) and faces[fi] == [list(x[0]) for x in specs[fi]]:
++                    f = self.emit_face(specs[fi])
++                else:
++                    lps = [lp[::-1] for lp in faces[fi]] if rev else faces[fi]
++                    f = self.emit_face([(lp, [Psrc[p] for p in lp], k == 0) for k, lp in enumerate(lps)])
++                if f:
++                    fids.append(f)
++            if not fids:
++                continue
++            if closed:
++                r = self.solid(fids, True)
++                out.append(r[0])
++            else:
++                self.pending_open.append(self.solid(fids, False)[0])
++                self.repair['open_pieces_as_surface'] += 1
++        return out
+ 
+     def solid(self, face_ids, closed=True):
+         if not face_ids:
+@@ -258,7 +332,8 @@
+     def part(self, name, items, faceted=True, pid=None, desc=None):
+         """items: list of brep ids (faceted) or open shell ids. pid = source part id (IFC GlobalId) written as
+         PRODUCT.id and desc = source class written as PRODUCT.description (z3: exact part mapping for grading)."""
+-        if not items:
++        opens, self.pending_open = self.pending_open, []
++        if not items and not opens:
+             return
+         nm = step_str(name or "part")
+         p = self.e("PRODUCT('%s','%s','%s',(#%d))" % (step_str(pid, 64) if pid else nm, nm, step_str(desc or "", 64), self.ctx_prod))
+@@ -268,11 +343,15 @@
+         pds = self.e("PRODUCT_DEFINITION_SHAPE('','',#%d)" % pd)
+         kind = ("FACETED_BREP_SHAPE_REPRESENTATION" if faceted
+                 else "SHELL_BASED_SURFACE_MODEL_SHAPE_REPRESENTATION")
+-        if not faceted:
++        if not faceted or (opens and not items):
+             sbsm = self.e("SHELL_BASED_SURFACE_MODEL('',(%s))"
+-                          % ",".join("#%d" % i for i in items))
++                          % ",".join("#%d" % i for i in list(items) + opens))
+             items = [sbsm]
+             kind = "MANIFOLD_SURFACE_SHAPE_REPRESENTATION"
++        elif opens:
++            # closed pieces + an open remainder: FACETED_BREP_SHAPE_REPRESENTATION may hold faceted breps only
++            items = list(items) + [self.e("SHELL_BASED_SURFACE_MODEL('',(%s))" % ",".join("#%d" % i for i in opens))]
++            kind = "SHAPE_REPRESENTATION"
+         rep = self.e("%s('%s',(#%d,%s),#%d)"
+                      % (kind, nm, self.origin_ax,
+                         ",".join("#%d" % i for i in items), self.ctx_geom))
+@@ -322,8 +401,8 @@
+                  for i in range(4))
+ 
+ 
+-def shell_faces(shell, m, w):
+-    """IfcConnectedFaceSet -> list of step face ids"""
++def shell_faces(shell, m, w, emit=True):
++    """IfcConnectedFaceSet -> list of step face ids (emit=False: list of face specs for StepWriter.closed_breps)"""
+     out = []
+     for f in shell.CfsFaces:
+         loops = []
+@@ -336,6 +415,11 @@
+                 pts = pts[::-1]
+             pids = [w.pt(*p) for p in pts]
+             loops.append((pids, pts, b.is_a("IfcFaceOuterBound") or len(f.Bounds) == 1))
++        if not emit:
++            sp = w.face_spec(loops)
++            if sp:
++                out.append(sp)
++            continue
+         fid = w.face(loops)
+         if fid:
+             out.append(fid)
+@@ -346,13 +430,10 @@
+     """Return (list_of_items, faceted_bool) or None if unsupported."""
+     t = item.is_a()
+     if t in ("IfcFacetedBrep", "IfcFacetedBrepWithVoids"):
+-        fl = shell_faces(item.Outer, m, w)
++        fl = shell_faces(item.Outer, m, w, emit=False)
+         if fl is None:
+             return None
+-        res = []
+-        s = w.solid(fl, True)
+-        if s:
+-            res.append(s[0])
++        res = w.closed_breps(fl)
+         if t == "IfcFacetedBrepWithVoids":
+             for v in item.Voids:
+                 vf = shell_faces(v, m, w)
+@@ -392,17 +473,25 @@
+             polys = []
+             for fa in item.Faces:
+                 polys.append(list(fa.CoordIndex))
++        closed = (item.Closed is True) if hasattr(item, "Closed") else True
+         for poly in polys:
+             ii = [p - 1 for p in poly]
+             pts = [mat_apply(m, coords[k]) for k in ii]
++            if closed:
++                sp = w.face_spec([([pids[k] for k in ii], pts, True)])
++                if sp:
++                    faces.append(sp)
++                continue
+             fid = w.face([([pids[k] for k in ii], pts, True)])
+             if fid:
+                 faces.append(fid)
+         if not faces:
+             return None
+-        closed = (item.Closed is True) if hasattr(item, "Closed") else True
+-        s = w.solid(faces, bool(closed))
+-        return ([s[0]], bool(closed))
++        if closed:
++            brs = w.closed_breps(faces)
++            return (brs, True) if (brs or w.pending_open) else None
++        s = w.solid(faces, False)
++        return ([s[0]], False)
+     if t == "IfcMappedItem":
+         src = item.MappingSource
+         tgt = item.MappingTarget
+@@ -471,7 +560,7 @@
+                 break
+             outs += r[0]
+             faceted = faceted and r[1]
+-        if not ok or not outs:
++        if not ok or not (outs or w.pending_open):
+             n_unsupported_items += 1
+             skipped.append(pr.id())
+             continue
+@@ -572,12 +661,12 @@
+             pts = [(vs[a * 3], vs[a * 3 + 1], vs[a * 3 + 2]),
+                    (vs[b * 3], vs[b * 3 + 1], vs[b * 3 + 2]),
+                    (vs[c * 3], vs[c * 3 + 1], vs[c * 3 + 2])]
+-            fid = w.face([([pids[a], pids[b], pids[c]], pts, True)])
+-            if fid:
+-                faces.append(fid)
+-        if faces:
+-            br = w.solid(faces, True)
+-            w.part(sh.name or sh.guid, [br[0]], True, pid=sh.guid, desc=getattr(sh, "type", None))
++            sp = w.face_spec([([pids[a], pids[b], pids[c]], pts, True)])
++            if sp:
++                faces.append(sp)
++        brs = w.closed_breps(faces) if faces else []
++        if brs or w.pending_open:
++            w.part(sh.name or sh.guid, brs, True, pid=sh.guid, desc=getattr(sh, "type", None))
+             n += 1
+         if not it.next():
+             break
+@@ -626,6 +715,7 @@
+     ap.add_argument("--noplane", action="store_true")
+     ap.add_argument("--prec", type=int, default=6)
+     ap.add_argument("--gzip", action="store_true")
++    ap.add_argument("--no-shellfix", action="store_true", help="write closed shells as they come (pre-shellfix output)")
+     a = ap.parse_args()
+ 
+     stats = {"input": a.ifc, "mode": a.mode, "nodedup": a.nodedup,
+@@ -651,6 +741,7 @@
+     w.nodedup = a.nodedup
+     w.noplane = a.noplane
+     w.prec = a.prec
++    w.shellfix = not a.no_shellfix
+ 
+     skipped = None
+     if a.mode in ("transcode", "hybrid"):
+@@ -672,6 +763,7 @@
+     stats["peak_rss_mb"] = rss()
+     stats["bbox"] = [round(v, 3) for v in w.bb]
+     stats["degenerate_faces_dropped"] = getattr(w, "n_degenerate", 0)
++    stats["shellfix"] = (dict(w.repair) or {"breps_repaired": 0}) if w.shellfix else "off"
+     stats["bytes_per_face"] = round(stats["out_bytes"] / max(1, w.n_faces), 1)
+     stats["expansion"] = round(stats["out_bytes"] / max(1, stats["in_bytes"]), 2)
+     if a.gzip:

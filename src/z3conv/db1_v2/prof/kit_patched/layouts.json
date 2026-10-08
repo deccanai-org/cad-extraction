@@ -1,0 +1,510 @@
+{
+ "7.64": {
+  "layout": {
+   "stride": 65,
+   "xyz": 33,
+   "pts_stride": 41,
+   "pts_k": 17,
+   "p1": 17,
+   "p2": 21,
+   "csys": 29,
+   "csys_key": "after",
+   "csys_stride": 61,
+   "csys_k": 9,
+   "attr": 13,
+   "attr_stride": 389,
+   "prof_off": 133,
+   "rest_ref": 197,
+   "rest_stride": 54,
+   "rest_off": 25
+  },
+  "score": [
+   7927,
+   7927
+  ],
+  "from": "7.64_0c103fc6d9",
+  "approved": true
+ },
+ "7.82": {
+  "layout": {
+   "stride": 65,
+   "xyz": 33,
+   "pts_stride": 41,
+   "pts_k": 17,
+   "p1": 17,
+   "p2": 21,
+   "csys": 29,
+   "csys_key": "after",
+   "csys_stride": 61,
+   "csys_k": 9,
+   "attr": 13,
+   "attr_stride": 389,
+   "prof_off": 133,
+   "rest_ref": 197,
+   "rest_stride": 54,
+   "rest_off": 25
+  },
+  "score": [
+   3125,
+   3125
+  ],
+  "from": "7.82_c73731fe0d",
+  "approved": true
+ },
+ "7.89": {
+  "layout": {
+   "stride": 65,
+   "xyz": 33,
+   "pts_stride": 41,
+   "pts_k": 17,
+   "p1": 17,
+   "p2": 21,
+   "csys": 29,
+   "csys_key": "after",
+   "csys_stride": 61,
+   "csys_k": 9,
+   "attr": 13,
+   "attr_stride": 379,
+   "prof_off": 133,
+   "rest_ref": 197,
+   "rest_stride": 54,
+   "rest_off": 25
+  },
+  "score": [
+   89,
+   89
+  ],
+  "from": "7.89_3ebc438266",
+  "approved": true
+ },
+ "7.98": {
+  "layout": {
+   "stride": 65,
+   "xyz": 33,
+   "pts_stride": 41,
+   "pts_k": 17,
+   "p1": 17,
+   "p2": 21,
+   "csys": 29,
+   "csys_key": "after",
+   "csys_stride": 61,
+   "csys_k": 9,
+   "attr": 13,
+   "attr_stride": 379,
+   "prof_off": 133,
+   "rest_ref": 197,
+   "rest_stride": 54,
+   "rest_off": 25
+  },
+  "score": [
+   0,
+   0
+  ],
+  "from": "7.98_5ab2fbd4b8",
+  "approved": true,
+  "note": "enabled 2026-09-25 under runtime guards: member-axis agreement>=0.9, strtok name identity, COLUMN-vertical check; samples verified"
+ },
+ "8.07": {
+  "layout": {
+   "stride": 73,
+   "xyz": 41,
+   "pts_stride": 41,
+   "pts_k": 17,
+   "p1": 21,
+   "p2": 25,
+   "csys": 33,
+   "csys_key": "after",
+   "csys_stride": 61,
+   "csys_k": 9,
+   "attr": 13,
+   "attr_stride": 331,
+   "prof_off": 85,
+   "rest_ref": 149,
+   "rest_stride": 54,
+   "rest_off": 25
+  },
+  "score": [
+   1681,
+   1681
+  ],
+  "from": "8.07_aa23d89ef2",
+  "approved": true
+ },
+ "8.53": {
+  "layout": {
+   "stride": 73,
+   "xyz": 41,
+   "pts_stride": 41,
+   "pts_k": 17,
+   "p1": 21,
+   "p2": 25,
+   "csys": 33,
+   "csys_key": "after",
+   "csys_stride": 61,
+   "csys_k": 9,
+   "attr": 13,
+   "attr_stride": 331,
+   "prof_off": 85,
+   "rest_ref": 149,
+   "rest_stride": 54,
+   "rest_off": 25
+  },
+  "score": [
+   3040,
+   3039
+  ],
+  "from": "8.53_0575f7270f",
+  "approved": true
+ },
+ "8.65": {
+  "layout": {
+   "stride": 73,
+   "xyz": 41,
+   "pts_stride": 41,
+   "pts_k": 17,
+   "p1": 21,
+   "p2": 25,
+   "csys": 33,
+   "csys_key": "after",
+   "csys_stride": 61,
+   "csys_k": 9,
+   "attr": 13,
+   "attr_stride": 331,
+   "prof_off": 85,
+   "rest_ref": 149,
+   "rest_stride": null,
+   "rest_off": 25
+  },
+  "score": [
+   440,
+   440
+  ],
+  "from": "8.65_5c33be3b1e",
+  "approved": true
+ },
+ "8.85": {
+  "layout": {
+   "stride": 73,
+   "xyz": 41,
+   "pts_stride": 41,
+   "pts_k": 17,
+   "p1": 21,
+   "p2": 25,
+   "csys": 33,
+   "csys_key": "after",
+   "csys_stride": 61,
+   "csys_k": 9,
+   "attr": 13,
+   "attr_stride": 341,
+   "prof_off": 85,
+   "rest_ref": 149,
+   "rest_stride": 54,
+   "rest_off": 25
+  },
+  "score": [
+   1391,
+   1391
+  ],
+  "from": "8.85_6eafeb8fc8",
+  "approved": true
+ },
+ "8.37": {
+  "layout": {
+   "stride": 73,
+   "xyz": 41,
+   "pts_stride": 41,
+   "pts_k": 17,
+   "p1": 21,
+   "p2": 25,
+   "csys": 33,
+   "csys_key": "after",
+   "csys_stride": 61,
+   "csys_k": 9,
+   "attr": 36,
+   "attr_stride": 72,
+   "prof_off": 66,
+   "rest_ref": 9,
+   "rest_stride": null,
+   "rest_off": 61
+  },
+  "score": [
+   0,
+   0
+  ],
+  "from": "8.37_7bd6a0fdfa",
+  "approved": true,
+  "note": "enabled 2026-09-25 under runtime guards: member-axis agreement>=0.9, strtok name identity, COLUMN-vertical check; samples verified"
+ },
+ "8.62": {
+  "layout": {
+   "stride": 73,
+   "xyz": 41,
+   "pts_stride": 41,
+   "pts_k": 17,
+   "p1": 21,
+   "p2": 25,
+   "csys": 33,
+   "csys_key": "after",
+   "csys_stride": 61,
+   "csys_k": 9,
+   "attr": 13,
+   "attr_stride": 331,
+   "prof_off": 85,
+   "rest_ref": 149,
+   "rest_stride": 54,
+   "rest_off": 25
+  },
+  "score": [
+   9366,
+   9354
+  ],
+  "from": "8.62_1fd782ba09",
+  "approved": true
+ },
+ "8.95": {
+  "layout": {
+   "stride": 73,
+   "xyz": 41,
+   "pts_stride": 41,
+   "pts_k": 17,
+   "p1": 21,
+   "p2": 25,
+   "csys": 33,
+   "csys_key": "after",
+   "csys_stride": 61,
+   "csys_k": 9,
+   "attr": 13,
+   "attr_stride": 341,
+   "prof_off": 85,
+   "rest_ref": 149,
+   "rest_stride": 54,
+   "rest_off": 25
+  },
+  "score": [
+   1069,
+   1069
+  ],
+  "from": "8.95_d2dfaf787f",
+  "approved": true
+ },
+ "6.87": {
+  "layout": null,
+  "approved": true,
+  "format": "old",
+  "note": "db1old reader; 7.24: 3251-3428 exact/model frame 100%; 6.87: 1460 exact"
+ },
+ "7.01": {
+  "layout": null,
+  "approved": true,
+  "format": "old",
+  "note": "db1old reader; 7.24: 3251-3428 exact/model frame 100%; 6.87: 1460 exact"
+ },
+ "7.13": {
+  "layout": null,
+  "approved": true,
+  "format": "old",
+  "note": "db1old reader; 7.24: 3251-3428 exact/model frame 100%; 6.87: 1460 exact"
+ },
+ "7.24": {
+  "layout": null,
+  "approved": true,
+  "format": "old",
+  "note": "db1old reader; 7.24: 3251-3428 exact/model frame 100%; 6.87: 1460 exact"
+ },
+ "7.30": {
+  "layout": null,
+  "approved": true,
+  "format": "old",
+  "note": "db1old reader; 7.24: 3251-3428 exact/model frame 100%; 6.87: 1460 exact"
+ },
+ "6.47": {
+  "layout": null,
+  "approved": true,
+  "format": "old",
+  "note": "db1old reader; 7.24: 3251-3428 exact/model frame 100%; 6.87: 1460 exact"
+ },
+ "9.08": {
+  "layout": {
+   "stride": 73,
+   "xyz": 41,
+   "pts_stride": 41,
+   "pts_k": 17,
+   "p1": 21,
+   "p2": 25,
+   "csys": 33,
+   "csys_key": "after",
+   "csys_stride": 61,
+   "csys_k": 9,
+   "attr": 13,
+   "attr_stride": 341,
+   "prof_off": 85,
+   "rest_ref": 149,
+   "rest_stride": 54,
+   "rest_off": 25
+  },
+  "layout_from": "8.95",
+  "approved": true,
+  "note": "enabled 2026-09-25 under runtime guards: member-axis agreement>=0.9, strtok name identity, COLUMN-vertical check; samples verified"
+ },
+ "8.44": {
+  "layout": {
+   "stride": 73,
+   "xyz": 41,
+   "pts_stride": 41,
+   "pts_k": 17,
+   "p1": 21,
+   "p2": 25,
+   "csys": 33,
+   "csys_key": "after",
+   "csys_stride": 61,
+   "csys_k": 9,
+   "attr": 13,
+   "attr_stride": 331,
+   "prof_off": 85,
+   "rest_ref": 149,
+   "rest_stride": 54,
+   "rest_off": 25
+  },
+  "layout_from": "8.53",
+  "approved": true,
+  "note": "enabled 2026-09-25 under runtime guards: member-axis agreement>=0.9, strtok name identity, COLUMN-vertical check; samples verified"
+ },
+ "7.62": {
+  "layout": {
+   "stride": 65,
+   "xyz": 33,
+   "pts_stride": 41,
+   "pts_k": 17,
+   "p1": 17,
+   "p2": 21,
+   "csys": 29,
+   "csys_key": "after",
+   "csys_stride": 61,
+   "csys_k": 9,
+   "attr": 13,
+   "attr_stride": 389,
+   "prof_off": 133,
+   "rest_ref": 197,
+   "rest_stride": 54,
+   "rest_off": 25
+  },
+  "layout_from": "7.64",
+  "approved": true,
+  "note": "enabled 2026-09-25 under runtime guards: member-axis agreement>=0.9, strtok name identity, COLUMN-vertical check; samples verified"
+ },
+ "7.61": {
+  "layout": {
+   "stride": 65,
+   "xyz": 33,
+   "pts_stride": 41,
+   "pts_k": 17,
+   "p1": 17,
+   "p2": 21,
+   "csys": 29,
+   "csys_key": "after",
+   "csys_stride": 61,
+   "csys_k": 9,
+   "attr": 13,
+   "attr_stride": 389,
+   "prof_off": 133,
+   "rest_ref": 197,
+   "rest_stride": 54,
+   "rest_off": 25
+  },
+  "layout_from": "7.64",
+  "approved": true,
+  "note": "enabled 2026-09-25 under runtime guards: member-axis agreement>=0.9, strtok name identity, COLUMN-vertical check; samples verified"
+ },
+ "7.52": {
+  "layout": {
+   "stride": 65,
+   "xyz": 33,
+   "pts_stride": 41,
+   "pts_k": 17,
+   "p1": 17,
+   "p2": 21,
+   "csys": 29,
+   "csys_key": "after",
+   "csys_stride": 61,
+   "csys_k": 9,
+   "attr": 13,
+   "attr_stride": 389,
+   "prof_off": 133,
+   "rest_ref": 197,
+   "rest_stride": 54,
+   "rest_off": 25
+  },
+  "layout_from": "7.64",
+  "approved": true,
+  "note": "enabled 2026-09-25 under runtime guards: member-axis agreement>=0.9, strtok name identity, COLUMN-vertical check; samples verified"
+ },
+ "7.81": {
+  "layout": {
+   "stride": 65,
+   "xyz": 33,
+   "pts_stride": 41,
+   "pts_k": 17,
+   "p1": 17,
+   "p2": 21,
+   "csys": 29,
+   "csys_key": "after",
+   "csys_stride": 61,
+   "csys_k": 9,
+   "attr": 13,
+   "attr_stride": 389,
+   "prof_off": 133,
+   "rest_ref": 197,
+   "rest_stride": 54,
+   "rest_off": 25
+  },
+  "layout_from": "7.82",
+  "approved": true,
+  "note": "enabled 2026-09-25 under runtime guards: member-axis agreement>=0.9, strtok name identity, COLUMN-vertical check; samples verified"
+ },
+ "8.74": {
+  "layout": {
+   "stride": 73,
+   "xyz": 41,
+   "pts_stride": 41,
+   "pts_k": 17,
+   "p1": 21,
+   "p2": 25,
+   "csys": 33,
+   "csys_key": "after",
+   "csys_stride": 61,
+   "csys_k": 9,
+   "attr": 13,
+   "attr_stride": 331,
+   "prof_off": 85,
+   "rest_ref": 149,
+   "rest_stride": null,
+   "rest_off": 25
+  },
+  "layout_from": "8.65",
+  "approved": true,
+  "note": "enabled 2026-09-25 under runtime guards: member-axis agreement>=0.9, strtok name identity, COLUMN-vertical check; samples verified"
+ },
+ "8.30": {
+  "layout": {
+   "stride": 73,
+   "xyz": 41,
+   "pts_stride": 41,
+   "pts_k": 17,
+   "p1": 21,
+   "p2": 25,
+   "csys": 33,
+   "csys_key": "after",
+   "csys_stride": 61,
+   "csys_k": 9,
+   "attr": 13,
+   "attr_stride": 331,
+   "prof_off": 85,
+   "rest_ref": 149,
+   "rest_stride": 54,
+   "rest_off": 25
+  },
+  "layout_from": "8.07",
+  "approved": true,
+  "note": "enabled 2026-09-25 under runtime guards: member-axis agreement>=0.9, strtok name identity, COLUMN-vertical check; samples verified"
+ }
+}

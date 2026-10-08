@@ -1,0 +1,64 @@
+--- a/adapters/zen3.py	2026-10-02 17:06:42
++++ b/adapters/zen3.py	2026-10-02 17:07:23
+@@ -25,6 +25,8 @@
+ INDEX = f'{ROOT}/_state/conv/index.jsonl.gz'
+ SRC = 'Zenitude-data-3/'
+ PEERS = ('Disk-2', 'Disk-1')          # earlier extractions of byte-identical archives (data-3 is a superset of Disk-2)
++# sha256 -> stored Disk-1/2 key, each entry proven by an S3-computed SHA-256 of that exact key (pinned ETag) + size (pkg-resolver)
++D12MAP = os.environ.get('PKG_D12MAP', 's3://annotationprod/cad-disk-extract/agentwork/pkg-resolver/disk12_sha_map.jsonl.gz')
+ 
+ 
+ def _lk(p):
+@@ -166,6 +168,28 @@
+                 if used: break
+         self._peer[pid] = (out, used)
+         return self._peer[pid]
++
++    def _d12_map(self):
++        """{sha256: (key, bytes)} from the pkg-resolver map; {} when PKG_D12MAP is empty/'off' or the object is missing."""
++        with self._lock:
++            if hasattr(self, '_d12m'):
++                return self._d12m
++            m = {}
++            if D12MAP and D12MAP != 'off':
++                p = os.path.join(self.cache_dir or '/nonexistent', 'disk12_sha_map.jsonl.gz')
++                if os.path.exists(p):
++                    raw = open(p, 'rb').read()
++                else:
++                    b, _, k = D12MAP[len('s3://'):].partition('/')
++                    raw = pc.get_bytes(b, k)
++                for l in (gzip.decompress(raw).decode().splitlines() if raw else []):
++                    if l.strip():
++                        r = json.loads(l)
++                        if r.get('proof') == 's3_sha256' and r.get('key', '').startswith('cad-disk-extract/'):
++                            m[r['sha256']] = (r['key'], int(r['bytes']))
++                self.log(f'disk12_sha_map: {len(m)} entries')
++            self._d12m = m
++            return m
+ 
+     def _d4_index(self, sha):
+         if not hasattr(self, '_d4i'):
+@@ -210,7 +234,8 @@
+ 
+     def resolve(self, proj, items, sds2_fpc=None, threads=24):
+         """sets src_bucket / src_key / src_how on each item (None when unresolved).  Order: own data-3 object > loose source
+-        object > data-3 marker > (prior:) conv-scan maps (sha-proven) > data-4 marker > Disk-2/Disk-1 same-archive path."""
++        object > data-3 marker > (prior:) conv-scan maps (sha-proven) > data-4 marker > data-4 manifests / index >
++        disk12_sha_map (S3 SHA-256-proven sha -> Disk-1/2 key, any archive) > Disk-2/Disk-1 same-archive path."""
+         pend_m3 = []; pend_prior = []
+         for it in items:
+             k = it.get('raw_key') or ''
+@@ -253,6 +278,13 @@
+                 k = self._d4_index(it['sha256'])
+                 if k: it['src_key'] = k; it['src_how'] = 'data4_index'
+             rest = [it for it in rest if not it.get('src_key')]
++        if rest:                                     # proven sha256 -> Disk-1/2 key map (any archive; size must match too)
++            dm = self._d12_map()
++            for it in rest:
++                e = dm.get(it['sha256'])
++                if e and e[1] == it['bytes']:
++                    it['src_key'] = e[0]; it['src_how'] = 'disk12_sha_map'
++            rest = [it for it in rest if not it.get('src_key')]
+         if rest:
+             pm, used = self._peer_map(proj)
+             for it in rest:

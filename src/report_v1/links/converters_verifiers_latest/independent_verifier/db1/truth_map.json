@@ -1,0 +1,90 @@
+{
+ "0f36290148946a49622f532928c8350b1be46b3816a87f56ee75775749eca1c3": [
+  {
+   "ifc_id": "e75b234aa9802d419cb6149d054b0ca5db60091a8895c6ac9e39d04ae4858a7e",
+   "path": "Zenitude-data-3/Completed_Projects_Data/000_Technical Library7_Zip Jobs/0120_ZAZA Construction, LLC.7z :: 0120_ZAZA Construction, LLC/MT20_076 (Project Snoopy)/19. Downloads/11-23-2020/Files (2)/FRESHPET-STRUCTURAL-20201016.ifc",
+   "size": 23751238,
+   "scope": "same_folder",
+   "db1_path": "Zenitude-data-3/Completed_Projects_Data/000_Technical Library7_Zip Jobs/0120_ZAZA Construction, LLC.7z :: 0120_ZAZA Construction, LLC/MT20_076 (Project Snoopy)/19. Downloads/11-23-2020/Files (2)/Freshpet TS2017i.db1",
+   "input_key": "cad-disk-extract/dataset/main/3d/Disk-1__TEKLA-HYD_JOBS-2015-2016_10.10.40.51_Server_Backup_SDS2-TEAM_SDS-PROJECTS_0120_ZAZA_Construction_LLC.7z/model/ifc/FRESHPET-STRUCTURAL-20201016.ifc"
+  }
+ ],
+ "5b33936fcd1e3efc1c15c2e95872ca9ec08ab9f3141cd16f52474913aad52e20": [
+  {
+   "ifc_id": "373f3f13c51de02936619398d929cdba9ee89b3538672dc637c62ca433047ec0",
+   "path": "Zenitude-data-3/Jobs & Data_Files_Completed_On_Server12/Jobs Files/FTP Data 19-3-2014/FTP Data 21-3-2014-10.10.40.4/FTP2.7z :: FTP2/customer/UPLOADS FROM MOLDTEK/Master Model/MAGNETATION_GRINDING_CIRCUIT_MASTER.zip!/MAGNETATION_GRINDING_CIRCUIT_MASTER/out2.ifc",
+   "size": 51698008,
+   "scope": "same_folder",
+   "db1_path": "Zenitude-data-3/Jobs & Data_Files_Completed_On_Server12/Jobs Files/FTP Data 19-3-2014/FTP Data 21-3-2014-10.10.40.4/FTP2.7z :: FTP2/customer/UPLOADS FROM MOLDTEK/Master Model/MAGNETATION_GRINDING_CIRCUIT_MASTER.zip!/MAGNETATION_GRINDING_CIRCUIT_MASTER/MAGNETATION_GRINDING_CIRCUIT_MASTER.db1",
+   "input_key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_JOBS-2015-2016_10.10.40.61_Data_Backup_Project Models_61.7z/CIVES/ABM/GRINDING_ABM3/out2.ifc"
+  },
+  {
+   "ifc_id": "7d03f53cf43ca9a9f78b611ab35f4bf32a4e604e9f3001e42435ba598dad9aff",
+   "path": "Zenitude-data-3/Jobs & Data_Files_Completed_On_Server12/Jobs Files/FTP Data 19-3-2014/FTP Data 21-3-2014-10.10.40.4/FTP2.7z :: FTP2/customer/UPLOADS FROM MOLDTEK/Master Model/MAGNETATION_GRINDING_CIRCUIT_MASTER.zip!/MAGNETATION_GRINDING_CIRCUIT_MASTER/out1.ifc",
+   "size": 64168774,
+   "scope": "same_folder",
+   "db1_path": "Zenitude-data-3/Jobs & Data_Files_Completed_On_Server12/Jobs Files/FTP Data 19-3-2014/FTP Data 21-3-2014-10.10.40.4/FTP2.7z :: FTP2/customer/UPLOADS FROM MOLDTEK/Master Model/MAGNETATION_GRINDING_CIRCUIT_MASTER.zip!/MAGNETATION_GRINDING_CIRCUIT_MASTER/MAGNETATION_GRINDING_CIRCUIT_MASTER.db1",
+   "input_key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_JOBS-2015-2016_10.10.40.61_Data_Backup_Project Models_61.7z/CIVES/ABM/GRINDING_ABM3/out1.ifc"
+  },
+  {
+   "ifc_id": "b4efa46d5914068e9bef4460e71392e158f4fe8af25cc01b14da632fee471475",
+   "path": "Zenitude-data-3/Jobs & Data_Files_Completed_On_Server12/Jobs Files/FTP Data 19-3-2014/FTP Data 21-3-2014-10.10.40.4/FTP2.7z :: FTP2/customer/UPLOADS FROM MOLDTEK/Master Model/MAGNETATION_GRINDING_CIRCUIT_MASTER.zip!/MAGNETATION_GRINDING_CIRCUIT_MASTER/out.ifc",
+   "size": 10903159,
+   "scope": "same_folder",
+   "db1_path": "Zenitude-data-3/Jobs & Data_Files_Completed_On_Server12/Jobs Files/FTP Data 19-3-2014/FTP Data 21-3-2014-10.10.40.4/FTP2.7z :: FTP2/customer/UPLOADS FROM MOLDTEK/Master Model/MAGNETATION_GRINDING_CIRCUIT_MASTER.zip!/MAGNETATION_GRINDING_CIRCUIT_MASTER/MAGNETATION_GRINDING_CIRCUIT_MASTER.db1",
+   "input_key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_JOBS-2015-2016_10.10.40.61_Data_Backup_Project Models_61.7z/CIVES/ABM/GRINDING_ABM3/out.ifc"
+  }
+ ],
+ "6eabb07e71459be68405dd50bc4bcea1922537007214754889f5ea40628d6740": [
+  {
+   "ifc_id": "2e766624466f2c00449a52eba339ef5dc1b081f45080f399c447856bce606aaa",
+   "path": "Zenitude-data-3/Jobs & Data_Files_Completed_On_Server12/Jobs Files/FTP Backup 2013, 2014 & 2015.7z :: FTP Backup 2013, 2014 & 2015/TO MMW/114 Bahamar/02-14-14/PODIUM ROOF-C.zip!/PODIUM ROOF-C/Baha_Roof_C_7233_Job.ifc",
+   "size": 4156811,
+   "scope": "same_folder",
+   "db1_path": "Zenitude-data-3/Jobs & Data_Files_Completed_On_Server12/Jobs Files/FTP Backup 2013, 2014 & 2015.7z :: FTP Backup 2013, 2014 & 2015/TO MMW/114 Bahamar/02-14-14/PODIUM ROOF-C.zip!/PODIUM ROOF-C/PODIUM ROOF-C.db1",
+   "input_key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_JOBS-2015-2016_10.10.40.57_Data_Backup_E-Drive_MMW BACKUP.7z/MMW BACKUP/PODIUM ROOF C BACKUPS/18TH MAY 13 10.55PM_DON'T DELETE/PODIUM ROOF-C/Baha_Roof_C_7233_Job.ifc"
+  },
+  {
+   "ifc_id": "83134afa6b20900b2f7608f9a1dbf2898a9829c8afdafef11f3178ec448a0f23",
+   "path": "Zenitude-data-3/Jobs & Data_Files_Completed_On_Server12/Jobs Files/FTP Backup 2013, 2014 & 2015.7z :: FTP Backup 2013, 2014 & 2015/TO MMW/114 Bahamar/02-14-14/PODIUM ROOF-C.zip!/PODIUM ROOF-C/out1.ifc",
+   "size": 7779080,
+   "scope": "same_folder",
+   "db1_path": "Zenitude-data-3/Jobs & Data_Files_Completed_On_Server12/Jobs Files/FTP Backup 2013, 2014 & 2015.7z :: FTP Backup 2013, 2014 & 2015/TO MMW/114 Bahamar/02-14-14/PODIUM ROOF-C.zip!/PODIUM ROOF-C/PODIUM ROOF-C.db1",
+   "input_key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_JOBS-2015-2016_10.10.40.57_Data_Backup_E-Drive_MMW BACKUP.7z/MMW BACKUP/PODIUM ROOF C BACKUPS/19TH DEC 13 5.20PM_BEFORE NUMBERING FOR FAB/PODIUM ROOF-C/out1.ifc"
+  },
+  {
+   "ifc_id": "d453e331f82315cde02797c3634da9fd89f3e520c410216b936473ee4e58c4b8",
+   "path": "Zenitude-data-3/Jobs & Data_Files_Completed_On_Server12/Jobs Files/FTP Backup 2013, 2014 & 2015.7z :: FTP Backup 2013, 2014 & 2015/TO MMW/114 Bahamar/02-14-14/PODIUM ROOF-C.zip!/PODIUM ROOF-C/ifc.ifc",
+   "size": 7803322,
+   "scope": "same_folder",
+   "db1_path": "Zenitude-data-3/Jobs & Data_Files_Completed_On_Server12/Jobs Files/FTP Backup 2013, 2014 & 2015.7z :: FTP Backup 2013, 2014 & 2015/TO MMW/114 Bahamar/02-14-14/PODIUM ROOF-C.zip!/PODIUM ROOF-C/PODIUM ROOF-C.db1",
+   "input_key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_JOBS-2015-2016_10.10.40.57_Data_Backup_E-Drive_MMW BACKUP.7z/MMW BACKUP/PODIUM ROOF C BACKUPS/19TH DEC 13 5.20PM_BEFORE NUMBERING FOR FAB/PODIUM ROOF-C/ifc.ifc"
+  },
+  {
+   "ifc_id": "d9ae2e49946a5355f1be031bcf4e8d35d62b585605a50b385ff04d11c7d28475",
+   "path": "Zenitude-data-3/Jobs & Data_Files_Completed_On_Server12/Jobs Files/FTP Backup 2013, 2014 & 2015.7z :: FTP Backup 2013, 2014 & 2015/TO MMW/114 Bahamar/02-14-14/PODIUM ROOF-C.zip!/PODIUM ROOF-C/out.ifc",
+   "size": 7779079,
+   "scope": "same_folder",
+   "db1_path": "Zenitude-data-3/Jobs & Data_Files_Completed_On_Server12/Jobs Files/FTP Backup 2013, 2014 & 2015.7z :: FTP Backup 2013, 2014 & 2015/TO MMW/114 Bahamar/02-14-14/PODIUM ROOF-C.zip!/PODIUM ROOF-C/PODIUM ROOF-C.db1",
+   "input_key": "cad-disk-extract/zentitude-data-4/extracted/TEKLA-HYD_JOBS-2015-2016_10.10.40.57_Data_Backup_E-Drive_MMW BACKUP.7z/MMW BACKUP/PODIUM ROOF C BACKUPS/19TH DEC 13 5.20PM_BEFORE NUMBERING FOR FAB/PODIUM ROOF-C/out.ifc"
+  }
+ ],
+ "7a6a190dfd82031f2ff9724a4e9673ace2eaa15fc442b332381b06f111fdd293": [
+  {
+   "ifc_id": "e5f30a12ecc5f3e59a39262e248e928e19daf6920a90147c30269a70b3418ba8",
+   "path": "Zenitude-data-3/Completed_Projects_Data/000_Technical Library7_Zip Jobs/0120_ZAZA Construction, LLC.7z :: 0120_ZAZA Construction, LLC/MT20_076 (Project Snoopy)/19. Downloads/11-23-2020/Files (1)/Freshpet_RFD_005-Tekla_IFC_Model.ifc",
+   "size": 9630866,
+   "scope": "same_folder",
+   "db1_path": "Zenitude-data-3/Completed_Projects_Data/000_Technical Library7_Zip Jobs/0120_ZAZA Construction, LLC.7z :: 0120_ZAZA Construction, LLC/MT20_076 (Project Snoopy)/19. Downloads/11-23-2020/Files (1)/Freshpet TS2017i.db1",
+   "input_key": "cad-disk-extract/dataset/main/3d/Disk-1__TEKLA-HYD_JOBS-2015-2016_10.10.40.51_Server_Backup_SDS2-TEAM_SDS-PROJECTS_0120_ZAZA_Construction_LLC.7z/model/ifc/Freshpet_RFD_005-Tekla_IFC_Model.ifc"
+  },
+  {
+   "ifc_id": "e75b234aa9802d419cb6149d054b0ca5db60091a8895c6ac9e39d04ae4858a7e",
+   "path": "Zenitude-data-3/Completed_Projects_Data/000_Technical Library7_Zip Jobs/0120_ZAZA Construction, LLC.7z :: 0120_ZAZA Construction, LLC/MT20_076 (Project Snoopy)/19. Downloads/11-23-2020/Files (1)/FRESHPET-STRUCTURAL-20201016.ifc",
+   "size": 23751238,
+   "scope": "same_folder",
+   "db1_path": "Zenitude-data-3/Completed_Projects_Data/000_Technical Library7_Zip Jobs/0120_ZAZA Construction, LLC.7z :: 0120_ZAZA Construction, LLC/MT20_076 (Project Snoopy)/19. Downloads/11-23-2020/Files (1)/Freshpet TS2017i.db1",
+   "input_key": "cad-disk-extract/dataset/main/3d/Disk-1__TEKLA-HYD_JOBS-2015-2016_10.10.40.51_Server_Backup_SDS2-TEAM_SDS-PROJECTS_0120_ZAZA_Construction_LLC.7z/model/ifc/FRESHPET-STRUCTURAL-20201016.ifc"
+  }
+ ]
+}

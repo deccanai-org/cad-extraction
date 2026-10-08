@@ -1,0 +1,615 @@
+diff -ru a/sds2-step-pipeline/decode/brep.py b/sds2-step-pipeline/decode/brep.py
+--- a/sds2-step-pipeline/decode/brep.py	2026-10-01 20:26:17
++++ b/sds2-step-pipeline/decode/brep.py	2026-10-01 21:07:49
+@@ -185,19 +185,74 @@
+         return sh
+ 
+ 
++_CLEAN_LOOPS = False  # set only inside _repaired(): loops_of() then also splits keyholes and drops spikes
++
++
+ def loops_of(f):
+     """A face's entries are one or more loops back to back, each closed by repeating its first vertex
+-    (hollow-section end faces: outer loop, then inner). A face with no repeat is a single loop."""
++    (hollow-section end faces: outer loop, then inner). A face with no repeat is a single loop.
++    In the repair stage (_CLEAN_LOOPS) bridges are read as such:
++      - a return to the loop's first vertex that comes straight back along the loop's first edge (a -> b ... b -> a) is a
++        keyhole bridge, not the end of the loop. 7.6xx HSS end faces are stored as [4, 1, 0, 5, 6, 1, 4, 7, 8, 9]:
++        outer corner 4, bridge to inner corner 1, inner ring 1-0-5-6, bridge back to 4, outer ring 4-7-8-9. Read with
++        the plain rule that was a non-simple loop [4, 1, 0, 5, 6, 1] plus a triangle [7, 8, 9]; 3-6 edges stayed free and
++        the HSS fell back to an extruded profile (data-3 10 World Trade 7.619: 549 HSS placements);
++      - inside a loop, edges stored once in each direction (keyhole bridges, zero-width spikes a -> b -> a) cancel and
++        the remaining edges are chained into the loops they bound (outer ring, inner ring). Built as one polygon the
++        bridge edges stayed unmatched (METHODIST 7.132 HSS / pipe end faces).
++    Not applied in the first passes: after conform() merges coincident vertices some stored faces carry an
++    out-and-back edge that their neighbours need (DSCC 7.312 W10x12, SOCORRO 7.425 HSS5x2x5/16 build only with it)."""
+     out, cur = [], []
+     for i in f:
+-        if cur and i == cur[0] and len(cur) >= 3:
++        if cur and i == cur[0] and len(cur) >= 3 and not (_CLEAN_LOOPS and cur[-1] == cur[1]):
+             out.append(cur); cur = []
+         elif not cur or i != cur[-1]:
+             cur.append(i)
+     if len(cur) >= 3: out.append(cur)
+-    return out
++    if not _CLEAN_LOOPS:
++        return out
++    return [l for l in _cancel_bridges(out) if len(l) >= 3]
+ 
+ 
++def _cancel_bridges(ls):
++    """A face's stored loops -> the loops they bound: edges present once in each direction (keyhole bridges
++    a -> b ... b -> a, zero-width spikes a -> b -> a, and an inner loop running along the outer loop: 7.6xx HSS end
++    faces whose top wall is cut away are stored as the outer ring plus an inner ring sharing the top edge, which after
++    the T-junction split of conform() is a pair of opposite edges - data-3 Kerman 7.619 HSS5x3) cancel; the remaining
++    edges are chained in stored order. Loops without such a pair, or whose remaining edges do not chain into closed
++    loops, are returned as stored."""
++    import collections
++    E = [(l[k], l[(k + 1) % len(l)]) for l in ls for k in range(len(l)) if l[k] != l[(k + 1) % len(l)]]
++    cnt = collections.Counter(E)
++    if not any(cnt[(b, a)] for a, b in cnt):
++        return ls
++    keep = {e: c - min(c, cnt[(e[1], e[0])]) for e, c in cnt.items()}
++    seq = []
++    for e in E:
++        if keep[e] > 0:
++            seq.append(e); keep[e] -= 1
++    if not seq:
++        return []
++    nxt_of = collections.defaultdict(list)
++    for x, (a, _) in enumerate(seq):
++        nxt_of[a].append(x)
++    used = [False] * len(seq); loops = []
++    for s0 in range(len(seq)):
++        if used[s0]:
++            continue
++        lp, e = [], s0
++        while True:
++            used[e] = True; a, b = seq[e]; lp.append(a)
++            if b == seq[s0][0]:
++                break
++            cand = [x for x in nxt_of[b] if not used[x]]
++            if not cand:
++                return ls
++            e = min(cand, key=lambda x: (x - e) % len(seq))      # the edge that follows in stored order
++        loops.append(lp)
++    return loops
++
++
+ def _area(P):
+     c = P.mean(0); return np.linalg.norm(sum(np.cross(P[k] - c, P[(k + 1) % len(P)] - c) for k in range(len(P)))) / 2
+ 
+@@ -292,6 +347,17 @@
+             drop.update((k, seen[key]) if n >= 4 else (k,))
+         else:
+             seen[key] = k
++    # repair stage only: a single-loop face that repeats the outer loop of a ring face on the same plane is a cap over a
++    # hollow end (7.1xx pipe ends stored as ring + full disk + inner disk: their edges had 3 users and the pipe fell back)
++    outer_of = {}
++    for k, f in enumerate(faces if _CLEAN_LOOPS else ()):
++        ls = loops_of(f)
++        if len(ls) > 1 and info[k] is not None:
++            outer_of.setdefault((info[k][0], info[k][1], frozenset(ls[0])), k)
++    for k, f in enumerate(faces if outer_of else ()):
++        ls = loops_of(f)
++        if len(ls) == 1 and info[k] is not None and (info[k][0], info[k][1], frozenset(ls[0])) in outer_of:
++            drop.add(k)
+     for i, a in enumerate(info):
+         if i in drop: continue
+         if a is None: continue
+@@ -302,21 +368,261 @@
+     return [f for k, f in enumerate(faces) if k not in drop]
+ 
+ 
+-def solid(V, faces, M=None, o=None):
+-    """Sew planar polygon faces (world transform o + M.T @ v, inches -> mm) into a solid (a compound of solids for
+-    multi-body pieces), or None. Retries with repair passes: conform() (merge vertices, split T-junctions), then
+-    also drop_covered() (redundant coplanar patches)."""
++SLIVER_W = 3e-3      # in: faces narrower than this (2 x area / perimeter) hanging on free / over-used edges are flaps
++PLANE_TOL = 1e-3     # in: vertex distance from a plane for faces treated as coplanar by merge_coplanar()
++LAST_REPAIR = ""     # set by solid(): which repair pass produced the solid ("" = as stored / conform / drop_covered)
++
++
++def _newell(P):
++    c = P.mean(0)
++    return sum(np.cross(P[k] - c, P[(k + 1) % len(P)] - c) for k in range(len(P))), c
++
++
++def _edge_use(faces):
++    import collections
++    E = collections.Counter()
++    for f in faces:
++        for l in loops_of(f):
++            for a, b in zip(l, l[1:] + l[:1]):
++                if a != b:
++                    E[(min(a, b), max(a, b))] += 1
++    return E
++
++
++def drop_slivers(V, faces, wmax=SLIVER_W):
++    """Remove zero-width flaps: single-loop faces narrower than wmax (2 x area / perimeter) with an edge that is not
++    shared by exactly two faces. P545 7.135 PL3/8x21 1/4: a 0.0009-in wide face hinged on a cope edge gave that edge 3
++    users and left 3 free edges, so the plate fell back to an approximate outline. A flap encloses no volume; the
++    other faces are kept as stored (if they do not close without it, the piece still falls back)."""
++    E = _edge_use(faces)
++    out = []
++    for f in faces:
++        ls = loops_of(f)
++        if len(ls) == 1:
++            l = ls[0]; P = V[l]
++            nv, _ = _newell(P)
++            per = sum(np.linalg.norm(P[(k + 1) % len(P)] - P[k]) for k in range(len(P)))
++            if per > 0 and np.linalg.norm(nv) / per < wmax and \
++                    any(E[(min(a, b), max(a, b))] != 2 for a, b in zip(l, l[1:] + l[:1]) if a != b):
++                continue
++        out.append(f)
++    return out
++
++
++WELD_TOL = 1e-3      # in: = the sewing tolerance; weld() merges vertices closer than this
++
++
++def weld(V, faces, tol=WELD_TOL):
++    """Merge vertices closer than the sewing tolerance (conform() merges at 1e-4 in only). 7.312 DUPONT W8x13: cope
++    corners stored 0.0002-0.0007 in apart left 10 free edges around 5-18 um slivers. No vertex moves by more than tol;
++    faces that collapse are skipped by the face builder."""
++    from scipy.spatial import cKDTree
++    used = sorted({i for f in faces for i in f})
++    if len(used) < 2:
++        return faces
++    par = list(range(len(used)))
++
++    def find(a):
++        while par[a] != a:
++            par[a] = par[par[a]]; a = par[a]
++        return a
++    for i, j in cKDTree(np.asarray(V)[used]).query_pairs(tol):
++        par[find(i)] = find(j)
++    rep = {used[i]: used[find(i)] for i in range(len(used))}
++    if all(rep[i] == i for i in used):
++        return faces
++    return [[rep[i] for i in f] for f in faces]
++
++
++def drop_isolated(faces):
++    """Remove faces that share no edge with any other face (every edge used once): they bound no volume. 8.004 TEMP JOB
++    BPL12GAx60 / 7.425 RH Jacksonville BPL3/16x1 1/2: a bent plate's mid-surface marker faces carry kind 7 except one
++    stored with kind 0, which was built as a real face, left 4 free edges and sent 312 + 202 placements to the
++    approximate builder. The stored boundary faces are unchanged (if they do not close, the piece still falls back)."""
++    E = _edge_use(faces)
++    return [f for f in faces
++            if not all(E[(min(a, b), max(a, b))] == 1 for l in loops_of(f) for a, b in zip(l, l[1:] + l[:1]) if a != b)]
++
++
++def merge_coplanar(V, faces, tol=PLANE_TOL):
++    """Overlapping coplanar faces of the same orientation -> one face, their union. 7.1xx-7.4xx cope / notch end faces
++    are stored as overlapping patches (P545 7.135 PL1/2x13 1/2: side x = 7 as y -13.5..-7.5 and y -11.5..-7; C6x8.2
++    cope end as two patches), whose overlap edges then have 3 users. The union covers exactly the points of the stored
++    patches: its outline vertices are the patches' own vertices, plus any crossing point of two patch edges (appended
++    to V). Multi-loop faces are left as they are. Returns (V, faces); faces unchanged if nothing overlaps."""
++    from shapely.geometry import Polygon, MultiPolygon
++    from shapely.geometry.polygon import orient
++    from shapely.ops import unary_union
++    info = []
++    for f in faces:
++        ls = loops_of(f)
++        if len(ls) != 1:
++            info.append(None); continue
++        nv, c = _newell(V[ls[0]])
++        a2 = np.linalg.norm(nv)
++        info.append((ls[0], nv / a2, c, a2 / 2, nv) if a2 > 1e-12 else None)
++    idx = [k for k in range(len(faces)) if info[k] is not None]
++    if len(idx) < 2:
++        return V, faces
++    N = np.array([info[k][1] for k in idx]); C = np.array([info[k][2] for k in idx])
++    taken = np.zeros(len(idx), bool); clusters = []
++    for oi in np.argsort([-info[k][3] for k in idx]):
++        if taken[oi]:
++            continue
++        k = idx[oi]; n = info[k][1]; d = float(n @ info[k][2])
++        taken[oi] = True; mem = [k]
++        # facing the same way and centred on k's plane; then every vertex on it (within tol)
++        for cj in np.where(~taken & (N @ n > 0.5) & (np.abs(C @ n - d) <= tol))[0]:
++            lj, _, _, _, nvj = info[idx[cj]]
++            if np.abs(V[lj] @ n - d).max() <= tol and nvj @ n > 0.5 * np.linalg.norm(nvj):
++                mem.append(idx[cj]); taken[cj] = True
++        if len(mem) > 1:
++            clusters.append((n, d, mem))
++    if not clusters:
++        return V, faces
++    V = np.asarray(V, float); extra = []; drop = set(); new = []
++    for n, d, mem in clusters:
++        u = np.cross(n, [1, 0, 0] if abs(n[0]) < 0.9 else [0, 1, 0]); u /= np.linalg.norm(u); w = np.cross(n, u)
++        polys = {}
++        for k in mem:
++            try:
++                pg = Polygon([(p @ u, p @ w) for p in V[info[k][0]]]).buffer(0)
++            except Exception:
++                pg = None
++            if pg is not None and not pg.is_empty and pg.area > 0:
++                polys[k] = pg
++        ks = list(polys)
++        adj = {k: set() for k in ks}
++        for x in range(len(ks)):
++            for y in range(x + 1, len(ks)):
++                if polys[ks[x]].intersection(polys[ks[y]]).area > 1e-6:
++                    adj[ks[x]].add(ks[y]); adj[ks[y]].add(ks[x])
++        seen = set()
++        for k0 in ks:
++            if k0 in seen or not adj[k0]:
++                continue
++            comp, st = [], [k0]
++            while st:
++                x = st.pop()
++                if x in seen: continue
++                seen.add(x); comp.append(x); st.extend(adj[x])
++            U = unary_union([polys[k] for k in comp])
++            parts = list(U.geoms) if isinstance(U, MultiPolygon) else [U]
++            src = sorted({i for k in comp for i in info[k][0]})
++            S2 = np.array([(V[i] @ u, V[i] @ w) for i in src])
++            faces_c = []
++            ok = True
++            for pg in parts:
++                if pg.geom_type != "Polygon" or pg.is_empty:
++                    ok = False; break
++                pg = orient(pg, 1.0)                     # exterior counter-clockwise in (u, w): normal +n
++                loops = []
++                for ring in [pg.exterior] + list(pg.interiors):
++                    lp = []
++                    for x, y in list(ring.coords)[:-1]:
++                        dd = np.abs(S2 - (x, y)).max(1)
++                        i = int(dd.argmin())
++                        if dd[i] <= tol:
++                            vi = src[i]
++                        else:                            # crossing point of two patch edges, on the plane
++                            vi = len(V) + len(extra); extra.append(n * d + x * u + y * w)
++                        if not lp or lp[-1] != vi:
++                            lp.append(vi)
++                    if len(lp) > 1 and lp[0] == lp[-1]:
++                        lp.pop()
++                    if len(lp) >= 3:
++                        loops.append(lp)
++                if not loops:
++                    ok = False; break
++                f = []
++                for lp in loops:
++                    f += lp + [lp[0]]
++                faces_c.append(f if len(loops) > 1 else loops[0])
++            if ok and faces_c:
++                drop.update(comp); new += faces_c
++    if not drop:
++        return V, faces
++    if extra:
++        V = np.vstack([V, np.array(extra)])
++    return V, [f for k, f in enumerate(faces) if k not in drop] + new
++
++
++def _passes(V, faces, M=None, o=None):
++    """The v5.4 sequence: faces as stored, conform() (merge vertices, split T-junctions), drop_covered()."""
+     sh = _solid_parts(V, faces, M, o)
+     if sh is None:
+-        try:
+-            F2 = conform(V, faces)
+-            sh = _solid_parts(V, F2, M, o)
+-            if sh is None:
+-                F3 = drop_covered(V, F2)
+-                if len(F3) < len(F2):
+-                    sh = _solid_parts(V, conform(V, F3), M, o)
+-        except Exception:
+-            sh = None
++        F2 = conform(V, faces)
++        sh = _solid_parts(V, F2, M, o)
++        if sh is None:
++            F3 = drop_covered(V, F2)
++            if len(F3) < len(F2):
++                sh = _solid_parts(V, conform(V, F3), M, o)
++    return sh
++
++
++def _repaired(V, faces, M=None, o=None):
++    """Repair stage of solid(), run only when the v5.4 passes leave the faces open (pieces that built in v5.4 are built
++    exactly as before). Uses only the faces the piece file stores:
++      1. keyhole / spike loops split, ring caps dropped (draft v5.5 loops_of / drop_covered), v5.4 passes again;
++      2. faces sharing no edge dropped (drop_isolated), zero-width flaps dropped (drop_slivers) and overlapping
++         coplanar patches merged (merge_coplanar), with the loops split as in 1, then as stored;
++      3. as 2 after welding vertices closer than the sewing tolerance (weld, 0.001 in).
++    Returns a closed valid solid or None; LAST_REPAIR names what was needed."""
++    global _CLEAN_LOOPS, LAST_REPAIR
++
++    def split_any(F):                                    # does the keyhole / spike split change any loop of F?
++        global _CLEAN_LOOPS
++        _CLEAN_LOOPS = False; raw = [loops_of(f) for f in F]
++        _CLEAN_LOOPS = True
++        return any(loops_of(f) != r for f, r in zip(F, raw))
++    try:
++        ks = split_any(faces) or split_any(conform(V, faces))
++        _CLEAN_LOOPS = True
++        sh = _passes(V, faces, M, o)
++        if sh is not None:
++            LAST_REPAIR = "keyhole / spike loops split" if ks else "ring caps over hollow ends dropped"
++            return sh
++        for clean, welded in [(c, w) for w in (False, True) for c in ((True, False) if ks else (False,))]:
++            _CLEAN_LOOPS = clean
++            F1 = weld(V, faces) if welded else faces
++            if welded and F1 is faces:
++                continue
++            F2 = conform(V, F1)
++            F3 = drop_isolated(F2)
++            F4 = drop_slivers(V, F3)
++            V5, F5 = merge_coplanar(V, F4)
++            if len(F4) == len(F2) and F5 is F4 and not welded:
++                continue
++            sh = _passes(V5, F5, M, o)
++            if sh is not None:
++                LAST_REPAIR = " + ".join(x for x, y in (("vertices within 0.001 in welded", welded),
++                                                         ("keyhole / spike loops split", clean),
++                                                         ("isolated faces dropped", len(F3) < len(F2)),
++                                                         ("zero-width faces dropped", len(F4) < len(F3)),
++                                                         ("overlapping coplanar faces merged", F5 is not F4)) if y)
++                return sh
++        return None
++    finally:
++        _CLEAN_LOOPS = False
++
++
++REPAIR_MAX_FACES = 5000   # larger face sets skip the repair stage (time bound)
++
++
++def solid(V, faces, M=None, o=None, repair=False):
++    """Sew planar polygon faces (world transform o + M.T @ v, inches -> mm) into a solid (a compound of solids for
++    multi-body pieces), or None. Retries with repair passes: conform() (merge vertices, split T-junctions), then
++    also drop_covered() (redundant coplanar patches); with repair=True (steel pieces, to_step2.brep_placed) then the
++    _repaired() stage (keyhole / spike loops, isolated faces, zero-width flaps, overlapping coplanar patches).
++    brep.LAST_REPAIR names the repair-stage fix used ("" if none)."""
++    global LAST_REPAIR
++    LAST_REPAIR = ""
++    try:
++        sh = _passes(V, faces, M, o)
++        if sh is None and repair and len(faces) <= REPAIR_MAX_FACES:
++            sh = _repaired(V, faces, M, o)
++    except Exception:
++        sh = None
+     return sh
+ 
+ 
+diff -ru a/sds2-step-pipeline/decode/to_step2.py b/sds2-step-pipeline/decode/to_step2.py
+--- a/sds2-step-pipeline/decode/to_step2.py	2026-10-01 20:26:17
++++ b/sds2-step-pipeline/decode/to_step2.py	2026-10-01 21:07:49
+@@ -481,6 +481,10 @@
+ HOLES_CUT = collections.Counter()
+ BREP_WHY = {}         # (job, piece) -> why the exact B-rep was not used (stand-in reason)
+ HOLES_NOT_CUT = set() # (job, piece) whose decoded holes the boolean could not cut
++BREP_REPAIR = {}      # (job, piece) -> repair-stage fix that closed the stored faces (brep.LAST_REPAIR)
++BREP_WEIGHT_NOTE = {} # (job, piece) -> exact B-rep kept although SDS2's piece weight cannot validate it (identity used)
++BREP_NEG_WEIGHT = {}  # (job, piece) -> B-rep weight / |SDS2 weight| for weights stored with a negative sign
++SHAPES = {}           # section index -> job_mtrl Shape (set by convert(); identity check of rolled B-reps)
+ 
+ 
+ def _extents_match(V, faces, p, tol=0.02):
+@@ -493,6 +497,98 @@
+     return all(abs(e - d) <= tol * d + 1e-3 for e, d in zip(ext, dims))
+ 
+ 
++def _stock_identity(V, faces, p, sh):
++    """Identity check for a closed, valid B-rep that SDS2's piece weight cannot validate: no weight, or a weight that
++    disagrees with the piece table's own size (SUSQUEHANNOCK 7.613: W18x35 x 244.7 in recorded at 285.6 lb = 0.4x its
++    35 lb/ft, PL1/2x8 1/4 x 10 at half its L x W x T; PSU BNR 8.004 HSS12x2x1/4 at 0.1x). Returns why it is accepted,
++    or "" (the B-rep is then not used, as before):
++      plate : thinnest extent = the piece-table thickness T (2 %), and its outline (minimum rotated rectangle) within
++              the table's L x W stock (2 % + 0.05 in) when both are given;
++      rolled: cross-section (local y / z extents) within the section's d x bf from job_mtrl (2 % + 0.05 in) and at least
++              60 % of its larger side, length within the table length, and the solid 0.6-1.6x the section's own lb/ft
++              over the B-rep's length (a hollow section closed as a bar would be 3-5x), or its mean cross-section
++              0.85-1.1x the area from the section's own job_mtrl dimensions (_section_area);
++      tube  : HSS / pipe / TS of any path (curved members): wall 2 x volume / surface 0.85-1.1x the section's wall,
++              thinnest extent a side of the section, length (volume / section area) between chord and half circle.
++    The approximate builders would extrude the same face vertices, so they cannot do better on such pieces."""
++    used = sorted({i for f in faces for i in f}); P = np.asarray(V)[used]
++    ext = np.ptp(P, 0)
++    from OCP.GProp import GProp_GProps
++    from OCP.BRepGProp import BRepGProp
++    g = GProp_GProps(); BRepGProp.VolumeProperties_s(sh, g); wt = abs(g.Mass()) / MM ** 3 * 0.2836
++    k = kind(p)
++    if k == "plate" and 0 < p["T"] < 100:
++        t = int(np.argmin(ext))
++        if abs(ext[t] - p["T"]) > 0.02 * p["T"] + 0.005:
++            return ""
++        dims = sorted(x for x in (p["L"], p["W"]) if 0 < x < 1e5)
++        if len(dims) == 2:
++            from shapely.geometry import MultiPoint
++            a, b = [i for i in range(3) if i != t]
++            with np.errstate(all="ignore"):
++                cs = np.array(MultiPoint(np.unique(np.round(P[:, [a, b]], 6), axis=0)).minimum_rotated_rectangle.exterior.coords)
++            e = sorted(np.linalg.norm(cs[1:3] - cs[0:2], axis=1))
++            if not all(x <= d * 1.02 + 0.05 for x, d in zip(e, dims)):
++                return ""
++        return f"flat plate of the piece-table thickness {p['T']:g} in" + (" within its L x W stock" if len(dims) == 2 else "")
++    s_ = SHAPES.get(p.get("sec"))
++    if k == "rolled" and s_ is not None and s_.d > 0 and s_.bf > 0:
++        cy, cz = sorted(ext[1:]); sd = sorted((s_.d, s_.bf))
++        straight = (cy <= sd[0] * 1.02 + 0.05 and cz <= sd[1] * 1.02 + 0.05 and cz >= 0.6 * sd[1]
++                    and not (0 < p["L"] < 1e5 and ext[0] > p["L"] * 1.02 + 0.05))
++        vol = abs(g.Mass()) / MM ** 3
++        A = _section_area(s_)
++        if straight:
++            nom = s_.weight * ext[0] / 12
++            if nom > 0 and 0.6 <= wt / nom <= 1.6:
++                return f"{s_.name} section envelope, {wt / nom:.2f}x its {s_.weight:g} lb/ft over the B-rep length"
++            # the section's lb/ft can itself be wrong (data-3 19-519 CMS 7.331: custom HSS1.5x13GA entered at
++            # 3.0 lb/ft, 1.35 lb/ft by its own d = 1.5 in, t = 0.0897 in; SDS2 weighs the pieces 3.0 lb/ft x length,
++            # so every B-rep was 0.45x "too light"): mean cross-section of the solid against the area from the
++            # record's own dimensions
++            a_ = vol / ext[0] if ext[0] > 0 else 0
++            if A > 0 and 0.85 <= a_ / A <= 1.1:
++                return (f"{s_.name} section envelope, mean section {a_:.3f} in2 = {a_ / A:.2f}x the {A:.3f} in2 of its "
++                        f"job_mtrl dimensions (its {s_.weight:g} lb/ft disagrees)")
++        if s_.family in ("HSS", "PIPE", "TS") and A > 0 and s_.tw > 0:
++            # hollow section of any shape of path (curved HSS: data-3 IFC_MHP / Revit_MHP 7.708 HSS6x4x1/2 rolled to a
++            # 144-in radius, 2.58x a recorded weight that is neither its length nor its arc): the solid is a tube of
++            # the section's own wall (2 x volume / surface = wall thickness, 0.85-1.1x; a hollow section closed as a
++            # bar would be 4-5x), its thinnest extent is a side of the section, and its length (volume / section
++            # area) lies between its chord and a half circle over it
++            g2 = GProp_GProps(); BRepGProp.SurfaceProperties_s(sh, g2); sa = abs(g2.Mass()) / MM ** 2
++            te = 2 * vol / sa if sa > 0 else 0
++            e3 = sorted(ext); Lv = vol / A
++            if (0.85 <= te / s_.tw <= 1.1 and sd[0] * 0.98 - 0.05 <= e3[0] <= sd[1] * 1.02 + 0.05
++                    and 0.85 * (e3[2] - sd[1]) <= Lv <= 1.15 * np.pi / 2 * e3[2]):
++                return (f"{s_.name} tube: wall {te:.3f} in (2 x volume / surface) = {te / s_.tw:.2f}x its {s_.tw:g} in, "
++                        f"thinnest extent {e3[0]:.3f} in, {Lv:.1f} in of section over a {e3[2]:.1f}-in chord")
++        return ""
++    return ""
++
++
++def _section_area(s_):
++    """Cross-section area (in2) from a job_mtrl record's own dimensions, or 0 when the family has no simple formula:
++    round HSS / pipe pi (d - t) t, rectangular HSS / TS 2 t (d + bf - 2 t) (sharp corners), I / channel
++    2 bf tf + (d - 2 tf) tw, tee bf tf + (d - tf) tw, angle t (d + bf - t). Fillets / corner radii are within the
++    identity window of _stock_identity."""
++    d, bf, tf, tw = s_.d, s_.bf, s_.tf, s_.tw
++    fam = s_.family
++    if not (d > 0 and bf > 0 and tw > 0) or not np.isfinite([d, bf, tf, tw]).all():
++        return 0.0
++    if fam == "PIPE" or (fam == "HSS" and s_.name.count("x") == 1 and abs(d - bf) < 1e-6):
++        return float(np.pi * (d - tw) * tw) if 2 * tw < d else 0.0
++    if fam in ("HSS", "TS") and 2 * tw < min(d, bf):
++        return float(2 * tw * (d + bf - 2 * tw))
++    if fam in ("W", "S", "M", "HP", "C", "MC") and 0 < 2 * tf < d:
++        return float(2 * bf * tf + (d - 2 * tf) * tw)
++    if fam in ("WT", "ST", "MT") and 0 < tf < d:
++        return float(bf * tf + (d - tf) * tw)
++    if fam == "L" and tw < min(d, bf):
++        return float(tw * (d + bf - tw))
++    return 0.0
++
++
+ def brep_placed(job, sid, p, M, o):
+     """Piece's exact solid (built once per piece, cached) placed at o + M.T @ local, or None -> approximate builders.
+     Accepted only when its volume is within 0.6-1.6x of SDS2's recorded weight (guards against misparsed layouts)."""
+@@ -511,17 +607,31 @@
+             r = brep.parse(data)
+             BREP_WHY[key] = "piece file has no readable face topology"
+             if r is not None:
+-                sh = brep.solid(*r)
++                sh = brep.solid(*r, repair=True)
+                 if sh is None:
+                     BREP_WHY[key] = "piece faces do not sew into a closed solid"
+-            if sh is not None and not 0 < p["wt"] < 1e9:
++                elif getattr(brep, "LAST_REPAIR", ""):
++                    BREP_REPAIR[key] = brep.LAST_REPAIR
++            bad = ""
++            if sh is not None and -1e9 < p["wt"] < 0:
++                # some 7.1xx-8.0xx piece tables store the weight with a negative sign (data-3 CLAYTON 7.245 W24x55 /
++                # W16x26, DUPONT 7.312 C10x15.3 stair pieces, IFC_19189 7.708 MC12x10.6): its magnitude is SDS2's weight
++                # of the stored B-rep (1.000x on 47 of the 47 such pieces that close, 14 jobs; the others are tiny
++                # constants such as -0.189 that this test rejects). Validate against |weight|, else as before.
++                g = GProp_GProps(); BRepGProp.VolumeProperties_s(sh, g)
++                rn = abs(g.Mass()) / MM ** 3 * 0.2836 / -p["wt"]
++                if 0.98 <= rn <= 1.02:
++                    BREP_NEG_WEIGHT[key] = round(rn, 4)
++            if sh is not None and key in BREP_NEG_WEIGHT:
++                pass
++            elif sh is not None and not 0 < p["wt"] < 1e9:
+                 # no usable SDS2 weight (v4 refused the exact B-rep outright): accept it when its extents are the
+                 # piece table's L x W x T, or for a rolled piece when its longest extent is the table length
+                 used = sorted({i for f in r[1] for i in f}); ext = np.ptp(r[0][used], 0)
+                 okx = _extents_match(r[0], r[1], p) or (p.get("sec", 0) > 0 and p.get("L", 0) > 0
+                                                         and abs(ext.max() - p["L"]) <= 0.02 * p["L"] + 0.05)
+                 if not okx:
+-                    sh = None; BREP_WHY[key] = "no SDS2 weight and B-rep extents differ from the piece table"
++                    bad = "no SDS2 weight and B-rep extents differ from the piece table"
+             elif sh is not None:
+                 g = GProp_GProps(); BRepGProp.VolumeProperties_s(sh, g)
+                 r_ = abs(g.Mass()) / MM ** 3 * 0.2836 / p["wt"]
+@@ -532,8 +642,16 @@
+                 elif r_ <= 0.6 and _extents_match(r[0], r[1], p):
+                     pass          # cut plate weighed as its rectangular stock (SUNY triangular stiffeners: 0.495)
+                 elif not 0.6 < r_ < 1.6:
+-                    sh = None
+-                    BREP_WHY[key] = f"piece B-rep volume {r_:.2f}x SDS2's weight (outside 0.6-1.6)"
++                    bad = f"piece B-rep volume {r_:.2f}x SDS2's weight (outside 0.6-1.6)"
++            if bad:
++                # the weight / size test guards against misparsed layouts. A closed valid B-rep that fails it is kept
++                # when it is this piece by an identity check (section envelope + lb/ft or section area, or plate
++                # thickness within its stock). Otherwise it falls back as before.
++                ok_ = _stock_identity(r[0], r[1], p, sh)
++                if ok_:
++                    BREP_WEIGHT_NOTE[key] = f"{ok_} ({bad})"
++                else:
++                    sh = None; BREP_WHY[key] = bad
+             if sh is not None and USE_HOLES:
+                 H = brep.holes(data)
+                 HOLES[key] = H
+@@ -1003,23 +1121,49 @@
+ 
+ def reset():
+     """Clear per-job caches before converting again in the same process (read-back repair pass)."""
+-    for c in (_BREP, HOLES, BREP_WHY, _REF):
++    for c in (_BREP, HOLES, BREP_WHY, _REF, BREP_REPAIR, BREP_WEIGHT_NOTE, BREP_NEG_WEIGHT):
+         c.clear()
+     REF_OPEN.clear(); REF_FACES.clear(); DERIVED_INFO.clear()
+     CONCRETE.clear(); HOLES_NOT_CUT.clear(); HOLES_CUT.clear(); del INVALID_DROPPED[:]
+ 
+ 
++def _repair_summary(job, rows, pieces):
++    """Manifest section for v5.5 exact pieces that needed more than the v5.4 passes (none is a stand-in: the geometry
++    is SDS2's stored faces)."""
++    inst = collections.Counter(r["piece"] for r in rows if r.get("builder") == "exact_brep")
++    rep = {s: w for (j, s), w in BREP_REPAIR.items() if j == job and inst[s]}
++    wn = {s: w for (j, s), w in BREP_WEIGHT_NOTE.items() if j == job and inst[s]}
++    ng = {s: w for (j, s), w in BREP_NEG_WEIGHT.items() if j == job and inst[s]}
++    return dict(
++        note="exact pieces from SDS2's own stored faces that needed a repair-stage fix to close (zero-width flaps "
++             "dropped, overlapping coplanar patches merged, keyhole / spike loops split, ring caps dropped; no face "
++             "added), and exact B-reps kept although SDS2's piece weight / size disagrees with them (accepted on an "
++             "identity check or as reference-model geometry)",
++        repaired=dict(pieces=len(rep), instances=sum(inst[s] for s in rep),
++                      by_fix=dict(collections.Counter(rep.values())),
++                      parts=[dict(piece=s, name=pieces[s]["name"], fix=w, instances=inst[s])
++                             for s, w in sorted(rep.items())][:2000]),
++        weight_unvalidated=dict(pieces=len(wn), instances=sum(inst[s] for s in wn),
++                                parts=[dict(piece=s, name=pieces[s]["name"], why=w, instances=inst[s])
++                                       for s, w in sorted(wn.items())][:2000]),
++        negative_weight=dict(note="SDS2 weight stored with a negative sign; the B-rep weighs |weight| (0.98-1.02x)",
++                             pieces=len(ng), instances=sum(inst[s] for s in ng),
++                             parts=[dict(piece=s, name=pieces[s]["name"], ratio=w, instances=inst[s])
++                                    for s, w in sorted(ng.items())][:2000]))
++
++
+ def convert(job, out, shared=True):
+     """shared=True: exact pieces are written once and placed per instance (STEP assembly); False: one copy each.
+     v5: every part that is not SDS2's exact piece geometry is written with an `[approx: ...]` name suffix and listed
+     in <out>_manifest.json (real type + reason); joists without pieces become open-web stand-ins; phantom material
+     blocks are ignored; a piece placed identically by two non-twin members is written once (FIX item 12)."""
+-    global SHARED
++    global SHARED, SHAPES
+     SHARED = shared
+     import joist as J
+     import manifest as MF
+     from instances import piece_vertices
+     pieces = read_pieces(job); shapes = read_shapes(job)
++    SHAPES = shapes
+     mems, _ = read_members(job)
+     mtype = {m.id: m.type for m in mems}
+     mem_by_id = {m.id: m for m in mems}
+@@ -1237,6 +1381,12 @@
+                         hw.append((o + M.T @ h["c"], -(M.T @ h["axis"]), h["depth"], h["bolt"], len(rows), h["dia"], h["slot"], sid))
+                     stats[k2] = stats.get(k2, 0) + 1; stats["exact"] += 1
+                     stats["exact_brep"] = stats.get("exact_brep", 0) + 1
++                    if (job, sid) in BREP_REPAIR:
++                        stats["exact_brep_repaired"] = stats.get("exact_brep_repaired", 0) + 1
++                    if (job, sid) in BREP_WEIGHT_NOTE:
++                        stats["exact_brep_weight_unvalidated"] = stats.get("exact_brep_weight_unvalidated", 0) + 1
++                    if (job, sid) in BREP_NEG_WEIGHT:
++                        stats["exact_brep_negative_weight"] = stats.get("exact_brep_negative_weight", 0) + 1
+                     if not conc: track(sid, sh, "exact")
+                     add_row(dict(member=n, member_type=mtype[n], piece=sid, inst=inst_no,
+                                  name=p["name"], kind=k2, builder="exact_brep",
+@@ -1613,6 +1763,8 @@
+                               holes_not_cut=dict(by_reason=dict(DERIVED_INFO.get("not_cut", {})),
+                                                  examples=DERIVED_INFO.get("not_cut_examples", []))),
+                    write_ok=ok, piece_dev=big)
++    if BREP_REPAIR or BREP_WEIGHT_NOTE or BREP_NEG_WEIGHT:
++        man["brep_repairs"] = _repair_summary(job, rows, pieces)
+     MF.write(man, base + "_manifest.json")
+     print(f"  manifest: class {man['class']} corpus {man['corpus']} ({'; '.join(man['class_reasons'][:4])})")
+     return ok, stats

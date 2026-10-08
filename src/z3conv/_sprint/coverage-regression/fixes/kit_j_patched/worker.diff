@@ -1,0 +1,13 @@
+--- kit_j/worker.py	2026-10-01 16:45:21
++++ fixes/kit_j_patched/worker.py	2026-10-01 16:58:41
+@@ -338,7 +338,9 @@
+ def process(fl, job, d):
+     prev = fl.getj(f'{fl.ST}/results/{job["id"]}.json')
+     new = _process_inner(fl, job, d)
+-    if not prev or prev.get('code') == CODE or prev.get('status') != 'ok':
++    # [coverage-regression fix] compare with every ok stored result, also one already stamped with this CODE (a kept earlier
++    # STEP carries the running code; a duplicate same-code run must not overwrite it with its own failure)
++    if not prev or prev.get('status') != 'ok':
+         return new
+     if est(new) <= est(prev):
+         new['alternatives'] = {prev.get('code'): {'status': prev.get('status'), 'step_key': (prev.get('step') or {}).get('key'), 'est': list(est(prev))}}

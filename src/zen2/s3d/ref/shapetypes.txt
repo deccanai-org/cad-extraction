@@ -1,0 +1,28 @@
+ShapeType|n
+---------|-
+RectangularSolid 001|61898
+RtCircularCylinder 001|58700
+SemiEllipticalHead 001|3860
+RtCircularCone 001|2896
+TruncatedRectangularPrism 001|2222
+EccentricRectangularPrism 001|756
+CircularTori 001|701
+TriangularSolid 001|652
+OctogonalSolid 001|475
+RectangularTorus 001|261
+EccentricCone 001|188
+EccentricPyramid 001|92
+TransitionElement 001|41
+Sphere 001|39
+Platform1 001|35
+PrismaticShape 001|14
+HexagonalSolid 001|7
+Platform2 001|6
+EccentricTransitionElement 001|6
+DatumShape 001|2
+eq_with_shapes
+--------------
+32346
+eq_with_nozzles|nozzles
+---------------|-------
+4368|37914

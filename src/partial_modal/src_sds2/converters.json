@@ -1,0 +1,26 @@
+{
+ "note": "SDS/2 -> STEP converter builds (sds2-step-pipeline) used by the partial tier (projects_p1.json, 4,379 sds2 rows: converter.version = the label below). Label -> zip + sha256 as the conversion fleet's own result JSONs name them (_state/conv/sds2/results/<id>.json 'converter' field; checked 2026-10-07 for one model per label, ids in 'evidence'). Zips are copied byte-exact from /Users/dhiren/Downloads/Deccan/z3conv/sds2_v5/ into converters/ (SHA256SUMS). v5.5.6 and v5.5.6.1 are two fleet labels of the same zip; v5.5.11 is the rc4 zip. Python 3.12 + the converters' pinned pip set (env/conv_requirements.txt).",
+ "labels": {
+  "v4":          {"zip": "sds2-step-pipeline-v4-candidate.zip", "sha256": "c5b65d271d3a6c69853d745d705cbb92b431e8891686068e7a555e720b3c15f0", "partial_rows": 645, "evidence": ["85cd2a7cb680b42eaa056bca", "r2 run sds2-step-r2-20260929-01 (NOTES_sds2_head.md, 11 models byte-identical)"]},
+  "v5":          {"zip": "sds2-step-pipeline-v5.zip", "sha256": "592c1d4f3186cf67bb81d28233a8e3e6ec99f82ec630bc133d41ecc7adfdb32c", "partial_rows": 3, "evidence": ["1f207d149cc8eecf6a8bbc3f"]},
+  "v5.1":        {"zip": "sds2-step-pipeline-v5.1.zip", "sha256": "8f74f4498956daa546d136529f4ff39b24d9ab001525cce625c1c2e4cee34280", "partial_rows": 84, "evidence": ["models_pinned.json (perfect tier, byte-identical)"]},
+  "v5.2":        {"zip": "sds2-step-pipeline-v5.2.zip", "sha256": "f2d05d38a8d04c21ee38e8d9c1d1fa211274a768aa321b93a892d81263c4d40c", "partial_rows": 14, "evidence": ["1645e51cae7ee5c27e3f84a4"]},
+  "v5.3":        {"zip": "sds2-step-pipeline-v5.3.zip", "sha256": "81ca1f95dbb3bb2e115574045e4cd0e20a8ff067242655f1d1c7eb59ca8d9822", "partial_rows": 41, "evidence": ["models_pinned.json (perfect tier, byte-identical)"]},
+  "v5.4":        {"zip": "sds2-step-pipeline-v5.4.zip", "sha256": "bf4a07fc3878ba29311b5c3d78c00519366ac361fd39cfbb2ee930b0dfb2f906", "partial_rows": 29, "evidence": ["models_pinned.json (perfect tier, byte-identical)"]},
+  "v5.4.1":      {"zip": "sds2-step-pipeline-v5.4.1.zip", "sha256": "0eccc2fbd55c16044c6508e95e79d7e9dd52d02f3b34d701c1ae8b3cd45dab86", "partial_rows": 113, "evidence": ["models_pinned.json (perfect tier, byte-identical)"]},
+  "v5.5.0":      {"zip": "sds2-step-pipeline-v5.5.0.zip", "sha256": "85e1158742607ad8bcc0da5f06c283ac5154f1c98ed70e015339678c46798ebf", "partial_rows": 118, "evidence": ["models_pinned.json (perfect tier, byte-identical)"]},
+  "v5.5.3":      {"zip": "sds2-step-pipeline-v5.5.3.zip", "sha256": "706e128964f7c6f7c11b175771c6a8d4a07be49c936506813a872a4bf35cc0a9", "partial_rows": 274, "evidence": ["models_pinned.json (perfect tier, byte-identical)", "dcc9a4376d362e458ff80a53 (sample s5, byte-identical)"]},
+  "v5.5.4":      {"zip": "sds2-step-pipeline-v5.5.4.zip", "sha256": "8e82ce7b23f36f1384fbd558aeb5ecada0d7717a347932abcc803af74fe9d52b", "partial_rows": 17, "evidence": ["23226689f7b854046b464df6"]},
+  "v5.5.5":      {"zip": "sds2-step-pipeline-v5.5.5.zip", "sha256": "2a6e5b681db1d34d658ae060e6e84ac5e8ac107c75befa933781fef12b029c1b", "partial_rows": 29, "evidence": ["1e862a1c790c6474dbf9aff4"]},
+  "v5.5.6":      {"zip": "sds2-step-pipeline-v5.5.6.zip", "sha256": "ef1952bfd99927cfa382a450fdafda7c0a36a24327c3dfa9710d547a67a83500", "partial_rows": 16, "evidence": ["0cff81dce5ed88360777b4e3"]},
+  "v5.5.6.1":    {"zip": "sds2-step-pipeline-v5.5.6.zip", "sha256": "ef1952bfd99927cfa382a450fdafda7c0a36a24327c3dfa9710d547a67a83500", "partial_rows": 324, "evidence": ["61228baef13886b1d84f1d44", "models_pinned.json (perfect tier, byte-identical)"]},
+  "v5.5.7":      {"zip": "sds2-step-pipeline-v5.5.7.zip", "sha256": "707ada97e8428c67564e169f061756fb0d3fdc43763fc45bcf12ed79d06a57f1", "partial_rows": 390, "evidence": ["models_pinned.json (perfect tier, byte-identical)"]},
+  "v5.5.8":      {"zip": "sds2-step-pipeline-v5.5.8.zip", "sha256": "7fab6793a71257a62398f8e89a7a10bb82af5bd61072c8d6d9e2dbbe711f5dc7", "partial_rows": 97, "evidence": ["00bdc439dcb265742339cf62"]},
+  "v5.5.9":      {"zip": "sds2-step-pipeline-v5.5.9.zip", "sha256": "f5dd227e61e676ca477fae31ee5d5b6467d701f1c576cba3fd37d03660bef658", "partial_rows": 428, "evidence": ["models_pinned.json (perfect tier, byte-identical)"]},
+  "v5.5.10-rc":  {"zip": "sds2-step-pipeline-v5.5.10-rc.zip", "sha256": "2572b1166ae0b019176992db1b56a670df5ebec4b0e6615c22230052f19bedbc", "partial_rows": 1, "evidence": ["8d3cfac8177298d9668c4d18"]},
+  "v5.5.11-rc3": {"zip": "sds2-step-pipeline-v5.5.11-rc3.zip", "sha256": "8d74a0ed6a951c3b60440bafe63183fb34e5be7b1d6fabad39de81abe1c6b10d", "partial_rows": 8, "evidence": ["03393338dc50fbc9a4fac87d", "models_pinned.json (perfect tier, byte-identical)"]},
+  "v5.5.11":     {"zip": "sds2-step-pipeline-v5.5.11-rc4.zip", "sha256": "b7cab51182265690377fd4df052103e7ea188429fae726ddcf55e95cd45252c5", "partial_rows": 1748, "evidence": ["e88b0cb6056f8157c6937e44", "404960f502a99b7c643d3efb", "models_pinned.json (perfect tier, byte-identical)"]}
+ },
+ "r2_run_prefix": "cad-disk-extract/sds2-step-r2-20260929-01/",
+ "r2_run_label": "v4"
+}

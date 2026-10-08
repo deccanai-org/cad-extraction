@@ -1,0 +1,12 @@
+--- a/sds2/worker.py	2026-10-01 15:39:22
++++ b/sds2/worker.py	2026-10-01 15:39:22
+@@ -151,7 +151,8 @@
+                     standins[('member_as_envelope', f'{mt or "member"} without piece data')] += 1
+             elif b in ('plate_fallback', 'profile_fallback'):
+                 standins[(f'{b}_approximate_no_holes', f'{kind} {nm.split()[0] if nm else ""}'.strip())] += 1
+-            elif kind == 'concrete':
++            elif kind == 'concrete' and b != 'exact_brep':
++                # exact_brep concrete = SDS2's own piece B-rep weighed as concrete (not a prism)
+                 standins[('concrete_as_prism', 'concrete footing/slab')] += 1
+             if kind in ('plate', 'rolled') and GRATING.match(nm):
+                 standins[('grating_as_solid_panel', 'bar grating ' + nm[:20])] += 1

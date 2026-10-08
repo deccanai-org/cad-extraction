@@ -1,0 +1,9 @@
+# Python 3.12; versions the pipeline was validated with
+cadquery-ocp==8.0.1.0.0
+numpy==2.5.3
+scipy==1.18.1
+shapely==2.1.2
+matplotlib==3.11.2
+# batch runs from S3 archives only
+boto3==1.43.100
+py7zr==1.1.3

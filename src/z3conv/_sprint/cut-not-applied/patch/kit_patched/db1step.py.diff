@@ -1,0 +1,117 @@
+--- /Users/dhiren/Downloads/Deccan/z3conv/db1/db1step.py	2026-10-01 18:14:27
++++ kit_patched/db1step.py	2026-10-01 18:49:00
+@@ -159,7 +159,12 @@
+     n2 = re.sub(r'^F\.\s*B\.?\s*', 'FB', n)
+     if n2 != n:
+         m = P_PLATE2.match(n2)
+-        if m: return 'RECT', [float(m.group(1)), float(m.group(2))], 'parametric_flat_bar'
++        if m:
++            # cut-not-applied P8: 'F.B 75X10' is width x thickness; the thickness lies across the part (XDim, local z) like 'PL t*b'.
++            # Proof: Tekla's net weight of the e151a8fa ladder stringers F.B 75X10 (48.0 net / 48.7 gross kg) = 29 D21 rung holes
++            # through 10 mm; with [75, 10] the same holes ran through 75 mm (45.3 kg); toe plates F.B 75X6 lay flat.
++            a_, b_ = float(m.group(1)), float(m.group(2))
++            return 'RECT', [min(a_, b_), max(a_, b_)], 'parametric_flat_bar'
+     m = P_CHAN_BR.match(n)
+     if m:
+         h, b, tw, tf = (float(x) for x in m.groups())
+@@ -215,6 +220,21 @@
+         return all(abs(x) <= 50000 for x in _nums(v))
+     except Exception:
+         return False
++
++
++# cut-not-applied P6: cut parts (ANTIMATERIAL / BlOpCl CUTPART) made by polygon cuts can carry their depth as a bare number instead of
++# 'BL<t>' (component-made cuts '111.600', '469.000'; 8.53 '914.4' / '1016' / '1219.2' through 18-20 in pipes). The outline is the
++# part's own contour record and a contour part's profile is its thickness, so they are built exactly like 'BL<t>' cuts.
++P_CUTDEPTH = re.compile(r'^\d+(?:\.\d+)?$')
++PART_CUTS_ON = os.environ.get('DB1_PART_CUTS', '1') == '1'     # cut-not-applied P7, diagnostics only: '0' writes every part uncut
++
++
++def zero_section(prof):
++    """cut-not-applied P10: a cut part whose own profile has a zero dimension ('PL0*177.8' on the 7.24 models) subtracts nothing:
++    counted as cut_body_zero_thickness, not as an unapplied cut"""
++    n = (prof or '').strip().upper()
++    m = P_PLATE2.match(n) or P_PLATE1.match(n) or P_ROUND.match(n)
++    return bool(m) and any(float(g) == 0.0 for g in m.groups() if g is not None)
+ 
+ 
+ def section_for(name, cat):
+@@ -624,6 +644,8 @@
+     def body(m):
+         """-> (frame, profile_entity, depth, kind_label) or (None, reason)"""
+         kind, v, how = section_for(m['prof'], cat)
++        if m.get('cut') and P_CUTDEPTH.match((m.get('prof') or '').strip()):
++            kind, v, how = None, 'contour_plate', None          # cut-not-applied P6: polygon cut part named by its bare depth
+         if kind is None and v == 'contour_plate':
+             poly = db.polygon(lay, m)
+             thick = float(re.findall(r'[\d.]+', m['prof'])[0])
+@@ -687,7 +709,7 @@
+         if m.get('cut'):
+             b = body(m)
+             if b[0] is not None: cut_body[m['seq']] = b[:3]
+-            else: why['cut_body_unbuilt'] += 1
++            else: why['cut_body_zero_thickness' if zero_section(m.get('prof')) else 'cut_body_unbuilt'] += 1   # cut-not-applied P10
+     applied = 0
+     plist = []          # z3: one record per decoded part: [seq, profile, category, status, how/reason, GlobalId, n_cuts]
+     # pass 1: bodies of the written parts (frame, depth, section region) for bolt placement and holes
+@@ -723,7 +745,7 @@
+         if b[0] is None:
+             why[b[1]] += 1; unres[m['prof'] or '<none>'] += 1
+             plist.append([m.get('seq'), m.get('prof'), part_cat(m.get('prof'), b[1]), 'skipped', b[1], None, 0]); continue
+-        cuts = [cut_body[c] for c in links.get(m['seq'], []) if c in cut_body]
++        cuts = [cut_body[c] for c in links.get(m['seq'], []) if c in cut_body] if PART_CUTS_ON else []
+         applied += len(cuts)
+         nh = 0
+         for bb, z0, z1 in HP.get(m['seq'], []):
+@@ -798,6 +820,11 @@
+                                 writer='db1bolts2 v2 (7.5x-9.x records) + db1bolts.bolt_group')
+     st['parts_list'] = plist
+     st['cuts_applied'] = applied
++    # cut-not-applied P11: every cut part accounted for (the grade flag cuts_not_applied only sees unbuilt bodies)
++    _wr = {p[0] for p in plist if p[3] == 'written'}; _lk = {c for v in links.values() for c in v}
++    st['cut_stats'] = dict(cut_parts=sum(1 for m in M if m.get('cut')), bodies_built=len(cut_body), applied=applied,
++                           unlinked=sum(1 for m in M if m.get('cut') and m['seq'] not in _lk),
++                           links_to_unwritten_parts=sum(1 for p, cs in links.items() if p not in _wr for c in cs if c in cut_body))
+     # sanity: in real steel models most horizontal beams stand web-vertical; a wrongly
+     # decoded orientation table would scatter these
+     hz = [m for m in M if not m.get('cut') and abs(m['x'][2]) < 0.1 and m['L'] > 500]
+@@ -858,6 +885,8 @@
+     def body(m):
+         if m.get('bolt'): return (None, 'bolt_group_excluded')
+         kind, v, how = section_for(m['prof'], cat)
++        if m.get('cut') and P_CUTDEPTH.match((m.get('prof') or '').strip()):
++            kind, v, how = None, 'contour_plate', None          # cut-not-applied P6: polygon cut part named by its bare depth
+         if kind is None and v == 'contour_plate':
+             thick = float(re.findall(r'[\d.]+', m['prof'])[0])
+             if not 0 < thick <= 50000: return (None, 'implausible_profile')
+@@ -895,7 +924,7 @@
+         if m.get('cut'):
+             b = body(m)
+             if b[0] is not None: cut_body[m['pid']] = b[:3]
+-            else: why['cut_body_unbuilt'] += 1
++            else: why['cut_body_zero_thickness' if zero_section(m.get('prof')) else 'cut_body_unbuilt'] += 1   # cut-not-applied P10
+     applied = 0
+     plist = []
+     # pass 1: bodies of every written part (cached) and, with bolts on, which parts each bolt passes through + the plies' extent
+@@ -984,7 +1013,7 @@
+         if b[0] is None:
+             why[b[1]] += 1; unres[m['prof'] or '<none>'] += 1
+             plist.append([m.get('pid'), m.get('prof'), part_cat(m.get('prof'), b[1]), 'skipped', b[1], None, 0]); continue
+-        cuts = [cut_body[c] for c in cut_rel.get(m['pid'], []) if c in cut_body]
++        cuts = [cut_body[c] for c in cut_rel.get(m['pid'], []) if c in cut_body] if PART_CUTS_ON else []
+         applied += len(cuts)
+         for i in part_bolts.get(id(m), []):
+             if (id(m), i) in inside:
+@@ -1012,6 +1041,12 @@
+         plist.append([m.get('pid'), m.get('prof'), cat_, 'written', b[3], e.GlobalId, len(cuts)])
+         src[b[3]] += 1
+     st['parts_list'] = plist
++    # cut-not-applied P11: every cut part accounted for (the grade flag cuts_not_applied only sees unbuilt bodies)
++    _wr = {p[0] for p in plist if p[3] == 'written'}; _lk = {c for v in cut_rel.values() for c in v}
++    st['cut_stats'] = dict(cut_parts=sum(1 for m in M if m.get('cut')), bodies_built=len(cut_body), applied=applied,
++                           unlinked=sum(1 for m in M if m.get('cut') and m['pid'] not in _lk),
++                           links_to_unwritten_parts=sum(1 for p, cs in cut_rel.items() if p not in _wr for c in cs if c in cut_body),
++                           operative_parts=sum(1 for m in M if m.get('cut') and m.get('mat') != 'ANTIMATERIAL'))
+     hz = [m for m in M if not m.get('cut') and abs(m['x'][2]) < 0.1 and m['L'] > 500]
+     yv = sum(1 for m in hz if abs(m['y'][2]) > 0.996) / len(hz) if hz else None
+     hzI = [m for m in hz if m.get('prof') and section_for(m['prof'], cat)[0] == 'I']

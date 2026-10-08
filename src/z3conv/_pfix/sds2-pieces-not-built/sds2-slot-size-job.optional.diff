@@ -1,0 +1,41 @@
+--- a/decode/piece_table.py	2026-10-01 17:37:33
++++ b/decode/piece_table.py	2026-10-01 16:44:53
+@@ -34,9 +34,37 @@
+     return max(LAYOUTS, key=filled)
+ 
+ 
++def slot_size_job(job, b):
++    """slot_size() scores the first 200 slots only; jobs whose pieces sit at high ids (or whose first slots are
++    stale) can get the wrong record layout, giving piece names like '@' / 'Y' / '!' and hundreds of thousands of
++    phantom placements (data-3 GF 7.331, test 8.004: 'no_usable_special_geometry'). Score every layout on the slots of
++    the job's own piece files instead (names must look like SDS2 piece names), preferring slot sizes that divide the
++    table; keep slot_size()'s answer unless another layout is clearly better."""
++    try:
++        ids = sorted(int(n) for n in os.listdir(os.path.join(job, "subm")) if n.isdigit())
++    except OSError:
++        ids = []
++    first = slot_size(b)
++    if len(ids) < 20:
++        return first
++    step = max(1, len(ids) // 400)
++    sample = ids[::step]
++    rx = re.compile(rb"(PL|FL|W|HSS|L|C|MC|WT|S|HP|PIPE|BPL|BLT|RB|RD|WS|HS|SQ|BAR|TS|GT|GR|ST|MT|M|Conc|[0-9]+[KL])[0-9A-Za-z /.x-]*\x00")
++
++    def score(key):
++        S, o = LAYOUTS[key]["slot"], LAYOUTS[key]["name"]
++        ok = sum(bool(rx.match(b[k * S + o:k * S + o + 0x30])) for k in sample if (k + 1) * S <= len(b))
++        return ok
++    sc = {k: score(k) for k in LAYOUTS}
++    best = max(sc, key=lambda k: (sc[k], (len(b) - 256) % LAYOUTS[k]["slot"] == 0))
++    if sc[best] >= max(10, 2 * sc[first]) and sc[best] >= 0.5 * len(sample):
++        return best
++    return first
++
++
+ def read_pieces(job):
+     b = open(os.path.join(job, "subm", "subm_idx"), "rb").read()
+-    key = slot_size(b); Lo = LAYOUTS[key]; SLOT = Lo["slot"]
++    key = slot_size_job(job, b); Lo = LAYOUTS[key]; SLOT = Lo["slot"]
+     fs = struct.calcsize(Lo["f"]); rd = lambda s, o: struct.unpack(Lo["f"], s[o:o + fs])[0]
+     sf, so = Lo["sec"]
+     out = {}

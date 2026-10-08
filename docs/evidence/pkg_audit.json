@@ -1,0 +1,503 @@
+{
+ "at": "2026-10-06T20:41:57Z",
+ "roots": {
+  "main/3d": {
+   "projects": 1286,
+   "errors": {},
+   "top_files": {
+    "manifest.jsonl,project.json": 1286
+   },
+   "top_dirs": {
+    "drawings,fab,model": 717,
+    "drawings,model": 405,
+    "drawings,fab,model,tables": 128,
+    "drawings,model,tables": 17,
+    "model": 16,
+    "fab,model": 2,
+    "model,tables": 1
+   },
+   "pj_keys": {
+    "bytes": 1286,
+    "domain": 1286,
+    "drawing_formats": 1286,
+    "duplicates_collapsed": 1286,
+    "excluded_non_asset_files": 1286,
+    "files": 1286,
+    "id": 1286,
+    "missing": 1286,
+    "model_formats": 1286,
+    "model_step_by_source": 1286,
+    "model_step_schemas": 1286,
+    "packaged_at": 1286,
+    "packaged_by": 1286,
+    "route": 1286,
+    "skipped_files": 1286,
+    "slots": 1286,
+    "source": 1286,
+    "status": 1286,
+    "units": 1286,
+    "warnings": 1286,
+    "year": 1286,
+    "conversions": 1221,
+    "removed_empty_step": 43,
+    "step_duplicates_collapsed": 25
+   },
+   "pj_vals": {
+    "route=3d": 1286,
+    "status=complete": 1286
+   },
+   "rowkeys": {
+    "bytes|etag|modality|parser_ok|project_id|relpath|role|sha256|source_key|supersedes|units": 23375163,
+    "bytes|converted_from|converter|etag|modality|parser_ok|project_id|relpath|role|sha256|source_key|step_source|supersedes|units": 25197,
+    "bytes|etag|modality|parser_ok|project_id|relpath|role|sha256|source_key|step_source|supersedes|units": 9031,
+    "also_converted_from|bytes|converted_from|converter|etag|modality|parser_ok|project_id|relpath|role|sha256|source_key|step_source|supersedes|units": 27,
+    "bytes|converted_from|converter|etag|modality|parser_ok|project_id|refreshed_at|relpath|role|sha256|source_key|step_source|supersedes|units": 15
+   },
+   "chans": {
+    "drawings/dg": 14260229,
+    "drawings/pdf": 4523034,
+    "fab/nc1": 1699003,
+    "drawings/dpm": 1471452,
+    "drawings/dxf": 1037625,
+    "drawings/dwg": 304890,
+    "model/step": 34270,
+    "tables/bom": 32767,
+    "model/db1": 28508,
+    "model/ifc": 15249,
+    "model/sat": 1506,
+    "tables/abm": 830,
+    "model/stl": 64,
+    "tables/drawing_index": 6
+   },
+   "chan_projects": {
+    "model/step": 1286,
+    "drawings/pdf": 1046,
+    "model/db1": 972,
+    "drawings/dg": 922,
+    "drawings/dxf": 871,
+    "drawings/dwg": 867,
+    "model/ifc": 849,
+    "fab/nc1": 847,
+    "drawings/dpm": 553,
+    "tables/bom": 146,
+    "tables/abm": 60,
+    "model/stl": 6,
+    "tables/drawing_index": 2,
+    "model/sat": 1
+   },
+   "depth": {
+    "3": 23409433
+   },
+   "bad_paths": [],
+   "rows": 23409433,
+   "hex6": 2469454,
+   "nosha": 23409433,
+   "step_class": {
+    "None": 34270
+   },
+   "partial_kind": {},
+   "pid_len_max": 200,
+   "addons": 0,
+   "example_pids": [
+    "Disk-1__TEKLA-HYD_JOBS-2015-2016_10.10.40.19_D_Drive_Backup_QA_Team_Project_Models_32-20014_Florence_ES_Replacement_ABM_06-18-2020_.zip-703527ec2ba9",
+    "Disk-1__TEKLA-HYD_JOBS-2015-2016_10.10.40.19_D_Drive_Backup_QA_Team_Project_Models_32-20014_Florence_ES_Replacement_ABM_06-18-2020_.zip",
+    "Disk-1__TEKLA-HYD_JOBS-2015-2016_10.10.40.19_D_Drive_Backup_QA_Team_Project_Models_32-20015_Heritage_ES_Replacement_ABM_06-17-2020_.7z-29fdb15aa89d"
+   ],
+   "distinct_sha": 0,
+   "sha_in_2plus_projects": 0
+  },
+  "main/2d": {
+   "projects": 1190,
+   "errors": {
+    "no_manifest:NoSuchKey": 5
+   },
+   "top_files": {
+    "manifest.jsonl,project.json": 1185
+   },
+   "top_dirs": {
+    "drawings": 840,
+    "drawings,fab": 288,
+    "drawings,fab,model": 16,
+    "drawings,model": 15,
+    "tables": 9,
+    "model": 9,
+    "fab": 5,
+    "drawings,fab,model,tables": 2,
+    "drawings,model,tables": 1
+   },
+   "pj_keys": {
+    "bytes": 1185,
+    "domain": 1185,
+    "drawing_formats": 1185,
+    "duplicates_collapsed": 1185,
+    "excluded_non_asset_files": 1185,
+    "files": 1185,
+    "id": 1185,
+    "missing": 1185,
+    "model_formats": 1185,
+    "model_step_schemas": 1185,
+    "packaged_at": 1185,
+    "packaged_by": 1185,
+    "route": 1185,
+    "skipped_files": 1185,
+    "slots": 1185,
+    "source": 1185,
+    "status": 1185,
+    "units": 1185,
+    "warnings": 1185,
+    "year": 1185
+   },
+   "pj_vals": {
+    "route=2d": 1185,
+    "status=complete": 1185
+   },
+   "rowkeys": {
+    "bytes|etag|modality|parser_ok|project_id|relpath|role|sha256|source_key|supersedes|units": 2662333
+   },
+   "chans": {
+    "drawings/pdf": 1577347,
+    "drawings/dxf": 582312,
+    "fab/nc1": 279105,
+    "drawings/dwg": 130178,
+    "drawings/dg": 89532,
+    "drawings/dpm": 3267,
+    "tables/bom": 441,
+    "model/db1": 125,
+    "tables/abm": 14,
+    "model/stl": 12
+   },
+   "chan_projects": {
+    "drawings/pdf": 1102,
+    "drawings/dxf": 345,
+    "fab/nc1": 311,
+    "drawings/dwg": 277,
+    "model/db1": 42,
+    "drawings/dg": 32,
+    "tables/bom": 12,
+    "drawings/dpm": 5,
+    "tables/abm": 4,
+    "model/stl": 1
+   },
+   "depth": {
+    "3": 2662333
+   },
+   "bad_paths": [],
+   "rows": 2662333,
+   "hex6": 855490,
+   "nosha": 2662333,
+   "step_class": {},
+   "partial_kind": {},
+   "pid_len_max": 200,
+   "addons": 0,
+   "example_pids": [
+    "Disk-1__CES_PEMB_2017_Accessible_Buildings_Co_Marcel_Town_Center.7z-fb5608d0cd5d",
+    "Disk-1__CES_PEMB_2017_Strong_Structural_Steel_1_1616-17_Texas_DPS.7z-55d703fa5419",
+    "Disk-1__CES_PEMB_2017_Strong_Structural_Steel_1_1616-17_Texas_DPS.7z"
+   ],
+   "distinct_sha": 0,
+   "sha_in_2plus_projects": 0
+  },
+  "packages/3d": {
+   "projects": 779,
+   "errors": {},
+   "top_files": {
+    "manifest.jsonl,project.json": 779
+   },
+   "top_dirs": {
+    "drawings,fab,model,tables": 635,
+    "drawings,model,tables": 85,
+    "model": 43,
+    "drawings,model": 12,
+    "model,tables": 3,
+    "drawings,fab,model": 1
+   },
+   "pj_keys": {
+    "bytes": 779,
+    "conversions": 779,
+    "disk": 779,
+    "domain": 779,
+    "drawing_formats": 779,
+    "duplicates_collapsed": 779,
+    "excluded_non_asset_files": 779,
+    "files": 779,
+    "id": 779,
+    "index_ref": 779,
+    "missing": 779,
+    "model_formats": 779,
+    "model_step_by_source": 779,
+    "model_step_schemas": 779,
+    "native_steps_not_graded": 779,
+    "native_steps_not_graded_count": 779,
+    "packaged_at": 779,
+    "packaged_by": 779,
+    "packager": 779,
+    "pii": 779,
+    "policy": 779,
+    "route": 779,
+    "sha256": 779,
+    "skipped_files": 779,
+    "slots": 779,
+    "source": 779,
+    "source_archive": 779,
+    "source_kind": 779,
+    "status": 779,
+    "steps_not_shipped": 779,
+    "steps_not_shipped_count": 779,
+    "units": 779,
+    "unresolved_files": 779,
+    "unresolved_files_count": 779,
+    "warnings": 779,
+    "year": 779,
+    "zero_byte_files": 779,
+    "also_in_archives": 737,
+    "models_also_elsewhere": 737
+   },
+   "pj_vals": {
+    "route=3d": 779,
+    "status=complete": 772,
+    "packager=pkg-2026-10-02g": 656,
+    "packager=pkg-2026-10-02d": 57,
+    "packager=pkg-2026-10-02b": 42,
+    "packager=pkg-2026-10-02f": 24,
+    "status=partial": 7
+   },
+   "rowkeys": {
+    "bytes|etag|modality|parser_ok|pii|pii_redacted|project_id|relpath|resolved_by|role|sha256|source_bucket|source_key|source_path|supersedes|units": 20145956,
+    "bytes|class|converted_from|converter|etag|etag_source|grader|modality|model_id|parser_ok|pii|pii_redacted|placed_at|project_id|relpath|role|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units": 12114,
+    "bytes|component_library|etag|modality|parser_ok|pii|pii_redacted|project_id|relpath|resolved_by|role|sha256|source_bucket|source_key|source_path|supersedes|units": 10950,
+    "bytes|class|converted_from|converter|etag|etag_source|grader|modality|model_id|parser_ok|pii|pii_redacted|placed_at|project_id|refreshed_at|relpath|role|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units": 280,
+    "bytes|class|converted_from|converter|etag|etag_source|grader|modality|model_id|parser_ok|pii|pii_redacted|placed_at|project_id|refreshed_at|relpath|role|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units|verify_codes|verify_evidence|verify_verdict": 129,
+    "bytes|class|converted_from|converter|etag|etag_source|grader|modality|model_id|parser_ok|pii|pii_redacted|placed_at|project_id|relpath|role|sds2_primary|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units|verify_codes|verify_evidence|verify_verdict": 84,
+    "bytes|etag|fpc|job|jsetup_sha256|members|members_bytes|members_count|members_digest|members_list_key|members_missing|members_missing_count|modality|parser_ok|pii|pii_redacted|project_id|relpath|role|sha256|source_key|source_path|supersedes|units|zip_store": 73,
+    "also_converted_from|also_model_ids|also_models|bytes|class|converted_from|converter|etag|etag_source|grader|modality|model_id|parser_ok|pii|pii_redacted|placed_at|project_id|relpath|role|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units": 73,
+    "bytes|class|converted_from|converter|etag|etag_source|grader|modality|model_id|parser_ok|pii|pii_redacted|placed_at|project_id|relpath|role|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units|verify_codes|verify_evidence|verify_verdict": 45,
+    "bytes|etag|fpc|job|jsetup_sha256|members_bytes|members_count|members_digest|members_list_key|members_missing|members_missing_count|modality|parser_ok|pii|pii_redacted|project_id|relpath|role|sha256|source_key|source_path|supersedes|units|zip_store": 26,
+    "bytes|class|converted_from|converter|etag|etag_source|grader|modality|model_id|older_revision_of|parser_ok|pii|pii_redacted|placed_at|project_id|relpath|role|sds2_primary|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units|verify_codes|verify_evidence|verify_verdict": 11,
+    "bytes|class|converted_from|converter|etag|etag_source|grader|modality|model_id|parser_ok|pii|pii_redacted|placed_at|project_id|refreshed_at|relpath|role|sds2_primary|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units|verify_codes|verify_evidence|verify_verdict": 2
+   },
+   "chans": {
+    "drawings/dg": 11582300,
+    "drawings/pdf": 4269673,
+    "fab/nc1": 1573639,
+    "drawings/dpm": 1488430,
+    "drawings/dxf": 705230,
+    "drawings/dwg": 253504,
+    "tables/bom": 155359,
+    "tables/kiss": 45186,
+    "model/ifc": 26132,
+    "model/db1": 24986,
+    "tables/abm": 20745,
+    "model/step": 12738,
+    "model/db2": 11663,
+    "model/sds2": 99,
+    "tables/drawing_index": 31,
+    "model/stl": 28
+   },
+   "chan_projects": {
+    "model/step": 779,
+    "drawings/pdf": 713,
+    "model/ifc": 708,
+    "tables/bom": 700,
+    "drawings/dxf": 642,
+    "fab/nc1": 636,
+    "tables/kiss": 616,
+    "drawings/dwg": 551,
+    "tables/abm": 525,
+    "model/db1": 473,
+    "model/db2": 466,
+    "drawings/dg": 446,
+    "drawings/dpm": 351,
+    "model/sds2": 67,
+    "tables/drawing_index": 11,
+    "model/stl": 3
+   },
+   "depth": {
+    "3": 20169743
+   },
+   "bad_paths": [],
+   "rows": 20169743,
+   "hex6": 2161067,
+   "nosha": 0,
+   "step_class": {
+    "1": 12738
+   },
+   "partial_kind": {},
+   "pid_len_max": 181,
+   "addons": 0,
+   "example_pids": [
+    "Zenitude-data-3__Completed_Jobs_Data_SDS_Jobs_2017.22_STEWART AMOS STEEL_SAI TEST JOB.7z",
+    "Zenitude-data-3__Completed_Jobs_Data_SDS_Jobs_2018.08_G & P_IFC_MHP_JOB.7z",
+    "Zenitude-data-3__Completed_Jobs_Data_SDS_Jobs_2018.08_G & P_Revit_MHP_JOB.7z"
+   ],
+   "distinct_sha": 15507077,
+   "sha_in_2plus_projects": 3423475
+  },
+  "packages/3d_partial": {
+   "projects": 2418,
+   "errors": {},
+   "top_files": {
+    "manifest.jsonl,project.json": 2418
+   },
+   "top_dirs": {
+    "model": 1462,
+    "drawings,fab,model,tables": 401,
+    "drawings,model,tables": 290,
+    "drawings,model": 187,
+    "model,tables": 73,
+    "drawings,fab,model": 5
+   },
+   "pj_keys": {
+    "addon_of": 2418,
+    "also_in_archives": 2418,
+    "bytes": 2418,
+    "conversions": 2418,
+    "disk": 2418,
+    "domain": 2418,
+    "drawing_formats": 2418,
+    "duplicates_collapsed": 2418,
+    "excluded_non_asset_files": 2418,
+    "files": 2418,
+    "id": 2418,
+    "index_ref": 2418,
+    "missing": 2418,
+    "model_formats": 2418,
+    "model_step_by_source": 2418,
+    "model_step_schemas": 2418,
+    "models_also_elsewhere": 2418,
+    "native_steps_not_graded": 2418,
+    "native_steps_not_graded_count": 2418,
+    "packaged_at": 2418,
+    "packaged_by": 2418,
+    "packager": 2418,
+    "partial_steps": 2418,
+    "perfect_package": 2418,
+    "pii": 2418,
+    "policy": 2418,
+    "route": 2418,
+    "sha256": 2418,
+    "skipped_files": 2418,
+    "slots": 2418,
+    "source": 2418,
+    "source_archive": 2418,
+    "source_kind": 2418,
+    "sources": 2418,
+    "status": 2418,
+    "steps_not_shipped": 2418,
+    "steps_not_shipped_count": 2418,
+    "tier": 2418,
+    "units": 2418,
+    "unresolved_files": 2418,
+    "unresolved_files_count": 2418,
+    "warnings": 2418,
+    "year": 2418,
+    "zero_byte_files": 2418
+   },
+   "pj_vals": {
+    "route=3d_partial": 2418,
+    "tier=partial": 2418,
+    "packager=pkg-2026-10-02g": 2418,
+    "status=complete": 2250,
+    "status=partial": 168
+   },
+   "rowkeys": {
+    "bytes|etag|modality|parser_ok|pii|pii_redacted|project_id|relpath|resolved_by|role|sha256|source_bucket|source_key|source_path|supersedes|units": 6444645,
+    "bytes|class|converted_from|converted_from_package|converter|etag|etag_source|grader|modality|model_id|parser_ok|partial|pii|pii_redacted|placed_at|project_id|relpath|role|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units|verify_codes|verify_evidence|verify_verdict": 10066,
+    "bytes|class|converted_from|converted_from_package|converter|etag|etag_source|grader|modality|model_id|parser_ok|partial|pii|pii_redacted|placed_at|project_id|relpath|role|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units": 7905,
+    "bytes|etag|fpc|job|jsetup_sha256|members_bytes|members_count|members_digest|members_list_key|members_missing|members_missing_count|modality|parser_ok|pii|pii_redacted|project_id|relpath|role|sha256|source_key|source_path|supersedes|units|zip_store": 4229,
+    "bytes|component_library|etag|modality|parser_ok|pii|pii_redacted|project_id|relpath|resolved_by|role|sha256|source_bucket|source_key|source_path|supersedes|units": 2606,
+    "bytes|class|converted_from|converter|etag|etag_source|grader|modality|model_id|older_revision_of|parser_ok|partial|pii|pii_redacted|placed_at|project_id|relpath|role|sds2_primary|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units": 2369,
+    "bytes|class|converted_from|converter|etag|etag_source|grader|modality|model_id|parser_ok|partial|pii|pii_redacted|placed_at|project_id|relpath|role|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units|verify_codes|verify_evidence|verify_verdict": 2359,
+    "bytes|class|converted_from|converter|etag|etag_source|grader|modality|model_id|parser_ok|partial|pii|pii_redacted|placed_at|project_id|relpath|role|sds2_primary|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units": 1713,
+    "bytes|class|converted_from|converted_from_package|converter|etag|etag_source|grader|modality|model_id|parser_ok|partial|pii|pii_redacted|placed_at|project_id|relpath|role|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units|verify_codes|verify_verdict": 1031,
+    "bytes|class|converted_from|converter|etag|etag_source|grader|modality|model_id|parser_ok|partial|pii|pii_redacted|placed_at|project_id|relpath|role|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units": 554,
+    "bytes|class|converted_from|converter|etag|etag_source|grader|modality|model_id|parser_ok|partial|pii|pii_redacted|placed_at|project_id|relpath|role|sds2_primary|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units|verify_codes|verify_evidence|verify_verdict": 278,
+    "bytes|class|converted_from|converted_from_package|converter|etag|etag_source|grader|modality|model_id|parser_ok|partial|pii|pii_redacted|placed_at|project_id|refreshed_at|relpath|role|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units|verify_codes|verify_evidence|verify_verdict": 182,
+    "bytes|etag|fpc|job|jsetup_sha256|members|members_bytes|members_count|members_digest|members_list_key|members_missing|members_missing_count|modality|parser_ok|pii|pii_redacted|project_id|relpath|role|sha256|source_key|source_path|supersedes|units|zip_store": 150,
+    "bytes|class|converted_from|converter|etag|etag_source|grader|modality|model_id|parser_ok|partial|pii|pii_redacted|placed_at|project_id|relpath|role|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units|verify_codes|verify_verdict": 147,
+    "bytes|class|converted_from|converted_from_package|converter|etag|etag_source|grader|modality|model_id|parser_ok|partial|pii|pii_redacted|placed_at|project_id|refreshed_at|relpath|role|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units|verify_codes|verify_verdict": 50,
+    "bytes|class|converted_from|converter|etag|etag_source|grader|modality|model_id|parser_ok|partial|pii|pii_redacted|placed_at|project_id|refreshed_at|relpath|role|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units|verify_codes|verify_evidence|verify_verdict": 40,
+    "bytes|class|converted_from|converted_from_package|converter|etag|etag_source|grader|modality|model_id|parser_ok|partial|pii|pii_redacted|placed_at|project_id|refreshed_at|relpath|role|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units": 15,
+    "bytes|class|converted_from|converter|etag|etag_source|grader|modality|model_id|older_revision_of|parser_ok|partial|pii|pii_redacted|placed_at|project_id|relpath|role|sds2_primary|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units|verify_codes|verify_evidence|verify_verdict": 9,
+    "bytes|class|converted_from|converter|etag|etag_source|grader|modality|model_id|parser_ok|partial|pii|pii_redacted|placed_at|project_id|relpath|role|sds2_primary|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units|verify_codes|verify_verdict": 5,
+    "bytes|class|converted_from|converter|etag|etag_source|grader|modality|model_id|parser_ok|partial|pii|pii_redacted|placed_at|project_id|refreshed_at|relpath|role|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units|verify_codes|verify_verdict": 5,
+    "also_converted_from|also_model_ids|also_models|bytes|class|converted_from|converted_from_package|converter|etag|etag_source|grader|modality|model_id|parser_ok|partial|pii|pii_redacted|placed_at|project_id|relpath|role|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units": 4,
+    "bytes|class|converted_from|converter|etag|etag_source|grader|modality|model_id|older_revision_of|parser_ok|partial|pii|pii_redacted|placed_at|project_id|refreshed_at|relpath|role|sds2_primary|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units": 3,
+    "bytes|class|converted_from|converter|etag|etag_source|grader|modality|model_id|older_revision_of|parser_ok|partial|pii|pii_redacted|placed_at|project_id|relpath|role|sds2_primary|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units|verify_codes|verify_evidence|verify_held|verify_verdict": 2,
+    "also_converted_from|also_model_ids|also_models|bytes|class|converted_from|converter|etag|etag_source|grader|modality|model_id|parser_ok|partial|pii|pii_redacted|placed_at|project_id|relpath|role|sha256|source_bucket|source_key|source_paths_in_project|step_key|step_source|supersedes|units": 1
+   },
+   "chans": {
+    "drawings/dg": 3136136,
+    "drawings/pdf": 1790167,
+    "fab/nc1": 469888,
+    "drawings/dpm": 446306,
+    "drawings/dxf": 364321,
+    "drawings/dwg": 138136,
+    "tables/bom": 72144,
+    "model/step": 26738,
+    "tables/kiss": 14487,
+    "model/db1": 5931,
+    "tables/abm": 4620,
+    "model/sds2": 4379,
+    "model/db2": 3235,
+    "model/ifc": 1815,
+    "model/stl": 48,
+    "tables/drawing_index": 17
+   },
+   "chan_projects": {
+    "model/step": 2418,
+    "model/sds2": 1322,
+    "drawings/pdf": 806,
+    "tables/bom": 707,
+    "model/db1": 512,
+    "model/db2": 505,
+    "drawings/dg": 432,
+    "drawings/dxf": 427,
+    "tables/kiss": 422,
+    "drawings/dwg": 416,
+    "fab/nc1": 406,
+    "tables/abm": 301,
+    "model/ifc": 296,
+    "drawings/dpm": 270,
+    "tables/drawing_index": 7,
+    "model/stl": 4
+   },
+   "depth": {
+    "3": 6478368
+   },
+   "bad_paths": [],
+   "rows": 6478368,
+   "hex6": 801918,
+   "nosha": 0,
+   "step_class": {
+    "2": 26738
+   },
+   "partial_kind": {
+    "approximated": 24726,
+    "complete_to_source": 2012
+   },
+   "pid_len_max": 200,
+   "addons": 662,
+   "example_pids": [
+    "Zenitude-data-3__Completed_Jobs_Data_Jobs From External Disk_AFRH_backup.7z",
+    "Zenitude-data-3__Completed_Jobs_Data_Jobs From External Disk_Avalon Building - 6000_Avalon 6000_JOB_Backup_06_Nov_13_12PM.zip",
+    "Zenitude-data-3__Completed_Jobs_Data_Jobs From External Disk_BBC_BETHEL BAPTIST CHURCH_JOB_30-Sep-13.zip"
+   ],
+   "distinct_sha": 5462097,
+   "sha_in_2plus_projects": 544096
+  }
+ },
+ "addon_dedup": {
+  "addons_checked": 662,
+  "files_also_in_target": 17,
+  "addons_with_overlap": 7,
+  "addon_target_not_found": 0
+ },
+ "cross_root_sha_overlap": {
+  "main/3d & main/2d": 0,
+  "main/3d & packages/3d": 0,
+  "main/3d & packages/3d_partial": 0,
+  "main/2d & packages/3d": 0,
+  "main/2d & packages/3d_partial": 0,
+  "packages/3d & packages/3d_partial": 1966448
+ }
+}

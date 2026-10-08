@@ -1,0 +1,82 @@
+[
+ {
+  "tag": "n1_db1_small",
+  "pid": "Zentitude-data-4__TEKLA-HYD_Backup 2026_N Drive Backup_CONTINENTAL_51_Westwood_PETCT_Master.7z",
+  "relpath": "model/step/51_Westwood_PETCT_Master.step",
+  "model_id": "992c3de413966850f7b95c8a089f22b74b446cfce41b5c6bef75427cbd7efd34",
+  "step_source": "db1",
+  "partial_kind": "approximated",
+  "bytes": 5676563,
+  "converted_from": "model/db1/51_Westwood_PETCT_Master.db1",
+  "converted_from_package": null,
+  "converter": {
+   "code": "z3-db1-2026-10-01v",
+   "version": null
+  },
+  "n_in_pkg": 1
+ },
+ {
+  "tag": "n2_db1_addon",
+  "pid": "Zentitude-data-4__TEKLA-HYD_JOBS-2015-2016_10.10.40.51_Server_Backup_TEKLA-TEAM_10.10.40.59-DATA_USA_PROJECTS_SS.7z",
+  "relpath": "model/step/F232-MASTER-d6c7cd.step",
+  "model_id": "4d188bbaad199b4772413ac8d76fd7e8e454c07e7a24da956a7f084efec6dd43",
+  "step_source": "db1",
+  "partial_kind": "approximated",
+  "bytes": 26769812,
+  "converted_from": "model/db1/F232-MASTER-c0419b.db1",
+  "converted_from_package": "cad-disk-extract/dataset/packages/3d/Zentitude-data-4__TEKLA-HYD_JOBS-2015-2016_10.10.40.51_Server_Backup_TEKLA-TEAM_10.10.40.59-DATA_USA_PROJECTS_SS.7z",
+  "converter": {
+   "code": "z3-db1-2026-10-01v",
+   "version": null
+  },
+  "n_in_pkg": 17
+ },
+ {
+  "tag": "n3_ifc_approx",
+  "pid": "Zentitude-data-4__TEKLA-HYD_PROJECT_DATA-2021-2022_CMC_SC_77. 31-2214 Global Commerce Park Bldg-3.7z",
+  "relpath": "model/step/31-2214 GCP3_STL-e7a9c8.step",
+  "model_id": "8314903ed33f19199d938895aa1f7fc53ee9710355cbc0d6bcd9814a2a0d346a",
+  "step_source": "ifc",
+  "partial_kind": "approximated",
+  "bytes": 18120155,
+  "converted_from": "model/ifc/31-2214 GCP3_STL.ifc",
+  "converted_from_package": "cad-disk-extract/dataset/packages/3d/Zentitude-data-4__TEKLA-HYD_PROJECT_DATA-2021-2022_CMC_SC_77. 31-2214 Global Commerce Park Bldg-3.7z",
+  "converter": {
+   "code": "z3-ifc-2026-10-01a+s6.1.10+x1",
+   "version": null
+  },
+  "n_in_pkg": 4
+ },
+ {
+  "tag": "n4_ifc_c2s",
+  "pid": "Zentitude-data-4__TEKLA-HYD_PROJECT_DATA-2019-2020_MMW_2.P535_HANGAR.7z",
+  "relpath": "model/step/GRID3.step",
+  "model_id": "701f5f69cd9124a9b61555c2e8e728468d2d1adadaab3cea8eee0ff98822fbbb",
+  "step_source": "ifc",
+  "partial_kind": "complete_to_source",
+  "bytes": 7077957,
+  "converted_from": "model/ifc/GRID3.ifc",
+  "converted_from_package": "cad-disk-extract/dataset/packages/3d/Zentitude-data-4__TEKLA-HYD_PROJECT_DATA-2019-2020_MMW_2.P535_HANGAR.7z",
+  "converter": {
+   "code": "z3-ifc-2026-10-01a+s6.1.11+x1",
+   "version": null
+  },
+  "n_in_pkg": 3
+ },
+ {
+  "tag": "n5_sds2",
+  "pid": "Zenitude-data-3__Completed_Jobs_Data_Jobs From External Disk_Data Room # Expansion_BACKUP_DATA ROOM_1021.7z",
+  "relpath": "model/step/BACKUP_DATA ROOM_1021.step",
+  "model_id": "5d5b9446d811bd5f1a8d692e",
+  "step_source": "sds2",
+  "partial_kind": "approximated",
+  "bytes": 13757052,
+  "converted_from": "model/sds2/BACKUP_DATA ROOM_1021.zip",
+  "converted_from_package": null,
+  "converter": {
+   "code": null,
+   "version": "v4"
+  },
+  "n_in_pkg": 1
+ }
+]

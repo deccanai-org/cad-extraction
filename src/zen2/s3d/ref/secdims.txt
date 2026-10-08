@@ -1,0 +1,45 @@
+SectionMoniker|Interface|Property|value
+--------------|---------|--------|-----
+AISC-LRFD-3.1, HSSC, HSS8-3/4X.500|IJUAHSS|tdes|0.011811
+AISC-LRFD-3.1, HSSC, HSS8-3/4X.500|IJUAHSS|tnom|1.2699999999999999E-2
+AISC-LRFD-3.1, HSSC, HSS8-3/4X.500|IJUAHSSC|D_t|18.800000000000001
+AISC-LRFD-3.1, HSSC, HSS8-3/4X.500|IStructCrossSectionDimensions|Area|7.8064359999999999E-3
+AISC-LRFD-3.1, HSSC, HSS8-3/4X.500|IStructCrossSectionDimensions|Depth|0.22225
+AISC-LRFD-3.1, HSSC, HSS8-3/4X.500|IStructCrossSectionDimensions|Perimeter|0.69850000000000001
+AISC-LRFD-3.1, HSSC, HSS8-3/4X.500|IStructCrossSectionDimensions|Width|0.22225
+AISC-LRFD-3.1, HSSC, HSS8-3/4X.500|IStructCrossSectionUnitWeight|UnitWeight|65.628029911417315
+AISC-LRFD-3.1, PIPE, PIPE1/2SCH40|IJUAHSS|tdes|0.0027686
+AISC-LRFD-3.1, PIPE, PIPE1/2SCH40|IJUAHSS|tnom|0.0027686
+AISC-LRFD-3.1, PIPE, PIPE1/2SCH40|IStructCrossSectionDimensions|Area|0.00016129
+AISC-LRFD-3.1, PIPE, PIPE1/2SCH40|IStructCrossSectionDimensions|Depth|2.1336000000000001E-2
+AISC-LRFD-3.1, PIPE, PIPE1/2SCH40|IStructCrossSectionDimensions|Perimeter|6.7056000000000004E-2
+AISC-LRFD-3.1, PIPE, PIPE1/2SCH40|IStructCrossSectionDimensions|Width|2.1336000000000001E-2
+AISC-LRFD-3.1, PIPE, PIPE1/2SCH40|IStructCrossSectionUnitWeight|UnitWeight|1.2679156799212599
+AISC-LRFD-3.1, W, W6X25|IJUAWideFlangeDesignProps|Fy3p|0.0
+AISC-LRFD-3.1, W, W6X25|IJUAWideFlangeDesignProps|Qf|9.8551999999999987E-2
+AISC-LRFD-3.1, W, W6X25|IJUAWideFlangeDesignProps|Qw|0.238506
+AISC-LRFD-3.1, W, W6X25|IJUAWideFlangeDesignProps|Wno|5.8128915999999999E-3
+AISC-LRFD-3.1, W, W6X25|IStructCrossSectionDimensions|Area|0.0047483776
+AISC-LRFD-3.1, W, W6X25|IStructCrossSectionDimensions|Depth|0.162052
+AISC-LRFD-3.1, W, W6X25|IStructCrossSectionDimensions|Perimeter|0.91185999999999989
+AISC-LRFD-3.1, W, W6X25|IStructCrossSectionDimensions|Width|0.15443199999999999
+AISC-LRFD-3.1, W, W6X25|IStructCrossSectionUnitWeight|UnitWeight|37.204098589238846
+AISC-LRFD-3.1, W, W6X25|IStructFlangedSectionDimensions|bf|0.15443199999999999
+AISC-LRFD-3.1, W, W6X25|IStructFlangedSectionDimensions|d|0.162052
+AISC-LRFD-3.1, W, W6X25|IStructFlangedSectionDimensions|kdesign|1.9151600000000001E-2
+AISC-LRFD-3.1, W, W6X25|IStructFlangedSectionDimensions|kdetail|0.0238125
+AISC-LRFD-3.1, W, W6X25|IStructFlangedSectionDimensions|tf|0.011557
+AISC-LRFD-3.1, W, W6X25|IStructFlangedSectionDimensions|tw|8.1280000000000015E-3
+Misc, CS, CS2.5|IStructCrossSectionDimensions|Area|3.1668283437499998E-3
+Misc, CS, CS2.5|IStructCrossSectionDimensions|Depth|6.3500000000000001E-2
+Misc, CS, CS2.5|IStructCrossSectionDimensions|Perimeter|0.19949159999999999
+Misc, CS, CS2.5|IStructCrossSectionDimensions|Width|6.3500000000000001E-2
+Misc, CS, CS2.5|IStructCrossSectionUnitWeight|UnitWeight|24.856653533047897
+Misc, RS, RS0.5x2|IStructCrossSectionDimensions|Area|6.4515999999999998E-4
+Misc, RS, RS0.5x2|IStructCrossSectionDimensions|Depth|5.0799999999999998E-2
+Misc, RS, RS0.5x2|IStructCrossSectionDimensions|Perimeter|0.127
+Misc, RS, RS0.5x2|IStructCrossSectionDimensions|Width|1.2699999999999999E-2
+Misc, RS, RS0.5x2|IStructCrossSectionUnitWeight|UnitWeight|5.0639242671784777
+catalog_sections
+----------------
+2220

@@ -1,0 +1,525 @@
+diff -ru a/decode/brep.py b/decode/brep.py
+--- a/decode/brep.py
++++ b/decode/brep.py
+@@ -18,18 +18,20 @@
+            (0x0E, 24, 8, 16, 0, lambda k: k & 0xE0 == 0xE0)]      # early 7.1xx (SCHIEL, HARRISON 7.135): 7.0 records
+ 
+ 
+-def parse(b, hdr=None, vrec=None, lrec=None, frec=None, co=None, marker=None):
+-    """-> (V, faces as lists of vertex indices) or None. With no layout given, tries the known ones."""
++def parse(b, hdr=None, vrec=None, lrec=None, frec=None, co=None, marker=None, nvmin=4):
++    """-> (V, faces as lists of vertex indices) or None. With no layout given, tries the known ones.
++    nvmin=3 (v5.5, imported reference parts only): accept a single triangle (data-3 hjj 7.425: 1,179 piece files of
++    3 vertices / 2 faces = one triangle stored on both sides, 86,230 placements left out as 'no closed B-rep')."""
+     if hdr is None:
+         for Lo in LAYOUTS:
+-            r = parse(b, *Lo)
++            r = parse(b, *Lo, nvmin=nvmin)
+             if r is not None:
+                 return r
+         return None
+     if len(b) < hdr + 12:
+         return None
+     nv, nf, ne = struct.unpack(">3I", b[hdr:hdr + 12])
+-    if not (3 < nv < 200000 and 0 < nf < 100000 and nf <= ne < 1000000):
++    if not (nvmin <= nv < 200000 and 0 < nf < 100000 and nf <= ne < 1000000):
+         return None
+     v0 = hdr + 16                                  # 4 pad bytes, then records of 3 x f64 (+ u8 tag + u24 id on 7.1+)
+     if v0 + vrec * nv + lrec * ne > len(b):
+@@ -307,6 +309,17 @@
+     multi-body pieces), or None. Retries with repair passes: conform() (merge vertices, split T-junctions), then
+     also drop_covered() (redundant coplanar patches)."""
+     sh = _solid_parts(V, faces, M, o)
++    if sh is not None:
++        return sh
++    try:
++        cleaned = clean_faces(V, faces)
++    except Exception:
++        cleaned = None
++    if cleaned is not None and cleaned[2] >= 0.4 * len(faces):
++        # v5.5: a mesh stored on both sides (imported reference meshes): the repair passes below cannot close it (every
++        # edge has 4 users; drop_covered() drops both copies) and drop_covered() is O(faces^2) - the time that ran out
++        # on data-3 State_Reno 7.331 (33,261 parts, 47,468 placements 'reference_time_budget_exceeded')
++        return _solid_cleaned(V, faces, M, o, cleaned)
+     if sh is None:
+         try:
+             F2 = conform(V, faces)
+@@ -317,15 +330,93 @@
+                     sh = _solid_parts(V, conform(V, F3), M, o)
+         except Exception:
+             sh = None
++    if sh is None:
++        sh = _solid_cleaned(V, faces, M, o, cleaned)
+     return sh
+ 
+ 
++def _degenerate(P, rel=1e-9):
++    """Zero-area loop: fewer than 3 distinct points, or all points on one line (Newell area ~ 0)."""
++    if len({tuple(np.round(q, 6)) for q in P}) < 3:
++        return True
++    ext = float(np.ptp(P, 0).max())
++    return _area(P) <= rel * max(1.0, ext * ext)
++
++
++def clean_faces(V, faces, tol=1e-4):
++    """v5.5 repair input: drop zero-area faces (three collinear points: cap triangulations of imported meshes, data-3
++    jfkf / vfgrt 7.331 beams with 4 such triangles each) and faces whose vertex set repeats an earlier face (double-sided
++    meshes store every triangle twice, once per orientation). Nothing is added: the kept faces are SDS2's own.
++    Returns (faces, n_degenerate, n_duplicate)."""
++    rep = np.arange(len(V)); key = {}
++    for i, p in enumerate(np.round(V / tol).astype(np.int64)):
++        rep[i] = key.setdefault(tuple(p), i)
++    out, seen, ndeg, ndup = [], set(), 0, 0
++    for f in faces:
++        ls = loops_of(f)
++        if not ls or _degenerate(V[ls[0]]):
++            ndeg += 1; continue
++        k = tuple(sorted({int(rep[i]) for i in ls[0]}))
++        if k in seen:
++            ndup += 1; continue
++        seen.add(k); out.append(f)
++    return out, ndeg, ndup
++
++
++def _has_volume(sh, rel=1e-9):
++    """A closed shell around no volume (all faces in one plane, e.g. a double-sided flat panel) is not a solid."""
++    from OCP.GProp import GProp_GProps
++    from OCP.BRepGProp import BRepGProp
++    from OCP.Bnd import Bnd_Box
++    from OCP.BRepBndLib import BRepBndLib
++    try:
++        b = Bnd_Box(); BRepBndLib.Add_s(sh, b)
++        lo, hi = b.CornerMin(), b.CornerMax()
++        ext = [hi.X() - lo.X(), hi.Y() - lo.Y(), hi.Z() - lo.Z()]
++        g = GProp_GProps(); BRepGProp.VolumeProperties_s(sh, g)
++        return min(ext) > 1e-3 and abs(g.Mass()) > rel * max(ext) ** 3
++    except Exception:
++        return False
++
++
++def _solid_cleaned(V, faces, M=None, o=None, cleaned=None):
++    """Last repair pass (v5.5): sew the faces left by clean_faces(), splitting the T-junctions a dropped zero-area
++    triangle leaves (conform); only when something was dropped and few free edges remain (an open mesh stays open:
++    no face is ever added), and only a closed solid with volume is accepted."""
++    import collections
++    try:
++        F, ndeg, ndup = cleaned if cleaned is not None else clean_faces(V, faces)
++        if not (ndeg or ndup) or len(F) < 4:
++            return None
++        rep = np.arange(len(V)); key = {}
++        for i, p in enumerate(np.round(V / 1e-4).astype(np.int64)):
++            rep[i] = key.setdefault(tuple(p), i)
++        E = collections.Counter()
++        for f in F:
++            for l in loops_of([int(rep[i]) for i in f]):
++                for a, b in zip(l, l[1:] + l[:1]):
++                    if a != b: E[(min(a, b), max(a, b))] += 1
++        free = sum(1 for c in E.values() if c == 1)
++        if free == 0:
++            sh = _solid_parts(V, F, M, o)
++        elif free <= max(16, 0.02 * len(E)):
++            sh = _solid_parts(V, conform(V, F), M, o)
++        else:
++            return None
++        return sh if sh is not None and _has_volume(sh) else None
++    except Exception:
++        return None
++
++
+ def _solid_parts(V, faces, M=None, o=None):
+     parts = bodies(faces)
+     if len(parts) > 1:
+         out = [_solid(V, p, M, o) for p in parts]
+         if any(s is None for s in out):
+             return None
++        out = _nest_voids(out)
++        if len(out) == 1:
++            return out[0]
+         from OCP.TopoDS import TopoDS_Compound
+         from OCP.BRep import BRep_Builder
+         c = TopoDS_Compound(); bb = BRep_Builder(); bb.MakeCompound(c)
+@@ -334,6 +425,105 @@
+     return _solid(V, faces, M, o)
+ 
+ 
++def _nest_voids(out, max_bodies=64):
++    """v5.5: a closed body of a piece that lies inside another closed body of the same piece is that body's inner wall:
++    SDS2 stores a closed hollow piece as its outer and its inner surface (data-3 A-Practice 8.007 tank shell 'SH',
++    T = 3/8 in: two closed bodies of 1,203 faces each). Two filled solids made it 71x SDS2's weight (left out as
++    fallback_over_5x_source_weight); the outer body with the inner one as a void weighs area / 2 x T = SDS2's weight.
++    Taken only for one level of nesting, every vertex of the inner body inside (or on) the outer solid, and a valid
++    result whose volume is outer - inner. An inner body touching the outer wall (19156_610 7.708 'SH' hopper: 4 of
++    its 6 vertices on the outer faces) is cut from it instead of being added as a void shell. Otherwise the bodies
++    are returned unchanged. No face is added or moved."""
++    if not 1 < len(out) <= max_bodies:
++        return out
++    try:
++        from OCP.Bnd import Bnd_Box
++        from OCP.BRepBndLib import BRepBndLib
++        from OCP.BRepClass3d import BRepClass3d_SolidClassifier
++        from OCP.TopAbs import TopAbs_IN, TopAbs_ON, TopAbs_SHELL, TopAbs_VERTEX, TopAbs_SOLID
++        from OCP.TopExp import TopExp_Explorer
++        from OCP.TopoDS import TopoDS, TopoDS_Solid
++        from OCP.BRep import BRep_Builder, BRep_Tool
++        from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut
++        from OCP.ShapeFix import ShapeFix_Solid
++        from OCP.BRepCheck import BRepCheck_Analyzer
++        from OCP.GProp import GProp_GProps
++        from OCP.BRepGProp import BRepGProp
++
++        def vol(s):
++            g = GProp_GProps(); BRepGProp.VolumeProperties_s(s, g); return abs(g.Mass())
++
++        def box(s):
++            b = Bnd_Box(); BRepBndLib.Add_s(s, b); lo, hi = b.CornerMin(), b.CornerMax()
++            return np.array([lo.X(), lo.Y(), lo.Z()]), np.array([hi.X(), hi.Y(), hi.Z()])
++
++        def shells(s):
++            ex = TopExp_Explorer(s, TopAbs_SHELL); r = []
++            while ex.More():
++                r.append(TopoDS.Shell(ex.Current())); ex.Next()
++            return r
++
++        def states(outer, inner):
++            ex = TopExp_Explorer(inner, TopAbs_VERTEX); pts = {}
++            while ex.More():
++                q = BRep_Tool.Pnt_s(TopoDS.Vertex(ex.Current()))
++                pts.setdefault((round(q.X(), 6), round(q.Y(), 6), round(q.Z(), 6)), q); ex.Next()
++            qs = list(pts.values())
++            return [BRepClass3d_SolidClassifier(outer, q, 1e-6).State() for q in qs[::max(1, len(qs) // 3000)]]
++
++        vols = [vol(s) for s in out]; boxes = [box(s) for s in out]
++        parent, touch = {}, set()
++        for j in range(len(out)):
++            cands = []
++            for i in range(len(out)):
++                if i == j or vols[i] <= vols[j]:
++                    continue
++                if np.all(boxes[i][0] <= boxes[j][0] + 1e-6) and np.all(boxes[j][1] <= boxes[i][1] + 1e-6):
++                    st = states(out[i], out[j])
++                    if st and all(x in (TopAbs_IN, TopAbs_ON) for x in st) and TopAbs_IN in st:
++                        cands.append((i, TopAbs_ON in st))
++            if cands:
++                i, on = min(cands, key=lambda c: vols[c[0]])
++                parent[j] = i
++                if on:
++                    touch.add(j)
++        if not parent or any(i in parent for i in parent.values()):
++            return out                                   # no nesting, or more than one level: unchanged
++        res = []
++        for i in range(len(out)):
++            if i in parent:
++                continue
++            inner = [j for j, i_ in parent.items() if i_ == i]
++            if not inner:
++                res.append(out[i]); continue
++            want = vols[i] - sum(vols[j] for j in inner)
++            if any(j in touch for j in inner):
++                so2 = out[i]
++                for j in inner:
++                    cut = BRepAlgoAPI_Cut(so2, out[j])
++                    if not cut.IsDone():
++                        return out
++                    so2 = cut.Shape()
++            else:
++                bb = BRep_Builder(); so = TopoDS_Solid(); bb.MakeSolid(so)
++                for sh in shells(out[i]):
++                    bb.Add(so, sh)
++                for j in inner:
++                    for sh in shells(out[j]):
++                        bb.Add(so, sh.Reversed())
++                fx = ShapeFix_Solid(so); fx.Perform(); so2 = fx.Solid()
++            if not BRepCheck_Analyzer(so2).IsValid() or want <= 0 or abs(vol(so2) - want) > 1e-3 * vols[i]:
++                return out
++            ex = TopExp_Explorer(so2, TopAbs_SOLID); n_ = 0
++            while ex.More():
++                res.append(TopoDS.Solid(ex.Current())); n_ += 1; ex.Next()
++            if not n_:
++                return out
++        return res
++    except Exception:
++        return out
++
++
+ def _solid(V, faces, M=None, o=None):
+     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakePolygon, BRepBuilderAPI_MakeFace, BRepBuilderAPI_Sewing, BRepBuilderAPI_MakeSolid
+     from OCP.gp import gp_Pnt
+@@ -449,6 +639,8 @@
+     sew = BRepBuilderAPI_Sewing(1e-3 * MM); n = 0
+     for f in faces:
+         for l in loops_of(f)[:1]:
++            if _degenerate(V[l]):
++                continue        # v5.5: a zero-area face made the whole sewn shell invalid (part left out)
+             poly = BRepBuilderAPI_MakePolygon()
+             for i in l: poly.Add(gp_Pnt(*(V[i] * MM)))
+             poly.Close()
+diff -ru a/decode/to_step2.py b/decode/to_step2.py
+--- a/decode/to_step2.py
++++ b/decode/to_step2.py
+@@ -481,8 +481,90 @@
+ HOLES_CUT = collections.Counter()
+ BREP_WHY = {}         # (job, piece) -> why the exact B-rep was not used (stand-in reason)
+ HOLES_NOT_CUT = set() # (job, piece) whose decoded holes the boolean could not cut
++TABLE_EMPTY = set()   # v5.5: (job, piece) exact B-rep accepted although the piece table holds no length / width / weight
++WEIGHT_OUTLIER = set()  # v5.5: (job, piece) rolled pieces written although SDS2's piece weight disagrees with its own section x L
++SKIP_NEEDED = {}      # v5.5: source_* skip reason -> what the job would need (the converter cannot build what it lacks)
++_GAP = {}             # v5.5: (job, piece) -> (source_* reason, detail) or None
++SOURCE_NEEDED = {
++    "source_piece_file_missing": "the piece file subm/<id> (absent from the job folder)",
++    "source_piece_has_no_geometry": "the piece's geometry: its piece file holds no faces and fewer than 4 vertex records "
++                                    "(the piece table gives at most the stock size, not the shape, axis or position)",
++    "source_piece_zero_size": "a non-zero piece size: SDS2's stored faces are flat and the piece table has a zero length "
++                              "(rolled) or a zero length / width / thickness",
++    "source_mesh_open": "a closed mesh: the part is stored as a double-sided surface whose single side is open "
++                        "(closing it would add faces the source does not have)",
++}
+ 
+ 
++def skip_reason_for(job, sid, p, reason):
++    """v5.5: the converter reason, or a precise source_* reason when the job holds no buildable geometry (source_gap)."""
++    if (job, sid) not in _GAP:
++        try:
++            _GAP[(job, sid)] = source_gap(job, sid, p)
++        except Exception:
++            _GAP[(job, sid)] = None
++    g = _GAP[(job, sid)]
++    if g is None:
++        return reason
++    SKIP_NEEDED.setdefault(g[0], SOURCE_NEEDED[g[0]])
++    return g[0]
++
++
++def source_gap(job, sid, p):
++    """v5.5: (reason, needed) when the job itself holds no buildable geometry for a piece, else None. Only unambiguous
++    cases: no piece file; a file with no faces and < 4 vertex records; stored
++    geometry that is flat while the piece table has a zero length / width / thickness (zero-size pieces: data-3
++    'L6x4x5/16' and 'W21x44' with L = 0, 'Conc. 0.0 yards', 'RB1/2' of zero length); a mesh stored on both sides
++    whose single side is still open (vendor parts). Everything else keeps its converter reason."""
++    # denormal doubles (5.3e-315: data-3 21030_S8EP GR / CK pieces) are zeros
++    dims = [d if d > 1e-6 else 0.0 for d in (p.get("L", 0) or 0, p.get("W", 0) or 0, p.get("T", 0) or 0)]
++    tab = "piece table L x W x T = {:g} x {:g} x {:g} in".format(*dims)
++    fp = os.path.join(job, "subm", str(sid))
++    if not os.path.exists(fp):
++        return "source_piece_file_missing", f"subm/{sid} absent"
++    try:
++        data = open(fp, "rb").read()
++        r = brep.parse(data)
++    except Exception:
++        return None
++    # rolled pieces carry L and depth only (T = 0 is normal): their size is missing when L = 0
++    zero_dim = dims[0] <= 0 if p.get("sec", 0) > 0 else sum(d > 0 for d in dims) < 3
++    if r is None:
++        V = subm_vertices(job, sid)
++        nv = 0 if V is None else len(V)
++        if nv < 4:
++            # nothing stored to build or place a solid by. With a full table size the record still gives the stock
++            # only: data-3 061219_Temp 7.613 RB3/8 and Viewer_J 7.704 RB1/2 are 261-byte files holding an identity
++            # frame and an empty box, while the table has the bar's length (and the name its diameter)
++            return "source_piece_has_no_geometry", (f"no faces, {nv} vertex record(s) in a {len(data)}-byte file, {tab}"
++                                                    + ("" if zero_dim else "; stock size only, no axis or position"))
++        return None
++    V, F = r
++    used = sorted({i for f in F for i in f})
++    if len(used) < 3:
++        return None
++    ext = np.ptp(V[used], 0)
++    if p["name"].startswith("Conc") and dims[2] <= 0 and brep.solid(V, F) is None:
++        # concrete is built as its T-thick prism; SDS2 records no thickness ('Conc. 0.0 yards') and its mesh is no solid
++        return "source_piece_zero_size", "concrete with thickness 0 ({}), stored mesh not closed".format(tab)
++    if ext.min() < 1e-6 and zero_dim:
++        return "source_piece_zero_size", "stored faces flat ({:g} x {:g} x {:g} in), {}".format(*ext, tab)
++    try:
++        Fc, ndeg, ndup = brep.clean_faces(V, F)
++        if ndup >= 0.4 * len(F) and Fc:
++            E = collections.Counter()
++            for f in brep.conform(V, Fc):
++                for l in brep.loops_of(f):
++                    for a, b in zip(l, l[1:] + l[:1]):
++                        if a != b: E[(min(a, b), max(a, b))] += 1
++            free = sum(1 for c in E.values() if c == 1)
++            if free:
++                return "source_mesh_open", f"{ndup} of {len(F)} faces repeated reversed; one side leaves {free} boundary edge(s)"
++    except Exception:
++        pass
++    return None
++
++
+ def _extents_match(V, faces, p, tol=0.02):
+     """B-rep extents equal the piece table's L x W x T (sorted, within 2%): the solid is the stock piece, cut."""
+     dims = sorted(x for x in (p.get("L", 0), p.get("W", 0), p.get("T", 0)))
+@@ -493,6 +575,39 @@
+     return all(abs(e - d) <= tol * d + 1e-3 for e, d in zip(ext, dims))
+ 
+ 
++def _table_without_size(p):
++    """v5.5: the piece table holds no length, no width and no weight (denormal doubles count as 0). The thickness field
++    may still be set: data-3 RH_PALO_PRACTICE 8.004 records its RB bars as L = W = wt = 0, T = 12."""
++    return all(not (abs(p.get(f_, 0) or 0) > 1e-6) for f_ in ("L", "W", "wt"))
++
++
++_NAME_DIA = re.compile(r"(?:RB|RD)\s*(\d+\s+\d+/\d+|\d+/\d+|\d+(?:\.\d+)?)(?![\w/.-])")
++
++
++def _name_dia(name):
++    """Round bar diameter from its SDS2 name (RB1/4 -> 0.25, RB1 1/4 -> 1.25, RB1 -> 1.0), or None."""
++    m = _NAME_DIA.match(name or "")
++    if not m:
++        return None
++    try:
++        return sum(float(int(a) / int(b)) if "/" in t else float(t) for t in m.group(1).split() for a, b in [(t.split("/") + ["1"])[:2]])
++    except (ValueError, ZeroDivisionError):
++        return None
++
++
++def _fits_own_record(p, ext):
++    """v5.5: a B-rep taken without table size must agree with what the record does hold: a round bar's thinnest extent
++    is its name diameter (within 10 %: faceted), a plate is at least its table thickness thick."""
++    d = _name_dia(p.get("name"))
++    if d:
++        return abs(float(min(ext)) / d - 1) <= 0.1
++    if re.match(r"R[BD]\d", p.get("name") or ""):
++        return False                                   # a round bar whose diameter cannot be read: not taken
++    if kind(p) == "plate" and (p.get("T", 0) or 0) > 1e-6:
++        return float(min(ext)) >= 0.95 * p["T"]
++    return True
++
++
+ def brep_placed(job, sid, p, M, o):
+     """Piece's exact solid (built once per piece, cached) placed at o + M.T @ local, or None -> approximate builders.
+     Accepted only when its volume is within 0.6-1.6x of SDS2's recorded weight (guards against misparsed layouts)."""
+@@ -520,6 +635,14 @@
+                 used = sorted({i for f in r[1] for i in f}); ext = np.ptp(r[0][used], 0)
+                 okx = _extents_match(r[0], r[1], p) or (p.get("sec", 0) > 0 and p.get("L", 0) > 0
+                                                         and abs(ext.max() - p["L"]) <= 0.02 * p["L"] + 0.05)
++                if not okx and _table_without_size(p) and ext.min() > 1e-3 and _fits_own_record(p, ext) \
++                        and brep._has_volume(sh) and not _absurd(sh):
++                    # v5.5: the piece table holds no length, width or weight (data-3 THERMOFISHER 7.708: 58 wall plates
++                    # 'FB0x0'; RH_PALO_PRACTICE 8.004: 178 RB1/4 / RB5/8 / RB3/4 bars recorded as L = W = wt = 0, T = 12):
++                    # nothing to validate against, so the closed, valid solid of the piece's own faces is taken as is
++                    # (the same acceptance as imported reference parts) when it agrees with what the record does hold
++                    # (a bar's name diameter, a plate's thickness); counted in the manifest
++                    okx = True; TABLE_EMPTY.add(key)
+                 if not okx:
+                     sh = None; BREP_WHY[key] = "no SDS2 weight and B-rep extents differ from the piece table"
+             elif sh is not None:
+@@ -562,6 +685,7 @@
+ 
+ 
+ _REF = {}
++_REF_GAP = {}         # v5.5: (job, piece) -> (source_* reason, detail) for reference parts the job holds no geometry for
+ REF_OPEN = set()      # reference parts written as open shells (faces as stored, not a closed solid)
+ REF_FACES = set()     # reference parts written as unsewn face sets (their sewn shell fails BRepCheck)
+ REF_BUDGET_S = float(os.environ.get("SDS2_REF_BUDGET_S", "5400"))   # time for building reference-model parts per job
+@@ -575,7 +699,20 @@
+     if key not in _REF:
+         sh = None
+         try:
+-            r = brep.parse(open(os.path.join(job, "subm", str(sid)), "rb").read())
++            fp = os.path.join(job, "subm", str(sid))
++            if not os.path.exists(fp):
++                # v5.5: partial job folder (data-3 GHT 7.425: 117 reference placements of absent piece files)
++                _REF_GAP[key] = ("source_piece_file_missing", f"subm/{sid} absent")
++            data = open(fp, "rb").read()
++            r = brep.parse(data)
++            if r is None:
++                # v5.5: a single stored triangle (3 vertices; data-3 hjj 7.425: 1,179 files, 1442_NORTH_SHORE 7.331: 156 parts)
++                # -> written as an open surface
++                r = brep.parse(data, *brep.LAYOUTS[0], nvmin=3)
++            Vs_ = subm_vertices(job, sid) if r is None else None
++            if r is None and (Vs_ is None or len(Vs_) < 4):
++                # v5.5: no faces and fewer than 4 vertex records: the job holds no geometry for this part
++                _REF_GAP[key] = ("source_piece_has_no_geometry", f"no faces in a {len(data)}-byte file (imported reference part)")
+             if r is not None and len(r[1]) <= REF_MAX_FACES:
+                 sh = brep.solid(*r)
+                 if sh is None:
+@@ -1003,9 +1140,9 @@
+ 
+ def reset():
+     """Clear per-job caches before converting again in the same process (read-back repair pass)."""
+-    for c in (_BREP, HOLES, BREP_WHY, _REF):
++    for c in (_BREP, HOLES, BREP_WHY, _REF, _REF_GAP, _GAP, SKIP_NEEDED):
+         c.clear()
+-    REF_OPEN.clear(); REF_FACES.clear(); DERIVED_INFO.clear()
++    REF_OPEN.clear(); REF_FACES.clear(); DERIVED_INFO.clear(); TABLE_EMPTY.clear(); WEIGHT_OUTLIER.clear()
+     CONCRETE.clear(); HOLES_NOT_CUT.clear(); HOLES_CUT.clear(); del INVALID_DROPPED[:]
+ 
+ 
+@@ -1136,7 +1273,11 @@
+                 instance_counts[(n, sid)] += 1; inst_no = instance_counts[(n, sid)]
+                 sh = brep_reference(job, sid, M, o)
+                 if sh is None:
+-                    record_skip(n, sid, inst_no, p, "reference", o, "reference_part_no_closed_brep"); continue
++                    g_ = _REF_GAP.get((job, sid))
++                    if g_ is not None:
++                        # v5.5: the job holds no geometry for this reference part (precise source reason, see SKIP_NEEDED)
++                        SKIP_NEEDED.setdefault(g_[0], SOURCE_NEEDED[g_[0]]); _GAP[(job, sid)] = g_
++                    record_skip(n, sid, inst_no, p, "reference", o, g_[0] if g_ else "reference_part_no_closed_brep"); continue
+                 opn = (job, sid) in REF_OPEN
+                 fset = (job, sid) in REF_FACES
+                 label = (f"{mtype[n]} #{n} / reference part (piece {sid}, inst {inst_no}) [reference: imported model geometry "
+@@ -1301,7 +1442,7 @@
+                         builder, k2 = "piece_table_standin", ("plate" if k == "plate" else "other")
+                         why = f"L x W x T slab from the piece table ({exact_why}; no usable vertices)"
+                 if sh is None:
+-                    record_skip(n, sid, inst_no, p, k, o, "no_usable_special_geometry")
++                    record_skip(n, sid, inst_no, p, k, o, skip_reason_for(job, sid, p, "no_usable_special_geometry"))
+                     continue
+                 if builder == "special_primitive" and p["name"].startswith("Conc"):
+                     why = "concrete as its L x W x T prism at the bottom of its mesh (volume = SDS2 quantity)"
+@@ -1388,7 +1529,16 @@
+                 # approximate solid wildly heavier than SDS2's weight (7.708 Center Grove: wall "plate" 7 5/8x384
+                 # whose vertices coincide -> mesh box of 50 million lb): report instead of writing it
+                 g_ = GProp_GProps(); BRepGProp.VolumeProperties_s(sh, g_); w_ = abs(g_.Mass()) / MM ** 3 * 0.2836
+-                if w_ > 5 * p["wt"] and w_ - p["wt"] > 1000:
++                s_ = shapes.get(p["sec"]) if k == "rolled" else None
++                nom_ = s_.weight * p["L"] / 12 if s_ is not None and (s_.weight or 0) > 0 and p["L"] > 0 else 0
++                if w_ > 5 * p["wt"] and w_ - p["wt"] > 1000 and nom_ > 0 and abs(w_ / nom_ - 1) <= 0.15 \
++                        and V is not None and len(V) >= 2 and abs(float(np.ptp(V[:, 0])) - p["L"]) <= 0.02 * p["L"] + 0.05:
++                    # v5.5: a rolled piece whose solid matches its own section's lb/ft (job_mtrl) over the piece-table length,
++                    # and whose vertices span that length: SDS2's piece weight is the outlier (data-3 W24x76 recorded at
++                    # 39 lb over 346 in), so the profile solid is written (tagged like every profile extrusion)
++                    holes_txt += f"; SDS2 piece weight {p['wt']:.0f} lb disagrees with {s_.weight:g} lb/ft x {p['L']:g} in, which the solid matches"
++                    WEIGHT_OUTLIER.add((job, sid))          # kept out of the weight check: SDS2's own number is the outlier
++                elif w_ > 5 * p["wt"] and w_ - p["wt"] > 1000:
+                     sh = None
+                     skip_reason = "fallback_over_5x_source_weight"
+                     # v4 skipped these (CHOWNS 6.336: 34 bent plates whose convex hull fills the bend): write the
+@@ -1399,6 +1549,8 @@
+                         if abs(g2.Mass()) / MM ** 3 * 0.2836 < 2 * p["wt"] + 1000:
+                             sh, builder, holes_txt = ts, "piece_table_standin", "no holes"
+             if sh is None:
++                if skip_reason == "fallback_builder_failed":
++                    skip_reason = skip_reason_for(job, sid, p, skip_reason)
+                 record_skip(n, sid, inst_no, p, k, o, skip_reason)
+                 continue
+             what = {"profile_fallback": "section profile extruded over the piece's vertex length",
+@@ -1413,7 +1565,9 @@
+             why = f"{what}; copes/cuts not modelled; {holes_txt} ({exact_why})" + (f"; {note}" if note else "")
+             lab_ = _tag(label, why)
+             add_flat(sh, lab_)
+-            stats[k] += 1; track(sid, sh, "approx")
++            stats[k] += 1
++            if (job, sid) not in WEIGHT_OUTLIER:
++                track(sid, sh, "approx")
+             stats[builder] = stats.get(builder, 0) + 1
+             add_row(dict(member=n, member_type=mtype[n], piece=sid, inst=inst_no,
+                          name=p["name"], kind=k, builder=builder,
+@@ -1613,6 +1767,18 @@
+                               holes_not_cut=dict(by_reason=dict(DERIVED_INFO.get("not_cut", {})),
+                                                  examples=DERIVED_INFO.get("not_cut_examples", []))),
+                    write_ok=ok, piece_dev=big)
++    # v5.5: what the job lacks for each source_* skip reason (the converter cannot build what the source does not hold),
++    # and exact parts taken without piece-table data (see brep_placed)
++    if SKIP_NEEDED:
++        man["skipped"]["needed"] = dict(SKIP_NEEDED)
++        man["skipped"]["source_absent"] = sum(1 for s_ in skipped_rows if s_["reason"].startswith("source_"))
++        man["skipped"]["source_detail"] = [dict(piece=k[1], name=(pieces.get(k[1]) or {}).get("name", "REFERENCE"), reason=g[0], detail=g[1])
++                                           for k, g in _GAP.items() if g is not None][:500]
++    if TABLE_EMPTY:
++        man["counts"]["pieces_exact_without_table_data"] = len(TABLE_EMPTY)
++    if WEIGHT_OUTLIER:
++        # written as tagged profile solids, not in the weight check (their SDS2 piece weight is not section lb/ft x L)
++        man["counts"]["rolled_sds2_weight_outliers"] = len(WEIGHT_OUTLIER)
+     MF.write(man, base + "_manifest.json")
+     print(f"  manifest: class {man['class']} corpus {man['corpus']} ({'; '.join(man['class_reasons'][:4])})")
+     return ok, stats

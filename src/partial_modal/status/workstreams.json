@@ -1,0 +1,10 @@
+[
+ {"name": "Job list (all partial models, signed links)", "state": "done", "note": "26,738 models in 2,418 packages; 22,749 in scope (< 1 GB)"},
+ {"name": "DB1 -> source stage", "state": "done", "note": "reproduces the delivered STEP on both DB1 test models"},
+ {"name": "SDS/2 -> source stage", "state": "done", "note": "reproduces the delivered STEP on the SDS/2 test model"},
+ {"name": "build123d pipeline stage", "state": "done", "note": "scripts + schedules + verification"},
+ {"name": "Colour-coded reconstruction (build_issues_model.py)", "state": "done", "note": "red missing / orange approximated / yellow check / purple not yet perfect"},
+ {"name": "Publisher into package scripts/", "state": "done", "note": "passed on a fake test package"},
+ {"name": "End-to-end test on 5 new samples + publish", "state": "running", "note": "Modal, all 5 in parallel"},
+ {"name": "Scale to all in-scope partial models", "state": "waiting", "note": "after the test report and owner approval of cost"}
+]

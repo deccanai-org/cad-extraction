@@ -1,0 +1,49 @@
+--- ../cur/sds2_worker.py	2026-10-01 19:53:20
++++ worker.py	2026-10-01 20:26:03
+@@ -131,13 +131,20 @@
+     m = re.search(r'not built \(no usable geometry\): (\{[^}]*\})', txt)
+     if m:
+         out['not_built_names'] = m.group(1)[:400]
+-    m = re.search(r'with solids: (\d+); BRep valid: (\d+); non-positive volume: (\d+)', txt)
++    # sds2-weights-failures: the LAST read-back block (after the --verify repair passes the STEP on disk is the last one; the
++    # first block is the pre-repair state: 39 data-3 jobs were judged on it). run_batch.parse_log takes the last block in the
++    # patched converter; these informational counts follow it.
++    m = None
++    for m in re.finditer(r'with solids: (\d+); BRep valid: (\d+); non-positive volume: (\d+)', txt):
++        pass
+     if m:
+         out['with_solids'] = int(m.group(1)); out['brep_valid'] = int(m.group(2)); out['nonpos_volume'] = int(m.group(3))
++        out['readback_passes'] = len(re.findall(r'with solids: \d+; BRep valid: \d+', txt))
+     m = re.search(r'steel pieces: solids ([\d.]+) t vs SDS2 piece weights ([\d.]+) t', txt)
+     if m:
+         out['steel_t'] = float(m.group(1)); out['sds2_t'] = float(m.group(2))
+-    out['invalid_named'] = re.findall(r'invalid after read-back: (.*)', txt)[:20]
++    last = txt.rfind('top-level shapes')                 # names of the last read-back block only
++    out['invalid_named'] = re.findall(r'invalid after read-back: (.*)', txt[last:] if last >= 0 else txt)[:20]
+     return out
+ 
+ 
+@@ -233,9 +240,22 @@
+                        'dominant_outliers': (wc.get('dominant_outliers') or [])[:10] if isinstance(wc.get('dominant_outliers'), list) else wc.get('dominant_outliers'),
+                        'step_steel_t': wc.get('step_steel_t'), 'sds2_piece_weight_t': wc.get('sds2_piece_weight_t'),
+                        'joist_standin_t': wc.get('joist_standin_t'),
+-                       'by_family': {k: {'ratio': v.get('ratio'), 'n': v.get('n')} for k, v in (wc.get('by_family') or {}).items()}},
++                       'by_family': {k: {'ratio': v.get('ratio'), 'n': v.get('n'), **{s_: _wpart(v.get(s_)) for s_ in ('exact', 'built', 'standin') if s_ in v}}
++                                     for k, v in (wc.get('by_family') or {}).items()},
++                       # converter v5.5w: the tally split by geometry source (exact = SDS2's own piece B-rep, built = untagged converter-built
++                       # solids, standin = tagged approximations) and the stud / rod pieces switched to their B-rep; absent in older manifests
++                       'by_source': {k: _wpart(v) for k, v in wc['by_source'].items()} if isinstance(wc.get('by_source'), dict) else None,
++                       'turned_brep': wc.get('turned_brep'),
++                       'sds2_weight_outliers': len(wc['sds2_weight_outliers']) if isinstance(wc.get('sds2_weight_outliers'), list) else None},
+             'readback': m.get('readback'), 'class': m.get('class'), 'corpus': m.get('corpus'), 'class_reasons': m.get('class_reasons'),
+             'holes': holes_summary(m.get('holes'))}
++
++
++def _wpart(x):
++    """one part of the v5.5w weight split -> {ratio, n, step_lb, sds2_lb} (None stays None)"""
++    if not isinstance(x, dict):
++        return None
++    return {k: x.get(k) for k in ('ratio', 'n', 'step_lb', 'sds2_lb')}
+ 
+ 
+ def holes_summary(h):

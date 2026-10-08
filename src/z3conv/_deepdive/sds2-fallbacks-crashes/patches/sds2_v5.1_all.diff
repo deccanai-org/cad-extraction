@@ -1,0 +1,399 @@
+--- a/sds2-step-pipeline/decode/brep.py
++++ b/sds2-step-pipeline/decode/brep.py
+@@ -315,11 +315,77 @@
+                 F3 = drop_covered(V, F2)
+                 if len(F3) < len(F2):
+                     sh = _solid_parts(V, conform(V, F3), M, o)
++        except Exception:
++            sh = None
++    if sh is None:
++        # keyhole faces: a face whose single loop runs out along a bridge edge, around an inner loop (hole / cut-out)
++        # and back along the same edge (401 CONGRESS 7.613 HSS12x4x1/2 end faces; 7.135 BAHAMAR concrete walls with
++        # openings). OCC keeps the doubled bridge as two free edges, so the shell never closes. Split such loops into
++        # outer + inner loops (the bridge disappears) and retry; pieces that already close are never touched.
++        try:
++            FK = [unkeyhole(f) for f in faces]
++            if FK != faces:
++                sh = _solid_parts(V, FK, M, o)
++                if sh is None:
++                    sh = _solid_parts(V, conform(V, FK), M, o)
+         except Exception:
+             sh = None
+     return sh
++
++
++def split_keyhole(loop):
++    """One stored loop that revisits a vertex -> [outer, inner, ...] (the bridge edge walked out and back is dropped)."""
++    out, cur = [], []
++    for i in loop:
++        if cur and i == cur[-1]:
++            continue
++        if i in cur:
++            j = cur.index(i); seg = cur[j:]; cur = cur[:j + 1]
++            if len(seg) >= 3:
++                out.append(seg)
++        else:
++            cur.append(i)
++    if len(cur) >= 3 and cur[0] == cur[-1]:
++        cur = cur[:-1]
++    return ([cur] if len(cur) >= 3 else []) + out
++
++
++def unkeyhole(f):
++    """Face entries with keyhole loops re-encoded as separate loops, each closed by repeating its first vertex
++    (the multi-loop encoding loops_of() reads); faces without a revisited vertex are returned unchanged."""
++    ls = loops_of(f)
++    if all(len(set(l)) == len(l) for l in ls):
++        return f
++    loops = [x for l in ls for x in (split_keyhole(l) if len(set(l)) != len(l) else [l])]
++    loops.sort(key=len, reverse=True)
++    nf = []
++    for l in loops:
++        nf += l + [l[0]]
++    return nf
+ 
+ 
++def _fixed_solid(sh):
++    """ShapeFix_Shape on an invalid solid -> the single valid solid with positive volume it yields, else None."""
++    from OCP.ShapeFix import ShapeFix_Shape
++    from OCP.BRepCheck import BRepCheck_Analyzer
++    from OCP.TopExp import TopExp_Explorer
++    from OCP.TopAbs import TopAbs_SOLID
++    from OCP.TopoDS import TopoDS
++    from OCP.GProp import GProp_GProps
++    from OCP.BRepGProp import BRepGProp
++    try:
++        fs = ShapeFix_Shape(sh); fs.Perform(); r = fs.Shape()
++        ex = TopExp_Explorer(r, TopAbs_SOLID); sols = []
++        while ex.More():
++            sols.append(TopoDS.Solid(ex.Current())); ex.Next()
++        if len(sols) != 1 or not BRepCheck_Analyzer(sols[0]).IsValid():
++            return None
++        g = GProp_GProps(); BRepGProp.VolumeProperties_s(sols[0], g)
++        return sols[0] if g.Mass() > 0 else None
++    except Exception:
++        return None
++
++
+ def _solid_parts(V, faces, M=None, o=None):
+     parts = bodies(faces)
+     if len(parts) > 1:
+@@ -404,7 +470,11 @@
+             ms = BRepBuilderAPI_MakeSolid(TopoDS.Shell(ex.Current()))
+             if not ms.IsDone(): return None
+             fx = ShapeFix_Solid(ms.Solid()); fx.Perform(); sh = fx.Solid()
+-            if not BRepCheck_Analyzer(sh).IsValid(): return None
++            if not BRepCheck_Analyzer(sh).IsValid():
++                # closed shell whose solid fails BRepCheck although every face is valid (RH PALO ALTO 7.720
++                # HSS4x4x1/4 piece 14761): one ShapeFix_Shape pass; kept only if it yields exactly one valid solid
++                sh = _fixed_solid(sh)
++                if sh is None: return None
+             out.append(sh); ex.Next()
+         if not out:
+             return None
+--- a/sds2-step-pipeline/decode/piece_table.py
++++ b/sds2-step-pipeline/decode/piece_table.py
+@@ -2,7 +2,7 @@
+   +0x110 i32 section index into job_mtrl (0 for plates/bars), +0x12E ASCII name (e.g. W18x35, L4x4x3/8, FL3/8x9),
+   +0x144 f64 weight lb, +0x14C f64 surface area, +0x16C f64 length, +0x174 f64 width/depth, +0x17C f64 thickness.
+ Also classifies each placed instance and prints coverage stats."""
+-import os, re, struct, sys, collections
++import os, re, struct, sys, collections, math
+ 
+ # slot size, name offset, section (fmt, off), weight/L/W/T (fmt, offsets)
+ LAYOUTS = {
+@@ -25,15 +25,34 @@
+     _v.setdefault("slot", _k)
+ 
+ 
+-def slot_size(b):
+-    """Pick the layout whose name field is filled for the most of the first 200 pieces. Returns the LAYOUTS key
+-    (the slot size, except "8.0" for the 2019+ record that shares 1024-B slots with 7.5/7.6)."""
+-    def filled(key):
++# a piece name SDS2 can write: section / material designations (W, HSS, L, PL, FL, Conc, bolts, studs, joists ...)
++NAME_OK = re.compile(rb"(W|M|S|HP|C|MC|L|WT|MT|ST|HSS|TS|PIPE|PL|FL|BAR|RD|SQ|BLT|HS|NS|WS|TWS|AB|RB|DBA|THD|STUD|Conc|GT|GR|"
++                     rb"PLG|WBX|WPS|BP|CP|SP|BPL|[0-9]+(K|LH|DLH|G|BG|VG))[0-9A-Za-z. /x-]")
++
++
++def slot_size(b, size=None):
++    """Pick the layout whose name field holds a plausible piece name for the most of the first 200 slots; ties (empty
++    or near-empty tables) go to a layout whose slot size divides the file (size - 256), then to the most filled.
++    v4 counted any printable byte, so on empty tables (DWF-import / training jobs: 111 of 3,728 data-3 jobs) noise
++    picked a wrong layout (7.425 NVX & 5 others: 1024 instead of 902) and the garbage records crashed plate_outline.
++    Returns the LAYOUTS key (the slot size, except "8.0" for the 2019+ record that shares 1024-B slots with 7.5/7.6).
++    size: full subm_idx size when b is only its head (default len(b))."""
++    size = len(b) if size is None else size
++    def score(key):
+         S, o = LAYOUTS[key]["slot"], LAYOUTS[key]["name"]
+-        return sum(bool(re.match(rb"[!-~]", b[k * S + o:k * S + o + 1])) for k in range(1, min(200, len(b) // S)))
+-    return max(LAYOUTS, key=filled)
++        ks = range(1, min(200, len(b) // S))
++        return (sum(bool(NAME_OK.match(b[k * S + o:k * S + o + 6])) for k in ks), size >= 256 and (size - 256) % S == 0,
++                sum(bool(re.match(rb"[!-~]", b[k * S + o:k * S + o + 1])) for k in ks))
++    return max(LAYOUTS, key=score)
+ 
+ 
++def _num(x):
++    """Piece-table number or 0.0 when it cannot be a dimension / weight (unused or deleted slots hold arbitrary bytes:
++    7.619 Seaport L4 has 3,362 such records; T = 4.6e20 with wt = 8.7e-311 made wt / 0.2836 / T underflow to 0.0 and
++    crashed plate_outline with ZeroDivisionError)."""
++    return float(x) if math.isfinite(x) and (x == 0 or 1e-6 <= abs(x) < 1e7) else 0.0
++
++
+ def read_pieces(job):
+     b = open(os.path.join(job, "subm", "subm_idx"), "rb").read()
+     key = slot_size(b); Lo = LAYOUTS[key]; SLOT = Lo["slot"]
+@@ -46,7 +65,11 @@
+         if not name:
+             continue
+         sec = struct.unpack(sf, s[so:so + struct.calcsize(sf)])[0]
+-        out[k] = dict(name=name, sec=sec, L=rd(s, Lo["L"]), W=rd(s, Lo["W"]), T=rd(s, Lo["T"]), wt=rd(s, Lo["wt"]))
++        raw = [rd(s, Lo[f]) for f in ("L", "W", "T", "wt")]
++        L, W, T, wt = (_num(x) for x in raw)
++        if [L, W, T, wt] != raw and not NAME_OK.match(name.encode("latin-1")):
++            continue                  # garbage slot: implausible name and impossible numbers -> not a piece
++        out[k] = dict(name=name, sec=sec, L=L, W=W, T=T, wt=wt)
+     return out
+ 
+ 
+--- a/sds2-step-pipeline/decode/instances.py
++++ b/sds2-step-pipeline/decode/instances.py
+@@ -106,14 +106,16 @@
+     only the orthonormal-rotation / finite-origin checks decide. Chosen from the job's subm_idx layout (440-B)."""
+     if job not in cache:
+         from piece_table import slot_size
+-        cache[job] = slot_size(open(os.path.join(job, "subm", "subm_idx"), "rb").read(64 * 1024)) in (440, 384)  # 7.1 / 7.0
++        fp = os.path.join(job, "subm", "subm_idx")
++        cache[job] = slot_size(open(fp, "rb").read(64 * 1024), os.path.getsize(fp)) in (440, 384)  # 7.1 / 7.0
+     return cache[job]
+ 
+ 
+ def _is_70(job, cache={}):
+     if job not in cache:
+         from piece_table import slot_size
+-        cache[job] = slot_size(open(os.path.join(job, "subm", "subm_idx"), "rb").read(64 * 1024)) == 384
++        fp = os.path.join(job, "subm", "subm_idx")
++        cache[job] = slot_size(open(fp, "rb").read(64 * 1024), os.path.getsize(fp)) == 384
+     return cache[job]
+ 
+ 
+--- a/sds2-step-pipeline/decode/sds2job.py
++++ b/sds2-step-pipeline/decode/sds2job.py
+@@ -309,6 +309,10 @@
+ # members that hold an imported reference model (DWF / IFC import): one member file places thousands of piece files
+ # that have no piece-table entry (data-3 SDS_Jobs_2015.25 / 7.331 jobs.7z: 50 of 71 jobs are such models)
+ REFERENCE_TYPES = {"DWF Import", "IFC Import", "SDNF Import", "DGN Import", "Reference Model", "ReferenceModel"}
++# the spelling varies by version: 7.720 "IFC_RH Palo_Grand Stair" stores "REFERENCE MODEL" (44 placements of curved C15x40
++# stringers with L = 0 / no weight -> written as straight extrusions [approx] instead of their stored B-rep)
++REFERENCE_TYPES |= {t.upper() for t in REFERENCE_TYPES}
++KNOWN_TYPES |= REFERENCE_TYPES
+ 
+ 
+ def _sparse_try(job, idx, ids, shapes, slot, ver):
+--- a/sds2-step-pipeline/decode/to_step2.py
++++ b/sds2-step-pipeline/decode/to_step2.py
+@@ -478,6 +478,7 @@
+ USE_HOLES = True      # cut the piece's bolt holes / slots (brep.holes) into its exact solid
+ _BREP = {}
+ CONCRETE = set()      # (job, piece) whose exact volume matches SDS2's weight at concrete density
++CONCRETE_BREP = True  # "Conc" pieces: try SDS2's stored B-rep first (kept when it weighs as concrete), prism otherwise
+ HOLES_CUT = collections.Counter()
+ BREP_WHY = {}         # (job, piece) -> why the exact B-rep was not used (stand-in reason)
+ HOLES_NOT_CUT = set() # (job, piece) whose decoded holes the boolean could not cut
+@@ -687,8 +688,93 @@
+     L = L if L and L > grip else grip + N + 0.25
+     return _compound([hexp(-H, H), BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1)), d / 2 * MM, L * MM).Shape(),
+                       hexp(grip, N)])
++
++
++def bolts_in_best_frame(job, n, frame, candidates, hole_faces, stats, tol=0.25):
++    """SDS2 bolt records of member n placed in the frame that puts their heads on decoded hole faces.
++    v4 placed every record in the member's 0xE8 main-material frame (header block when absent). That frame is wrong
++    when the header names a connection plate (7.331 VOID: BEAM W30x132 whose header piece is a PL5/8 -> its 28 bolts
++    written 3-9 in off and perpendicular to their holes, plus 28 nominal bolts in the empty holes) and on 7.1xx files
++    (7.135 BAHAMAR: 2 of 413 records on a hole; the member's own work-line frame puts 336 there). The v4 frame is kept
++    whenever every record lands on a hole face, when no holes were decoded, or when no other frame does better."""
++    import bolts as BR
++    from instances import _is_frame
++    if hole_faces is None:
++        return BR.member_bolts(job, n, frame)
++    raw = BR.member_bolts(job, n, (np.eye(3), np.zeros(3)))          # records in the record frame
++    if not raw:
++        return []
++    H = np.array([r["head"] for r in raw]); X = np.array([r["axis"] for r in raw])
++
++    def hits(M, o):
++        W = o + H @ M                                                # = o + M.T @ head, row-wise
++        ok = np.isfinite(W).all(1) & (np.abs(W).max(1) < 1e7)
++        if not ok.any():
++            return 0
++        d, _ = hole_faces.query(W[ok], distance_upper_bound=tol)
++        return int(np.isfinite(d).sum())
++
++    def placed(M, o):
++        return [dict(r, head=o + M.T @ r["head"], axis=M.T @ r["axis"]) for r in raw]
++
++    cands = []
++    if frame is not None:
++        cands.append((np.asarray(frame[0], float), np.asarray(frame[1], float)))
++    try:
++        import struct
++        b = open(os.path.join(job, "mem", str(n)), "rb").read(0xE8)
++        if len(b) >= 0xE8:
++            cands.append((np.array(struct.unpack(">9d", b[0x88:0xD0])).reshape(3, 3), np.array(struct.unpack(">3d", b[0xD0:0xE8]))))
++    except OSError:
++        pass
++    base = hits(*cands[0]) if cands else 0
++    if base == len(raw):
++        return placed(*cands[0])
++    best, bh = (cands[0] if cands else None), base
++    seen = set()
++    for M, o in list(cands[1:]) + [(np.asarray(M_, float), np.asarray(o_, float)) for M_, o_ in candidates]:
++        k = (tuple(np.round(M, 4).ravel()), tuple(np.round(o, 3)))
++        if k in seen or not _is_frame(M):
++            continue
++        seen.add(k)
++        h = hits(M, o)
++        if h > bh:
++            best, bh = (M, o), h
++    if best is None:
++        return BR.member_bolts(job, n, frame)
++    if bh > base and bh >= 0.5 * len(raw):
++        stats["bolt_record_frames_reselected"] = stats.get("bolt_record_frames_reselected", 0) + 1
++        return placed(*best)
++    return BR.member_bolts(job, n, frame)
+ 
+ 
++def stacks_covered(stacks, recs, lat_tol=1 / 16):
++    """Indices of hole stacks that an SDS2 bolt record already fills: record axis parallel to the stack, head within
++    1/16 in of the stack axis, and the record's plies [head, head + grip] overlapping the stack span by > 25 % of the
++    shorter. v4 required the head within 0.002 in of a stack end, so a record whose head sits on a washer / shim face
++    or a ply the stack does not include (8.004 Fire Station 41: 0.03-0.6 in) left its stack 'uncovered' and a second,
++    nominal bolt was written into the same holes (69 duplicates on that job)."""
++    from scipy.spatial import cKDTree
++    mids = np.array([e + a * g / 2 for e, a, g, d in stacks])
++    tree = cKDTree(mids); out = set()
++    for r in recs:
++        h, ax, gr = np.asarray(r["head"], float), np.asarray(r["axis"], float), float(r["grip"])
++        if not (np.isfinite(h).all() and np.isfinite(ax).all() and np.abs(h).max() < 1e7):
++            continue
++        for si in tree.query_ball_point(h + ax * gr / 2, 6.0):
++            e, a, g, d = stacks[si]
++            c = ax @ a
++            if abs(abs(c) - 1) > 1e-3:
++                continue
++            v = h - e; t0 = v @ a
++            if np.linalg.norm(v - t0 * a) > lat_tol:
++                continue
++            t1 = t0 + np.sign(c) * gr
++            if min(max(t0, t1), g) - max(min(t0, t1), 0.0) > 0.25 * min(g, gr):
++                out.add(si)
++    return out
++
++
+ def bolt_stacks(C, A, D, T, I):
+     """Group placed holes into coaxial stacks (same bolt diameter, parallel axes, lateral offset < 1/16 in, within
+     6 in); keep stacks through >= 2 piece instances -> list of (entry point, unit axis, grip, bolt dia)."""
+@@ -856,6 +942,7 @@
+     parts = {}; root = [None]; hw = []          # hw: placed holes (entry, axis, depth, bolt dia, instance)
+     shared_inst = []                            # (part key, local solid, placement, instance label)
+     frames = {}                                 # member -> main material placement (bolt record frame)
++    member_frames = {}                          # member -> every material placement (bolt record frame candidates)
+     bolt_rows = []
+ 
+     def add_exact(sid, res, label):
+@@ -911,6 +998,7 @@
+                         label=label)
+             continue
+         main_sid, inst = material_instances(job, n, pieces)
++        member_frames[n] = [(M_, o_) for _, M_, o_ in inst]
+         for sid_, M_, o_ in inst:
+             if sid_ == main_sid:
+                 frames[n] = (M_, o_); break
+@@ -968,9 +1056,17 @@
+                 continue
+             # exact B-rep: plates / rolled / joists, and bolts (SDS2 stores each nut, head and washer as its own
+             # faceted hex / ring piece). Studs and rods keep the true cylinders of special_solid; concrete its prism.
++            is_conc = p["name"].startswith("Conc")
+             if (k in ("plate", "rolled") and not TURNED.match(p["name"]) or p["name"].startswith("BLT")) \
+-                    and not p["name"].startswith("Conc"):
++                    and (not is_conc or CONCRETE_BREP):
+                 sh = brep_placed(job, sid, p, M, o)
++                if sh is not None and is_conc and (job, sid) not in CONCRETE:
++                    # a "Conc" piece's own B-rep replaces the L x W x T prism only when it weighs as concrete
++                    # (BAHAMAR 7.135: 35 / 35 walls and footings at 150 pcf = SDS2's weight to 0.1 %; WLCSC 7.331: 7 / 7)
++                    if 0 < p["wt"] < 1e9:
++                        sh = None
++                    else:
++                        CONCRETE.add((job, sid))         # no weight: brep_placed matched its extents to the piece table
+                 if sh is not None:
+                     conc = (job, sid) in CONCRETE
+                     k2 = "concrete" if conc else "fastener" if p["name"].startswith("BLT") else k
+@@ -1169,8 +1265,15 @@
+         # nominal heavy-hex bolts only for coaxial hole stacks of >= 2 pieces that no record covers
+         import bolts as BR
+         recs = []
++        hole_faces = None
++        if hw:
++            from scipy.spatial import cKDTree
++            _C = np.array([h[0] for h in hw]); _A = np.array([h[1] for h in hw]); _D = np.array([h[2] for h in hw])
++            _P = np.vstack([_C, _C + _A * _D[:, None]])
++            _P = _P[np.isfinite(_P).all(1) & (np.abs(_P).max(1) < 1e7)]
++            hole_faces = cKDTree(_P) if len(_P) else None
+         for n in sorted(mtype):
+-            try: recs += BR.member_bolts(job, n, frames.get(n))
++            try: recs += bolts_in_best_frame(job, n, frames.get(n), member_frames.get(n, ()), hole_faces, stats)
+             except Exception: pass
+         btype = BR.bolt_types(job)
+         if recs:
+@@ -1199,12 +1302,7 @@
+                 recs = [r for r in recs if r["layout"] == "f64" or on[id(r)]]
+         covered = set()
+         if recs and stacks:
+-            from scipy.spatial import cKDTree
+-            ends = [(e, si) for si, (e, a, g, d) in enumerate(stacks)] + [(e + a * g, si) for si, (e, a, g, d) in enumerate(stacks)]
+-            tree = cKDTree(np.array([x for x, _ in ends]))
+-            for r in recs:
+-                dist, j = tree.query(r["head"], distance_upper_bound=2e-3)
+-                if np.isfinite(dist): covered.add(ends[j][1])
++            covered = stacks_covered(stacks, recs)
+         bparts = {}
+         todo = [(r["head"], r["axis"], r["grip"], r["dia"], r["length"], btype.get(r["type"], ""), "sds2") for r in recs] + \
+                [(e, a, g, d, None, "", "nominal") for si, (e, a, g, d) in enumerate(stacks) if si not in covered]
+--- a/sds2-step-pipeline/decode/verify_step.py
++++ b/sds2-step-pipeline/decode/verify_step.py
+@@ -24,13 +24,30 @@
+ 
+ 
+ def product_names(path):
+-    """PRODUCT('name',...) entities in file order (one per written solid)."""
+-    rx = re.compile(r"=\s*PRODUCT\('([^']*)'")
+-    out = []
++    """PRODUCT('name',...) entities in file order (one per written solid). The STEP writer wraps long entities: the
++    name can start on the line after "PRODUCT(" and itself continue on the next line (reference parts / tagged
++    nominal bolts whose part name is the full instance label). A line-only regex missed those, and when the miss made
++    the name count equal the shape count the assembly was read as one shape (7.425 NVX: "1 top-level shapes")."""
++    rx = re.compile(r"=\s*PRODUCT\(\s*'([^']*)'")
++    rx_open = re.compile(r"=\s*PRODUCT\(\s*('[^']*)?$")
++    out = []; buf = None
+     with open(path, encoding="latin-1") as f:
+         for line in f:
++            line = line.rstrip("\r\n")
++            if buf is not None:
++                buf += line
++                m = re.match(r"\s*'([^']*)'", buf)
++                if m:
++                    out.append(m.group(1)); buf = None
++                elif len(buf) > 8192:
++                    buf = None
++                continue
+             m = rx.search(line)
+-            if m: out.append(m.group(1))
++            if m:
++                out.append(m.group(1)); continue
++            m = rx_open.search(line)
++            if m:
++                buf = m.group(1) or ""
+     return out
+ 
+ 

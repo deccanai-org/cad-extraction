@@ -1,0 +1,1 @@
+cd /work/agentwork/class1-readiness-audit; tail -2 aud_k4.log; tail -3 full_k4e.log; ps -eo pid,etime,args | grep "kit_k4/convert_one\|kit_k4e/\|fullconv" | grep -v grep | sed 's#/work/agentwork/class1-readiness-audit/##g' | cut -c1-140

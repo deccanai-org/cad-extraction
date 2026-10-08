@@ -1,0 +1,20 @@
+# SDS2 sds2-step-pipeline v5.4 (sds2-step-pipeline-v5.4.zip): 2494-B slot fixed layout for 7.221 / 7.233 / 7.243 / 7.253 in sds2job._sparse_try (applies unchanged to v5.5.3)
+# apply: cd <unzipped pipeline root> && patch -p1 < this.diff
+--- a/sds2-step-pipeline/decode/sds2job.py	2026-10-01 14:33:10
++++ b/sds2-step-pipeline/decode/sds2job.py	2026-10-01 20:39:44
+@@ -323,6 +323,15 @@
+     }.get(slot)
+     if slot == 2494 and ver == "7.245":
+         fixed = dict(type=0x988, p1=0x112, p2=0x172, sec=0x1D8, roll=0x1DE, fw=8)
++    if slot == 2494 and ver in ("7.221", "7.233", "7.243", "7.253"):
++        # the documented 7.243 layout (module docstring). calibrate() finds exactly this on every data-3 7.233 / 7.243 /
++        # 7.253 job with enough structural members (10 jobs: 7 Cives Binney jobs, Northside_job, ANNAPOLIS, 604; sections
++        # mapped 27/27 ... 5,776/5,776). The only 7.221 job (Boylston_Job, a seed job whose 140-B member files carry no work
++        # point) holds the same layout in its own mem_idx: type markers 5,127/5,127 at 0x988, calibrate()'s section search
++        # with these point offsets picks 0x1D4 (3,000/3,000 beams, 152 sections; next offset scores 1/20), beams
++        # horizontal 2,997/3,000, columns vertical 890/892. MISC-only 7.243 jobs (100_Binney_Slab_Job x2,
++        # 100_Binney_Slab_Arch_Job) and that seed job have no work point key, so calibrate() raised ValueError.
++        fixed = dict(type=0x988, p1=0x112, p2=0x172, sec=0x1D4, roll=0x1DA, fw=8)
+     if slot in (3204, 3404, 3600):
+         # Later families share the 7.4+ point/section fields.  Their type field moved with the slot width, so accept
+         # it only when at least one real member marker identifies the offset (the failing 7.613 and 8.007 jobs do).

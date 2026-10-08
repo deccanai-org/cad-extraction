@@ -1,0 +1,9 @@
+# v5 retry candidate — zero target-area guard (not deployed)
+
+At 2026-09-29 01:40 UTC, the corrected v4 first-pass ledger had 11 jobs failing in `decode/to_step2.py:plate_outline` with `ZeroDivisionError` at `hull_err = ... / target`. The call originates in `plate_local`, which derives target area from piece weight and thickness. The observed failure establishes that the computed target can be zero even though the source fields passed the positive checks.
+
+The local `pipeline/sds2-step-pipeline/decode/to_step2.py` now returns `None` for a zero or non-finite target, retaining the existing convex-hull geometry instead of dividing by zero or inventing a cutout. This is a narrow exception guard, not proof of accurate source geometry.
+
+An isolated v5 canary on the already-failed `GHTUG` source job ran on worker `i-0a9be41d2cdd4ad80`, with separate work/output paths and no change to the v4 runner. ZIP SHA256 `580df86a0e9c83b9954130268a17541c9de707897fc849ab8ca45286f10d4375` and manifest SHA256 `bcd155af0a60cdf4c7e62547683e9989ef2de0d7c1d614b8c3f4bc2b72a39eb4` were checked on the worker. Stage 2 exported and read back 644/644 valid solids, but **QA failed**: the STEP/SDS2 steel-weight ratio was ~2.76e214, with 3,240 skipped source pieces. The exception guard therefore does not yield an acceptable conversion for this job. Preserve this as diagnostic output only; do not promote it or count it as converted. Results: `s3://annotationprod/cad-disk-extract/sds2-step-r2-20260929-01/canary/v5-zero-area-GHTUG/results.jsonl`.
+
+Do not modify the ten active v4 workers. Preserve v4 results. Do not broadly deploy this guard as a "fix" to the 11 affected jobs without diagnosing their source weights and skipped pieces. Any retry must pass full Stage 2 export/read-back, mass/geometry QA, and S3-object checks. Do not count a job as accepted solely because this exception disappears.

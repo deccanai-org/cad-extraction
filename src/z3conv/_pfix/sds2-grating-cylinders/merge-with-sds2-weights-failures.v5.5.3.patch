@@ -1,0 +1,817 @@
+diff -ruN a/sds2-step-pipeline/decode/grating.py b/sds2-step-pipeline/decode/grating.py
+--- a/sds2-step-pipeline/decode/grating.py	1969-12-31 16:00:00
++++ b/sds2-step-pipeline/decode/grating.py	2026-10-01 23:03:52
+@@ -0,0 +1,408 @@
++"""Bar grating and grating treads (G[TR]... pieces) built from SDS2's own piece data (patch sds2-grating-cylinders).
++
++What SDS2 stores (piece files of 7.2xx-8.0xx jobs; checked on SLC4 DATABANK 7.331, SHERIFFS OFFICE 7.425, One Light
++Tower 7.312, PSU BNR 8.004):
++  - the bearing bars and end bands as faces. On panels (GR) they sew into one closed solid; on treads (GT) the bars and
++    the nosing are open tubes whose two end outlines lie on the carrier plates / bands (those edges have 3 users), so
++    the piece "does not sew" and v4 / v5 wrote the grating as a solid panel (5-10x SDS2's weight)
++  - every cross bar as one flat rectangle on the walking face (0.001 in below or 0.005 in above it), exactly as wide as
++    the cross bar (a zero-thickness marker, not a solid)
++  - the piece-table slot holds the grating fields as 8 numbers: bearing bar thickness, bar depth, bar spacing, cross bar
++    width, cross bar depth, cross bar spacing, panel width, panel length (f64 at +0x168 in 852 / 902-B slots, +0x158 in
++    8.0 slots; located by value, see slot_fields)
++build() reproduces that grating: closed bodies as stored; open bar / nosing tubes closed at their own stored end
++outlines only where each outline lies on a stored face of the band / carrier it is welded to (a contact face that
++disappears in the union), otherwise the closed cells bounded by the stored faces (OCC MakerVolume, non-manifold treads);
++cross bars = their stored rectangles extruded into the grating by the slot's cross bar depth; all fused into one solid.
++SDS2's piece weight is the weight of exactly this union (SLC4 GR1 3/4x23 15/16 x 97 1/2: 199.0 lb built vs 199.0 lb
++SDS2; SHERIFFS GR3/4x23 9/16: 22.03 vs 22.06 lb), so a result is accepted within WEIGHT_TOL of SDS2's weight, or when
++lighter, inside the record's W x L stock and of the stock's weight per plan area (a panel cut down in SDS2 keeps the
++uncut panel's weight: TEMP Wayne Farms GR1 1/4x36 cut to 11 1/2 in: 0.322 = 11.5 / 36); otherwise the caller keeps the
++tagged panel. Nothing is added that the piece does not store: no bar positions are guessed and no open mesh is closed
++with new boundary faces.
++"""
++import collections, struct
++import numpy as np
++import brep
++
++MM = 25.4
++WEIGHT_TOL = 0.03          # |built / SDS2 weight - 1| allowed for an exact grating
++MAX_CELL_FACES = 300       # larger non-manifold pieces are not partitioned into cells (FMI 7.132 GR1 1/2x101: 567
++                           # faces, 2-5 min, and the cells closed voids: 3.8x SDS2's weight)
++STEEL = 0.2836             # lb / in3
++CUT_DENSITY = (0.93, 1.25)  # cut panel: (built / SDS2 weight) / (plan / stock area) allowed; < 1: steel missing, > 1:
++                            # bands along the cut edges (data-3, 115 cut pieces: 0.94-1.20, narrow 4 in strips 1.20)
++
++
++def _edge_use(faces):
++    E = collections.Counter()
++    for f in faces:
++        for l in brep.loops_of(f):
++            for a, b in zip(l, l[1:] + l[:1]):
++                if a != b:
++                    E[(min(a, b), max(a, b))] += 1
++    return E
++
++
++def _chain(edges):
++    """Undirected edges -> closed vertex loops, or None unless every vertex has exactly two of them."""
++    adj = collections.defaultdict(list)
++    for a, b in edges:
++        adj[a].append(b); adj[b].append(a)
++    if not adj or any(len(v) != 2 for v in adj.values()):
++        return None
++    loops, seen = [], set()
++    for s in adj:
++        if s in seen:
++            continue
++        loop, prev, cur = [s], s, adj[s][0]
++        seen.add(s)
++        while cur != s:
++            if cur in seen:
++                return None
++            loop.append(cur); seen.add(cur)
++            a, b = adj[cur]
++            prev, cur = cur, (b if a == prev else a)
++        loops.append(loop)
++    return loops
++
++
++def _normal(P):
++    c = P.mean(0)
++    n = sum(np.cross(P[k] - c, P[(k + 1) % len(P)] - c) for k in range(len(P)))
++    L = np.linalg.norm(n)
++    return c, (n / L if L > 1e-12 else None)
++
++
++def _on_stored_face(V, loop, others):
++    """True if the loop lies in the plane of one of the other bodies' stored faces and inside its outline: the end face
++    it would close is a contact face of the union (internal), not new boundary."""
++    from shapely.geometry import Polygon, Point
++    P = V[loop]
++    for f in others:
++        ls = brep.loops_of(f)
++        if not ls or len(ls[0]) < 3:
++            continue
++        Q = V[ls[0]]
++        c, n = _normal(Q)
++        if n is None or np.abs((P - c) @ n).max() > 1e-3:
++            continue
++        u = np.cross(n, [1.0, 0, 0] if abs(n[0]) < 0.9 else [0, 1.0, 0]); u /= np.linalg.norm(u); w = np.cross(n, u)
++        try:
++            poly = Polygon([(q @ u, q @ w) for q in Q]).buffer(1e-3)
++        except Exception:
++            continue
++        if all(poly.covers(Point(p @ u, p @ w)) for p in P):
++            return True
++    return False
++
++
++def _closed_faces(V, faces, others=()):
++    """Faces of an open body plus one planar end face per loop of its free edges (bar / nosing tubes whose ends sit on
++    a band or carrier plate), or None if the free edges are not planar closed loops or an end outline does not lie on a
++    stored face of another body (that would be closing an open mesh, which is not done)."""
++    E = _edge_use(faces)
++    if any(c > 2 for c in E.values()):
++        return None
++    free = [e for e, c in E.items() if c == 1]
++    if not free:
++        return list(faces)
++    loops = _chain(free)
++    if not loops:
++        return None
++    for l in loops:
++        if len(l) < 3:
++            return None
++        c, n = _normal(V[l])
++        if n is None or np.abs((V[l] - c) @ n).max() > 1e-4:
++            return None
++        if not _on_stored_face(V, l, others):
++            return None
++    return list(faces) + loops
++
++
++def _prism(P, vec):
++    from OCP.gp import gp_Pnt, gp_Vec
++    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakePolygon, BRepBuilderAPI_MakeFace
++    from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
++    poly = BRepBuilderAPI_MakePolygon()
++    for q in P:
++        poly.Add(gp_Pnt(*(q * MM)))
++    poly.Close()
++    f = BRepBuilderAPI_MakeFace(poly.Wire(), True)
++    if not f.IsDone():
++        return None
++    return BRepPrimAPI_MakePrism(f.Face(), gp_Vec(*(vec * MM))).Shape()
++
++
++def slot_fields(slot, depth, cross_w=None):
++    """The 8 grating numbers in a piece-table slot, located by value: [bar thickness, bar depth, bar spacing, cross bar
++    width, cross bar depth, cross bar spacing, width, length] as consecutive f64 (7.2+ records) or f32 (7.0 / 7.1),
++    whose depth equals the bars' depth in the B-rep and whose cross bar width equals the stored cross bar rectangles."""
++    for code, size in (("d", 8), ("f", 4)):
++        n = 8 * size
++        for o in range(0, len(slot) - n + 1, 2):
++            v = struct.unpack(">8" + code, slot[o:o + n])
++            if not all(np.isfinite(v)):
++                continue
++            bt, d, sp, cw, cd, cs, W, L = v
++            tol = 2e-3 if size == 8 else 5e-3
++            if abs(d - depth) > tol or not (0 < bt <= 1.0 and bt < sp <= 12 and 0 < cw <= 1.0 and 0 < cd <= 12
++                                            and 0 < cs <= 48 and 0 < W < 2000 and 0 < L < 5000):
++                continue
++            if cross_w is not None and abs(cw - cross_w) > tol:
++                continue
++            # cross bars recorded deeper than the bearing bars (1504 EQUADOR GR3/16: 0.5 in under a 0.197 in plank;
++            # DSCC mesh panels) are built as recorded, protruding below the bars: SDS2's weight confirms it (1.012), and
++            # such a piece must match SDS2's weight (no cut-panel exemption, see build)
++            return dict(offset=o, fmt=code, bar_t=bt, depth=d, bar_spacing=sp, cross_w=cw, cross_d=cd,
++                        cross_deeper_than_bars=cd > d + tol, cross_spacing=cs, width=W, length=L)
++    return None
++
++
++def _plan_ratio(V, faces, n, fields):
++    """Plan area of the piece / the record's W x L (validation only, nothing is built from it): the union of the stored
++    faces that face the walking-face normal (bar / band / nosing tops, cross bar rectangles), projected on the walking
++    face, with the open spaces between bars closed by half the larger bar / cross bar spacing. A panel cut from its
++    stock keeps the stock's weight per plan area, so built / SDS2 weight ~ this ratio (data-3: 0.94-1.20x it over 115
++    cut pieces; narrow strips carry relatively more band). None if it cannot be computed."""
++    from shapely.geometry import Polygon
++    from shapely.ops import unary_union
++    try:
++        u = np.cross(n, [1.0, 0, 0] if abs(n[0]) < 0.9 else [0, 1.0, 0]); u /= np.linalg.norm(u); w = np.cross(n, u)
++        polys = []
++        for f in faces:
++            ls = brep.loops_of(f)
++            if not ls or len(ls[0]) < 3:
++                continue
++            _, nn = _normal(V[ls[0]])
++            if nn is None or abs(nn @ n) < 0.9:
++                continue
++            pg = Polygon([(q @ u, q @ w) for q in V[ls[0]]]).buffer(0)
++            if pg.area > 0:
++                polys.append(pg)
++        r = max(fields["bar_spacing"], fields["cross_spacing"]) / 2 + 0.02
++        a = unary_union(polys).buffer(r, 4).buffer(-r, 4).area
++        wl = fields["width"] * fields["length"]
++        return a / wl if a > 0 and wl > 0 else None
++    except Exception:
++        return None
++
++
++def _volume(sh):
++    from OCP.GProp import GProp_GProps
++    from OCP.BRepGProp import BRepGProp
++    g = GProp_GProps(); BRepGProp.VolumeProperties_s(sh, g)
++    return abs(g.Mass()) / MM ** 3
++
++
++def _occ_faces(V, faces):
++    """Planar OCC faces (outer loop + inner loops) of stored piece faces, in mm; None if one cannot be made."""
++    from OCP.gp import gp_Pnt
++    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakePolygon, BRepBuilderAPI_MakeFace
++    from OCP.ShapeFix import ShapeFix_Face
++
++    def wire(idx):
++        poly = BRepBuilderAPI_MakePolygon()
++        for i in idx:
++            poly.Add(gp_Pnt(*(V[i] * MM)))
++        poly.Close()
++        return poly.Wire() if poly.IsDone() else None
++    out = []
++    for f in faces:
++        ls = brep.loops_of(f)
++        if not ls:
++            continue
++        ls.sort(key=lambda l: -brep._area(V[l]))
++        w0 = wire(ls[0])
++        if w0 is None:
++            return None
++        mf = BRepBuilderAPI_MakeFace(w0, True)
++        if not mf.IsDone():
++            return None
++        for l in ls[1:]:
++            w = wire(l)
++            if w is not None:
++                mf.Add(w)
++        face = mf.Face()
++        if len(ls) > 1:
++            fx = ShapeFix_Face(face); fx.FixOrientation(); fx.Perform(); face = fx.Face()
++        out.append(face)
++    return out
++
++
++def _cells(V, faces):
++    """Closed cells bounded by the stored faces (OCC BOPAlgo_MakerVolume): tread bars and nosing are open tubes that
++    end on the carrier plates and overlap the next face, so they are closed by the carrier faces SDS2 stores, not by
++    new faces. Returns the list of cell solids or None."""
++    from OCP.BOPAlgo import BOPAlgo_MakerVolume
++    from OCP.TopExp import TopExp_Explorer
++    from OCP.TopAbs import TopAbs_SOLID
++    try:
++        from OCP.TopTools import TopTools_ListOfShape
++    except ImportError:
++        from OCP.collections import List_TopoDS_Shape as TopTools_ListOfShape
++    fl = _occ_faces(V, faces)
++    if not fl:
++        return None
++    args = TopTools_ListOfShape()
++    for f in fl:
++        args.Append(f)
++    mv = BOPAlgo_MakerVolume(); mv.SetArguments(args); mv.SetRunParallel(False); mv.SetIntersect(True)
++    mv.SetAvoidInternalShapes(True)
++    mv.Perform()
++    if mv.HasErrors():
++        return None
++    out = []
++    ex = TopExp_Explorer(mv.Shape(), TopAbs_SOLID)
++    while ex.More():
++        out.append(ex.Current()); ex.Next()
++    return out or None
++
++
++def build(V, F, wt, slot):
++    """-> (local solid, info) or (None, info with 'why'). V, F: brep.parse() of the piece file; wt: SDS2 piece weight
++    (lb); slot: the piece's raw piece-table record."""
++    from OCP.BRepAlgoAPI import BRepAlgoAPI_Fuse
++    from OCP.BRepCheck import BRepCheck_Analyzer
++    from OCP.TopExp import TopExp_Explorer
++    from OCP.TopAbs import TopAbs_SOLID
++    try:
++        from OCP.TopTools import TopTools_ListOfShape
++    except ImportError:
++        from OCP.collections import List_TopoDS_Shape as TopTools_ListOfShape
++    info = dict(bodies=0, closed_as_stored=0, closed_at_stored_ends=0, cells=0, cross_bars=0)
++    F = brep.conform(V, F)                       # merge coincident vertices, split T-junctions (as brep.solid does)
++    solids, markers, body_faces, stuck = [], [], [], False
++    parts = brep.bodies(F)
++    for bi, P in enumerate(parts):
++        if len(P) == 1 and len(brep.loops_of(P[0])) == 1:
++            markers.append(brep.loops_of(P[0])[0]); continue     # a lone flat face: a cross bar rectangle
++        info["bodies"] += 1
++        body_faces.append(P)
++        sh = brep._solid(V, P)
++        if sh is not None:
++            info["closed_as_stored"] += 1
++        else:
++            others = [f for bj, Q in enumerate(parts) if bj != bi and len(Q) > 1 for f in Q]
++            P2 = _closed_faces(V, P, others)
++            sh = brep._solid(V, P2) if P2 is not None else None
++            if sh is None:
++                stuck = True; continue
++            info["closed_at_stored_ends"] += 1
++        solids.append(sh)
++    if not body_faces:
++        info["why"] = "no bar / band bodies in the piece faces"
++        return None, info
++    if stuck:
++        # non-manifold treads (bars / nosing overlapping the carrier faces): closed cells of all stored faces
++        nfaces = sum(len(P) for P in body_faces)
++        if nfaces > MAX_CELL_FACES:
++            info["why"] = f"bars / bands do not close and the piece is too large to partition ({nfaces} faces)"
++            return None, info
++        solids = _cells(V, [f for P in body_faces for f in P])
++        if not solids:
++            info["why"] = "bar / band faces do not bound closed cells"
++            return None, info
++        info["cells"] = len(solids)
++    body_v = [V[sorted({i for f in P for i in f})] for P in body_faces]
++    allv = np.vstack(body_v)
++    n = None
++    if markers:
++        ref, normals = None, []
++        for l in markers:
++            _, nn = _normal(V[l])
++            if nn is None:
++                info["why"] = "degenerate cross bar rectangle"; return None, info
++            ref = nn if ref is None else ref
++            normals.append(nn if nn @ ref >= 0 else -nn)
++        n = normals[0]
++        if any(abs(m @ n) < 0.9999 for m in normals):
++            info["why"] = "cross bar rectangles not parallel"; return None, info
++        widths = []
++        for l in markers:
++            q = V[l] - np.outer(V[l] @ n, n)
++            q = q - q.mean(0)
++            widths.append(float(np.ptp(q @ np.linalg.svd(q, full_matrices=False)[2][1])))
++        cross_w = float(np.median(widths))
++    else:
++        ext = np.ptp(allv, 0); n = np.eye(3)[int(np.argmin(ext))]; cross_w = None
++    # the bars' depth is the slot's depth field; a tread's own extent also spans its deeper carrier plates, so every
++    # body extent along the walking-face normal is a candidate
++    fields = None
++    for depth in sorted({round(float(np.ptp(B @ n)), 4) for B in body_v}, reverse=True):
++        fields = slot_fields(slot, depth, cross_w)
++        if fields:
++            break
++    if fields:
++        info["slot"] = {k: (round(v, 5) if isinstance(v, float) else v) for k, v in fields.items()}
++    tools = []
++    if markers:
++        if not fields:
++            info["why"] = "cross bar depth not found in the piece record"; return None, info
++        cd = fields["cross_d"]
++        s_all = allv @ n
++        smin, smax = float(s_all.min()), float(s_all.max())
++        for l in markers:
++            P = V[l]
++            sm = float(np.mean(P @ n))
++            top, dirv = (smax, -n) if abs(sm - smax) <= abs(sm - smin) else (smin, n)
++            if abs(sm - top) > 0.02:
++                info["why"] = "cross bar rectangle not on the walking face"; return None, info
++            t = _prism(P + np.outer(top - P @ n, n), dirv * cd)    # stored rectangle on the walking face, down cd
++            if t is None:
++                info["why"] = "cross bar prism failed"; return None, info
++            tools.append(t)
++        info["cross_bars"] = len(tools)
++    if len(solids) == 1 and not tools:
++        res = solids[0]
++    else:
++        args = TopTools_ListOfShape(); args.Append(solids[0])
++        tl = TopTools_ListOfShape()
++        for s in solids[1:] + tools:
++            tl.Append(s)
++        op = BRepAlgoAPI_Fuse(); op.SetArguments(args); op.SetTools(tl); op.SetRunParallel(False)
++        op.SetFuzzyValue(1e-4)
++        op.Build()
++        if not op.IsDone():
++            info["why"] = "boolean fuse failed"; return None, info
++        # no ShapeUpgrade_UnifySameDomain: it merges the walking surface into one face with a hole per opening
++        # (OLT GT1/8x34 5/8: 392 inner wires) and BRepCheck of such a face is quadratic in its wires: 3.0 s instead
++        # of 0.9 s per placed grating in the --verify read-back (SLC4 GR1 3/4x35 13/16: 4.8 s vs 1.7 s)
++        res = op.Shape()
++    if not BRepCheck_Analyzer(res).IsValid():
++        info["why"] = "fused grating is not a valid solid"; return None, info
++    ex = TopExp_Explorer(res, TopAbs_SOLID); ns = 0
++    while ex.More():
++        ns += 1; ex.Next()
++    info["solids"] = ns
++    built = _volume(res) * STEEL
++    info["built_lb"] = round(built, 3)
++    info["sds2_lb"] = round(wt, 3)
++    r = built / wt if wt > 0 else None
++    info["weight_ratio"] = None if r is None else round(r, 4)
++    if r is not None and abs(r - 1) <= WEIGHT_TOL:
++        return res, info
++    # a panel cut down from its stock (strips, notches, openings): SDS2 weighs the uncut W x L panel (TEMP Wayne
++    # Farms GR1 1/4x36 cut to 11 1/2 in wide: 0.322 = 11.5 / 36), so a lighter result is accepted when the piece's
++    # own geometry lies within the W x L stock of its record, its cross bars are stored, and its weight per plan area
++    # is the stock's (built / SDS2 weight = CUT_DENSITY x plan / stock area): a piece that lost bars or closed voids
++    # fails this
++    why = ""
++    if r is not None and r < 1 and fields and not fields.get("cross_deeper_than_bars"):
++        plan = sorted(np.ptp(allv - np.outer(allv @ n, n), 0))[-2:]
++        stock = sorted((fields["width"], fields["length"]))
++        pr = _plan_ratio(V, [f for P in body_faces for f in P] + markers, n, fields)
++        info["plan_ratio"] = None if pr is None else round(pr, 4)
++        if not (plan[0] <= stock[0] + 0.05 and plan[1] <= stock[1] + 0.05):
++            why = "larger than its W x L stock"
++        elif not markers:
++            why = "no cross bars stored although the record has them"
++        elif pr is None or not CUT_DENSITY[0] <= r / pr <= CUT_DENSITY[1]:
++            why = (f"weight per plan area {r / pr:.2f}x the stock's" if pr else "plan area not measurable")
++        else:
++            info["cut_from_stock"] = True
++            return res, info
++    info["why"] = (f"built grating {r:.3f}x SDS2's weight (outside 1 +- {WEIGHT_TOL}, not a cut of its W x L stock"
++                   f"{': ' + why if why else ''})" if r is not None else "no SDS2 weight to validate the built grating")
++    return None, info
+diff -ruN a/sds2-step-pipeline/decode/manifest.py b/sds2-step-pipeline/decode/manifest.py
+--- a/sds2-step-pipeline/decode/manifest.py	2026-10-01 23:03:52
++++ b/sds2-step-pipeline/decode/manifest.py	2026-10-01 23:03:52
+@@ -27,7 +27,8 @@
+     "rolled_profile_extrusion": "a readable SDS2 piece B-rep (copes, cuts, end preparation)",
+     "plate_from_vertices": "a readable SDS2 piece B-rep (cut outline, bends)",
+     "piece_table_standin": "readable piece geometry (only the piece-table L x W x T / section is known)",
+-    "grating_solid_panel": "the grating bar layout (SDS2 stores a solid panel)",
++    "grating_solid_panel": "grating bars and bands stored as faces that bound closed solids, with the cross bar fields in "
++                           "the piece record (the reason names what this piece lacks)",
+     "holes_not_cut": "a successful boolean of the decoded holes",
+     "concrete_prism": "the concrete mesh as a closed solid",
+     "builtup_estimated": "the real built-up section dimensions (flange widths / thicknesses)",
+@@ -247,6 +248,9 @@
+                             parts=[{k: s[k] for k in ("member", "member_type", "piece", "inst", "name", "kind", "reason")} for s in skipped]),
+                converter_duplicates=dict(total=len(dups), parts=dups[:5000]),
+                readback=dict(checked=False))
++    for k in ("grating", "rods"):                  # [sgc] patch sds2-grating-cylinders: builder outcome sections
++        if stats.get("sgc_" + k):
++            man[k] = stats["sgc_" + k]
+     man["class"], man["corpus"], man["class_reasons"] = classify(man)
+     return man
+ 
+diff -ruN a/sds2-step-pipeline/decode/to_step2.py b/sds2-step-pipeline/decode/to_step2.py
+--- a/sds2-step-pipeline/decode/to_step2.py	2026-10-01 23:03:52
++++ b/sds2-step-pipeline/decode/to_step2.py	2026-10-01 23:03:52
+@@ -487,6 +487,13 @@
+         segs = turned_local(Vt) if Vt is not None and len(Vt) >= 6 else None
+         if not segs and V is not None:
+             segs = turned_local(V)
++        if not segs:
++            # [sgc] rings along an axis that is not a local coordinate axis through the origin (angled / offset rods):
++            # exact cylinders on the axis of the piece's own end caps
++            ax = _cap_axis_cylinders(_turned_from_brep(job, sid, p), M, o)
++            if ax is not None:
++                TURNED_ANY_AXIS.add((job, sid))
++                return ax, "fastener"
+         if not segs and p["W"] > 0 and p["L"] > 0:
+             # rings not stacked on one axis (hooked / bent anchors, 7.605 NFCU DBA1/2): straight rod of the
+             # piece's diameter and length along the mesh's longest direction
+@@ -606,6 +613,7 @@
+ 
+ 
+ SPECIAL_NOTE = ""     # set by special_solid when it had to guess a shape (tagged by the caller)
++TURNED_ANY_AXIS = set()  # [sgc] (job, piece) rods written as exact cylinders on their end-cap axis
+ USE_BREP = True       # exact faceted solids from the piece file's own topology (brep.py); False = approximate builders
+ USE_HOLES = True      # cut the piece's bolt holes / slots (brep.holes) into its exact solid
+ _BREP = {}
+@@ -731,6 +739,272 @@
+     return BRepBuilderAPI_Transform(sh, t, True).Shape()
+ 
+ 
++# [sgc] patch sds2-grating-cylinders: nominal diameter of a round bar / stud / anchor from its name (RB1/2, RB1 1/4,
++# THD STUD 5/8, TWS3/4, DBA1/2) -> inches
++_DIA_RX = re.compile(r"^(?:RB|RD|AB|DBA|TWS|WS|HS|NS|THD STUD|STUD)\s*(\d+ \d+/\d+|\d+/\d+|\d+(?:\.\d+)?)\b")
++
++
++def _name_dia(name):
++    m = _DIA_RX.match(name or "")
++    if not m:
++        return None
++    try:
++        return sum(float(a) / float(b) if "/" in t else float(t) for t in m.group(1).split()
++                   for a, b in [t.split("/") if "/" in t else (t, 1)])
++    except (ValueError, ZeroDivisionError):
++        return None
++
++
++def _cluster(x, tol):
++    """1-D values -> labels of runs whose sorted gaps are <= tol, and the run means."""
++    o = np.argsort(x); lab = np.empty(len(x), int); k = 0
++    for i in range(len(o)):
++        if i and x[o[i]] - x[o[i - 1]] > tol:
++            k += 1
++        lab[o[i]] = k
++    return lab, np.array([x[lab == j].mean() for j in range(k + 1)])
++
++
++def turned_any_axis(V, F, p):
++    """Rods, studs and anchors whose rings are not stacked on a piece-local coordinate axis through the origin (joist
++    web rods at an angle, bars offset from the piece origin): v5.4 wrote them as a straight-rod guess along the mesh's
++    longest direction (data-3 sample: 26,783 of 30,708 guessed rods are straight). The axis is the common normal of
++    the piece's planar end caps (faces of >= 6 vertices, stored duplicates dropped) through their centroids; the rings
++    are read along it as turned_local does. Accepted only when every face vertex lies on a ring, the shank diameter
++    is the name's (RB1/2 -> 0.5 in) and the cylinders weigh SDS2's weight (0.75-1.33).
++    -> [(start point, length, radius, unit axis)] in piece-local inches, or None."""
++    used = sorted({i for f in F for i in f})
++    if len(used) < 6:
++        return None
++    U = V[used]
++    caps = {}
++    for f in F:
++        ls = brep.loops_of(f)
++        if len(ls) != 1 or len(ls[0]) < 6 or frozenset(ls[0]) in caps:
++            continue
++        P = V[ls[0]]; c = P.mean(0)
++        nrm = sum(np.cross(P[k] - c, P[(k + 1) % len(P)] - c) for k in range(len(P)))
++        if np.linalg.norm(nrm) < 1e-12:
++            continue
++        nrm = nrm / np.linalg.norm(nrm)
++        if np.abs((P - c) @ nrm).max() < 1e-3:
++            caps[frozenset(ls[0])] = (c, nrm)
++    if len(caps) < 2:
++        return None
++    C = np.array([c for c, _ in caps.values()]); n0 = next(iter(caps.values()))[1]
++    if any(abs(nr @ n0) < 0.9999 for _, nr in caps.values()):
++        return None
++    t = (C - C[0]) @ n0
++    if np.linalg.norm((C - C[0]) - np.outer(t, n0), axis=1).max() > 2e-3:
++        return None                                        # cap centres not on one line: bent / hooked
++    c0 = C[int(np.argmin(t))]
++    u = np.cross(n0, [1.0, 0, 0] if abs(n0[0]) < 0.9 else [0, 1.0, 0]); u /= np.linalg.norm(u); w = np.cross(n0, u)
++    X = (U - c0) @ np.array([n0, u, w]).T
++    x, r = X[:, 0], np.linalg.norm(X[:, 1:], axis=1)
++    on = r > 0.05
++    if on.sum() < 6:
++        return None
++    xl, xc = _cluster(x, 2e-3)
++    rl, rc = _cluster(r[on], 2e-3)
++    cnt = collections.Counter(zip(xl[on], rl))
++    if any(cnt[(a, b)] < 3 for a, b in zip(xl[on], rl)):
++        return None                                        # a vertex off every ring
++    if np.any(~on & ~np.isin(xl, list({a for a, _ in cnt}))):
++        return None                                        # an axis point between stations
++    st = collections.defaultdict(set)
++    for a, b in cnt:
++        st[a].add(b)
++    xs = sorted(st, key=lambda a: xc[a])
++    segs = []
++    for a0, a1 in zip(xs, xs[1:]):
++        common = sorted(st[a0] & st[a1], key=lambda b: rc[b])
++        if not common:
++            return None
++        L = float(xc[a1] - xc[a0])
++        rr = next((rc[b] for b in reversed(common) if L <= 2.5 * rc[b]), rc[common[0]])
++        segs.append((c0 + n0 * xc[a0], L, float(rr), n0))
++    if not segs:
++        return None
++    d = _name_dia(p.get("name"))
++    shank = max(segs, key=lambda s: s[1])
++    if d and abs(2 * shank[2] - d) > 0.03 * d + 0.01:
++        return None
++    vol = sum(np.pi * r_ ** 2 * L_ for _, L_, r_, _ in segs)
++    if p.get("wt", 0) > 0 and not 0.75 <= vol * 0.2836 / p["wt"] <= 1.33:
++        return None
++    return segs
++
++
++def _cap_axis_cylinders(segs, M, o):
++    """turned_any_axis() segments -> world cylinders (one solid, or a compound for stepped studs), or None."""
++    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
++    from OCP.gp import gp_Ax2, gp_Dir
++    if not segs:
++        return None
++    parts = []
++    for q0, L, r, u in segs:
++        try:
++            parts.append(BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(*((o + M.T @ q0) * MM)), gp_Dir(*(M.T @ u))),
++                                                  r * MM, L * MM).Shape())
++        except Exception:
++            return None
++    return parts[0] if len(parts) == 1 else _compound(parts)
++
++
++def _turned_from_brep(job, sid, p):
++    try:
++        with open(os.path.join(job, "subm", str(sid)), "rb") as f:
++            r = brep.parse(f.read())
++    except OSError:
++        return None
++    return turned_any_axis(r[0], r[1], p) if r is not None else None
++
++
++_ROD = {}
++ROD_SEW_TOL = 0.002   # in: bend facets of SDS2 rod meshes that miss each other by 0.001-0.002 in (SUSQUEHANNOCK RB1/4)
++
++
++def _merge_vertices(V, F, tol):
++    """Single-loop faces with vertices closer than tol merged into one; degenerate faces dropped. None if any face has
++    several loops (hollow end faces: not a rod)."""
++    from scipy.spatial import cKDTree
++    if any(len(brep.loops_of(f)) != 1 for f in F):
++        return None
++    used = sorted({i for f in F for i in f})
++    par = {i: i for i in used}
++
++    def find(a):
++        while par[a] != a:
++            par[a] = par[par[a]]; a = par[a]
++        return a
++    for i, j in cKDTree(V[used]).query_pairs(tol):
++        a, b = find(used[i]), find(used[j])
++        if a != b:
++            par[max(a, b)] = min(a, b)
++    out = []
++    for f in F:
++        nf = []
++        for i in brep.loops_of(f)[0]:
++            i = find(i)
++            if not nf or nf[-1] != i:
++                nf.append(i)
++        if len(nf) > 1 and nf[0] == nf[-1]:
++            nf.pop()
++        if len(set(nf)) >= 3:
++            out.append(nf)
++    return out
++
++
++def rod_brep_placed(job, sid, p, M, o):
++    """Bent / hooked rods and anchors ([sgc]): the piece's own faceted B-rep, also when its bend facets miss each other by
++    up to ROD_SEW_TOL (coincident vertices merged, then sewn as brep.solid does). Accepted on brep_placed's rule: volume
++    within 0.6-1.6x SDS2's weight. Shared part + placement like brep_placed, or None."""
++    if not USE_BREP:
++        return None
++    key = (job, sid)
++    if key not in _ROD:
++        sh = None
++        try:
++            with open(os.path.join(job, "subm", str(sid)), "rb") as f:
++                r = brep.parse(f.read())
++            if r is not None:
++                sh = brep.solid(*r)
++                if sh is None:
++                    F2 = _merge_vertices(r[0], r[1], ROD_SEW_TOL)
++                    sh = brep.solid(r[0], F2) if F2 else None
++            if sh is not None:
++                from OCP.GProp import GProp_GProps
++                from OCP.BRepGProp import BRepGProp
++                g = GProp_GProps(); BRepGProp.VolumeProperties_s(sh, g)
++                if not (p["wt"] > 0 and 0.6 < abs(g.Mass()) / MM ** 3 * 0.2836 / p["wt"] < 1.6):
++                    sh = None
++        except Exception:
++            sh = None
++        _ROD[key] = sh
++    sh = _ROD[key]
++    if sh is None:
++        return None
++    t = placement(M, o)
++    if t is None:
++        return None
++    if SHARED:
++        return ("shared", sh, t)
++    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
++    return BRepBuilderAPI_Transform(sh, t, True).Shape()
++
++
++GRATING = re.compile(r"G[TR]\d")   # bar grating (GR) and grating treads (GT)
++_GRATING = {}          # (job, piece) -> built local grating solid or None
++GRATING_WHY = {}       # (job, piece) -> why the grating could not be built (tagged panel reason)
++GRATING_INFO = {}      # (job, piece) -> grating.build() info (manifest)
++GRATING_BUDGET_S = float(os.environ.get("SDS2_GRATING_BUDGET_S", "1800"))   # grating build time per job (0: off)
++_GRATING_T = {}        # job -> seconds spent building gratings
++_IDX = {}
++
++
++def _piece_record(job, sid, name):
++    """Raw piece-table record of a piece: the slot layout whose name field holds the piece's own name."""
++    from piece_table import LAYOUTS
++    if job not in _IDX:
++        _IDX.clear()
++        with open(os.path.join(job, "subm", "subm_idx"), "rb") as f:
++            _IDX[job] = f.read()
++    b = _IDX[job]
++    for Lo in LAYOUTS.values():
++        S, o = Lo["slot"], Lo["name"]
++        q = sid * S + o
++        if (sid + 1) * S <= len(b) and b[q:q + len(name)] == name.encode() and not 32 <= b[q + len(name)] <= 126:
++            return b[sid * S:(sid + 1) * S]
++    return None
++
++
++def grating_placed(job, sid, p, M, o):
++    """Bar grating / grating tread built by grating.build() from the piece's own faces and record (cached per piece),
++    placed like brep_placed; None (reason in GRATING_WHY) -> the caller's tagged panel."""
++    import grating as GRT
++    import time as _t
++    key = (job, sid)
++    if key not in _GRATING:
++        sh, why, info = None, "", {}
++        t0 = _t.time()
++        try:
++            if _GRATING_T.get(job, 0.0) >= GRATING_BUDGET_S:
++                raise TimeoutError
++            with open(os.path.join(job, "subm", str(sid)), "rb") as f:
++                r = brep.parse(f.read())
++            rec = _piece_record(job, sid, p["name"])
++            if r is None:
++                why = "piece file has no readable face topology"
++            elif rec is None:
++                why = "piece record not found"
++            else:
++                sh, info = GRT.build(r[0], r[1], p["wt"], rec)
++                why = info.get("why", "")
++            if sh is not None and _absurd(sh):
++                sh, why = None, "absurd extent"
++        except FileNotFoundError:
++            why = "no piece file (subm/<id> missing)"
++        except TimeoutError:
++            why = f"grating build time budget exceeded ({GRATING_BUDGET_S:g} s per job, SDS2_GRATING_BUDGET_S)"
++        except Exception as e:
++            sh, why = None, f"grating build error {type(e).__name__}"
++        _GRATING_T[job] = _GRATING_T.get(job, 0.0) + _t.time() - t0
++        _GRATING[key] = sh
++        GRATING_INFO[key] = dict(info, name=p["name"], ok=sh is not None)
++        if sh is None:
++            GRATING_WHY[key] = why or "not built"
++    sh = _GRATING[key]
++    if sh is None:
++        return None
++    t = placement(M, o)
++    if t is None:
++        return None
++    if SHARED:
++        return ("shared", sh, t)
++    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
++    return BRepBuilderAPI_Transform(sh, t, True).Shape()
++
++
+ _REF = {}
+ REF_OPEN = set()      # reference parts written as open shells (faces as stored, not a closed solid)
+ REF_FACES = set()     # reference parts written as unsewn face sets (their sewn shell fails BRepCheck)
+@@ -1505,6 +1779,19 @@
+                 dup_rows.append(dict(member=n, piece=sid, inst=inst_no, name=p["name"], written_with_member=prev[0]))
+                 stats["duplicate_skipped"] = stats.get("duplicate_skipped", 0) + 1
+                 continue
++            if USE_BREP and GRATING.match(p["name"]):
++                # [sgc] bar grating / grating tread as SDS2 models it (grating.py): bearing bars, bands, carrier plates
++                # and nosing from the piece faces, cross bars from their stored rectangles and the record's cross bar
++                # depth; validated against SDS2's weight (v4 / v5.4: solid panel, tagged)
++                gsh = grating_placed(job, sid, p, M, o)
++                if gsh is not None:
++                    sh = add_exact(sid, gsh, label)
++                    stats["grating"] = stats.get("grating", 0) + 1; stats["exact"] += 1
++                    stats["exact_brep"] = stats.get("exact_brep", 0) + 1
++                    add_row(dict(member=n, member_type=mtype[n], piece=sid, inst=inst_no,
++                                 name=p["name"], kind="grating", builder="exact_brep",
++                                 ox=round(o[0], 4), oy=round(o[1], 4), oz=round(o[2], 4)), dkey, label=label)
++                    continue
+             # exact B-rep: plates / rolled / joists, and bolts (SDS2 stores each nut, head and washer as its own
+             # faceted hex / ring piece). Studs and rods keep the true cylinders of special_solid; concrete its prism.
+             if (k in ("plate", "rolled") and not TURNED.match(p["name"]) or p["name"].startswith("BLT")) \
+@@ -1581,9 +1868,21 @@
+                     if ex_ is not None:                                      # v5.5w: SDS2's own B-rep (see turned_brep)
+                         sh, k2, builder = ex_, "fastener", "exact_brep"
+                         stats["exact"] += 1
++                if builder == "special_primitive" and sh is not None and SPECIAL_NOTE \
++                        and not p["name"].startswith("Conc") and brep_placed(job, sid, p, M, o) is None:
++                    # [sgc] still a straight-rod guess and the stored B-rep does not close as stored: the B-rep with
++                    # bend facets up to 0.002 in apart merged (SUSQUEHANNOCK / RIPPLING RB1/4); closed B-reps are
++                    # turned_brep()'s (above)
++                    ex_ = rod_brep_placed(job, sid, p, M, o)
++                    if ex_ is not None:
++                        sh, k2, builder = ex_, "fastener", "exact_brep"
++                        stats["exact"] += 1; stats["rod_brep"] = stats.get("rod_brep", 0) + 1
++                        globals()["SPECIAL_NOTE"] = ""
+                 if sh is None and not p["name"].startswith("Conc"):
+                     # e.g. threaded studs with no rings; square / round bars and rebar keep their table kind
+                     sh, k2 = brep_placed(job, sid, p, M, o), ("fastener" if TURNED.match(p["name"]) else k)
++                    if sh is None and TURNED.match(p["name"]):
++                        sh = rod_brep_placed(job, sid, p, M, o)             # [sgc] bend facets 0.002 in apart
+                     if sh is not None:
+                         stats["exact"] += 1
+                         builder = "exact_brep"
+@@ -1594,6 +1893,8 @@
+                     if sh is not None:
+                         builder, k2 = "piece_table_standin", ("plate" if k == "plate" else "other")
+                         why = f"L x W x T slab from the piece table ({exact_why}; no usable vertices)"
++                        if GRATING.match(p["name"]):
++                            why = f"bar grating as an {why} (bars not built: {GRATING_WHY.get((job, sid), 'no grating data')})"
+                 if sh is None:
+                     record_skip(n, sid, inst_no, p, k, o, "no_usable_special_geometry")
+                     continue
+@@ -1707,6 +2008,8 @@
+                     "piece_table_standin": "piece-table size (L x W x T / nominal section)"}[builder]
+             if nominal and builder == "profile_fallback":
+                 what = "nominal section over the piece-table length (piece file holds no geometry)"
++            if GRATING.match(p["name"]):
++                what = f"bar grating as its panel outline (bars not built: {GRATING_WHY.get((job, sid), 'no grating data')})"
+             note = T.PROFILE_NOTES.get(shapes[p["sec"]].name) if k == "rolled" and p["sec"] in shapes else None
+             why = f"{what}; copes/cuts not modelled; {holes_txt} ({exact_why})" + (f"; {note}" if note else "")
+             lab_ = _tag(label, why)
+@@ -1903,6 +2206,23 @@
+     if skipped:
+         print("  not built (no usable geometry):", dict(skipped.most_common(10)))
+     placed_total = sum(instance_counts.values())
++    # [sgc] what the grating builder and the exact rod paths did (manifest "grating" / "rods";
++    # caches are keyed by (job, piece), so a read-back repair pass reuses them)
++    gi = [v for (j_, _), v in GRATING_INFO.items() if j_ == job]
++    stats["sgc_grating"] = dict(pieces=len(gi), built=sum(1 for v in gi if v.get("ok")),
++                                cut_from_stock=sum(1 for v in gi if v.get("ok") and v.get("cut_from_stock")),
++                                tread_cells=sum(1 for v in gi if v.get("ok") and v.get("cells")),
++                                cross_bars=sum(v.get("cross_bars", 0) for v in gi if v.get("ok")),
++                                placed_written=stats.get("grating", 0), build_seconds=round(_GRATING_T.get(job, 0.0), 1),
++                                not_built=dict(collections.Counter(GRATING_WHY[k_] for k_ in GRATING_WHY if k_[0] == job)),
++                                note="bars, bands, carrier plates and nosing from the piece faces; cross bars = the stored "
++                                     "cross bar rectangles extruded by the record's cross bar depth; built weight within 3 % "
++                                     "of SDS2's, or a cut of the record's W x L stock (SDS2 weighs the uncut panel)")
++    stats["sgc_rods"] = dict(exact_cylinders_on_cap_axis=sum(1 for r in rows if r.get("builder") == "special_primitive"
++                                                             and (job, r.get("piece")) in TURNED_ANY_AXIS),
++                             exact_brep_bent=stats.get("rod_brep", 0),
++                             straight_rod_guesses=sum(1 for r in rows if r.get("builder") == "special_primitive"
++                                                      and "straight rod" in (r.get("standin") or "")))
+     man = MF.build(job=job, out=out, version=read_version(job), stats=stats, rows=rows, skipped=skipped_rows,
+                    dups=dup_rows, bolt_standins=bolt_rows, mems=mems, placed=placed_total,
+                    members_without_geometry=n_members_without_geometry,

@@ -1,0 +1,37 @@
+--- a/ifc2step6.py
++++ b/ifc2step6.py
+@@ -2046,6 +2046,25 @@
+         return out
+ 
+ 
++def repair_null_curve_segments(f):
++    """IfcCompositeCurveSegment without a ParentCurve (Tekla 2017i writes `#0`, a reference to no entity, read as $; the
++    attribute is mandatory) makes the kernel reject the whole profile, and the product was lost ('SHEAR TAB' PL3/4"X12":
++    the empty segment sits next to a closed polyline segment that alone bounds the plate). Such a segment carries no
++    geometry; it is dropped from the in-memory curve when at least one real segment remains (the source file is not
++    touched). -> number of curves changed"""
++    n = 0
++    for cc in f.by_type('IfcCompositeCurve'):
++        try:
++            segs = cc.Segments or ()
++            keep = [sg for sg in segs if getattr(sg, 'ParentCurve', None) is not None]
++            if keep and len(keep) < len(segs):
++                cc.Segments = keep
++                n += 1
++        except Exception:
++            continue
++    return n
++
++
+ def kernel_settings(ttype='poly'):
+     import ifcopenshell.geom
+     import ifcopenshell.ifcopenshell_wrapper as W
+@@ -2652,6 +2671,8 @@
+     stats["schema_declared"] = info.get('schema_declared')
+     stats["input_kind"] = info.get('input_kind')
+     stats["input_fix"] = info.get('input_fix') or None
++    if os.environ.get('V6_NO_CURVE_REPAIR') != '1':
++        stats["null_curve_segments_dropped"] = repair_null_curve_segments(f)
+     try:
+         m_per_unit = float(ifcopenshell.util.unit.calculate_unit_scale(f))
+     except Exception:

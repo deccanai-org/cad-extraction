@@ -1,0 +1,130 @@
+--- a/ifc2step6.py
++++ b/ifc2step6.py
+@@ -2774,6 +2774,9 @@
+     stats["transcode_corrupt_coords_tessellated"] = n_corrupt
+     stats["transcode_coverage_pct"] = round(100.0 * stats["transcode_products"] / max(1, len(recs)), 1)
+     stats["transcode_sec"] = round(time.time() - t_tc, 2)
++    # ---- opening bodies the kernel will subtract: contact walls removed in memory (see repair_opening_shells)
++    if kernel_list and a.mode != 'transcode' and os.environ.get('V6_NO_OPENING_REPAIR') != '1':
++        stats["opening_shell_repair"] = repair_opening_shells([f.by_id(r.eid) for r in kernel_list])
+     # ---- kernel pass
+     t_k = time.time()
+     PHASE[0] = 'kernel %d products' % len(kernel_list)
+@@ -2955,6 +2958,117 @@
+ 
+ 
+ KEEP_TAGS = {'reoriented', 'components', 'void', 'tjunction', 'open_in_source', 'open-surface', 'sewn', 'double-sided'}
++
++
++def _opening_shells(item, depth=0):
++    """closed shells of the faceted solids an opening body draws (through mapped items and boolean operands)"""
++    if depth > 16 or item is None:
++        return
++    if item.is_a('IfcMappedItem'):
++        for si in item.MappingSource.MappedRepresentation.Items or []:
++            yield from _opening_shells(si, depth + 1)
++    elif item.is_a('IfcFacetedBrep'):             # incl. IfcFacetedBrepWithVoids (its Outer)
++        yield item.Outer
++    elif item.is_a('IfcBooleanResult'):
++        yield from _opening_shells(item.FirstOperand, depth + 1)
++        yield from _opening_shells(item.SecondOperand, depth + 1)
++
++
++def _shell_loops(shell):
++    """per face of an IfcClosedShell: its single polygon as rounded coordinates in traversal order (None if the face has
++    holes or is not a poly loop), and the edge-use counter of the whole shell"""
++    loops = []
++    use = collections.Counter()
++    for fc in shell.CfsFaces or []:
++        pts_all = []
++        for b in fc.Bounds or []:
++            lp = b.Bound
++            if not lp.is_a('IfcPolyLoop'):
++                pts_all = None
++                break
++            pts = [tuple(round(float(x), 9) for x in p.Coordinates) for p in lp.Polygon]
++            if getattr(b, 'Orientation', True) is False:
++                pts = pts[::-1]
++            pts_all.append(pts)
++        if pts_all is None:
++            return None, None
++        for pts in pts_all:
++            for i in range(len(pts)):
++                a_, b_ = pts[i], pts[(i + 1) % len(pts)]
++                if a_ != b_:
++                    use[(a_, b_) if a_ < b_ else (b_, a_)] += 1
++        loops.append(pts_all[0] if len(pts_all) == 1 else None)
++    return loops, use
++
++
++def contact_wall_pairs(shell):
++    """pairs of faces of one closed shell covering the same polygon with opposite winding: two bodies touching face to
++    face exported as one shell (the shared face once per body). -> ([(i, j)], non-2-manifold edges before, after)"""
++    loops, use = _shell_loops(shell)
++    if not loops:
++        return [], 0, 0
++    by = collections.defaultdict(list)
++    for k, lp in enumerate(loops):
++        if lp is not None and len(lp) >= 3 and len(set(lp)) == len(lp):
++            by[frozenset(lp)].append(k)
++    pairs = []
++    for ks in by.values():
++        if len(ks) != 2:
++            continue
++        a_, b_ = loops[ks[0]], loops[ks[1]]
++        if len(a_) != len(b_):
++            continue
++        i = b_.index(a_[0])
++        if b_[i::-1] + b_[:i:-1] == a_:             # same cycle, walked the other way round
++            pairs.append(tuple(ks))
++    bad0 = sum(1 for n in use.values() if n != 2)
++    if not pairs:
++        return [], bad0, bad0
++    use2 = collections.Counter(use)
++    for ks in pairs:
++        for k in ks:
++            lp = loops[k]
++            for i in range(len(lp)):
++                a_, b_ = lp[i], lp[(i + 1) % len(lp)]
++                use2[(a_, b_) if a_ < b_ else (b_, a_)] -= 1
++    bad1 = sum(1 for n in use2.values() if n not in (0, 2))
++    return pairs, bad0, bad1
++
++
++def repair_opening_shells(prods):
++    """The kernel subtracts IfcOpeningElement bodies with OpenCASCADE booleans, which need 2-manifold closed tools. SDS/2
++    exports countersunk / stepped bolt holes as ONE IfcFacetedBrep holding two bodies (cone + cylinder) that touch face
++    to face, the shared face given once per body with opposite winding: 16 edges used 4 times. The boolean then returns
++    nothing and the whole product was lost (6.1.0-dev3: 28 plates of one model, 1 of another; 6.0.1 the same). Like the
++    transcoder's contact-wall repair, both copies of such a face pair are removed from the opening's shell in memory
++    (the two bodies become their exact union; no face added, no vertex moved; the source file is not touched), only
++    when that makes the shell 2-manifold where it was not. Products' own bodies are not changed here."""
++    seen = set()
++    n_sh = n_pairs = n_ops = n_err = 0
++    for pr in prods:
++        for rel in getattr(pr, 'HasOpenings', None) or []:
++            n_ops += 1
++            try:
++                items, _ = body_items(rel.RelatedOpeningElement)
++                shells = [sh for it in (items or []) for sh in _opening_shells(it)]
++            except Exception:
++                n_err += 1
++                continue
++            for sh in shells:
++                if sh is None or sh.id() in seen:
++                    continue
++                seen.add(sh.id())
++                try:
++                    pairs, bad0, bad1 = contact_wall_pairs(sh)
++                    if pairs and bad1 < bad0:
++                        drop = {k for ks in pairs for k in ks}
++                        sh.CfsFaces = [fc for k, fc in enumerate(sh.CfsFaces) if k not in drop]
++                        n_sh += 1
++                        n_pairs += len(pairs)
++                except Exception:
++                    n_err += 1
++    return {'openings': n_ops, 'shells_checked': len(seen), 'shells_repaired': n_sh, 'face_pairs_removed': n_pairs,
++            'errors': n_err}
+ 
+ 
+ def inst_key(pr):

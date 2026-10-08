@@ -1,0 +1,2 @@
+mkdir -p /work/agentwork/sds2-pieces-not-built/stage && cd /work/agentwork/sds2-pieces-not-built && aws s3 cp --quiet s3://annotationprod/cad-disk-extract/_control/z3conv/agentjobs/sds2-pieces-not-built/run_diag_ref.sh stage/run_diag_ref.sh && setsid nohup bash stage/run_diag_ref.sh > out_diag_ref.log 2>&1 < /dev/null & 
+sleep 2; echo launched; ps -eo pid,args | grep diag_ref | grep -v grep | head

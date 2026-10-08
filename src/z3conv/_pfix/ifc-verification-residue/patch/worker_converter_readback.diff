@@ -1,0 +1,21 @@
+--- worker.orig.py	2026-10-01 17:26:26
++++ worker.py	2026-10-01 18:03:31
+@@ -477,9 +477,18 @@
+         rec['census'] = json.load(open(cj))
+     except Exception:
+         rec['census'] = {'error': f'census rc {rcc}', 'log': tail_of(os.path.join(d, 'census.log'), 400)}
++    vparts = stp + '.verify_parts.jsonl.gz'
++    if not os.path.exists(sparts) and 'skipped' in v and os.path.exists(vparts):
++        # STEP over the read-back cap: ifc2step6 (>= 6.1.0-dev3+vr) read every written part back from its own STEP
++        # block with step_check's checks and wrote them in step_check's --parts format -> per-part join from those
++        sparts = vparts
++        rec['validate']['per_part_source'] = 'converter_readback'
++        rec['validate']['converter_readback'] = (st.get('readback_parts') or {})
+     if os.path.exists(cparts) and os.path.exists(sparts):
+         try:
+             rec['join'] = grade_join.join(grade_join.load(cparts), grade_join.load(sparts))
++            if sparts.endswith('.verify_parts.jsonl.gz'):
++                rec['join']['per_part_source'] = 'converter_readback'
+         except Exception as e:
+             rec['join'] = {'error': f'{type(e).__name__}: {str(e)[:200]}'}
+     # uploads

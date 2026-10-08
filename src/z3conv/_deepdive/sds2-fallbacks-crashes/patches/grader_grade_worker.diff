@@ -1,0 +1,11 @@
+--- a/grade/worker.py	2026-10-01 15:39:22
++++ b/grade/worker.py	2026-10-01 15:39:22
+@@ -247,7 +247,7 @@
+                 st[('joist_as_envelope_box', 'joist ' + (nm or mt)) if 'joist' in b else ('member_as_envelope', f'{mt or "member"} without piece data')] += 1
+             elif b in ('plate_fallback', 'profile_fallback'):
+                 st[(f'{b}_approximate_no_holes', f'{kind} {nm.split()[0] if nm else ""}'.strip())] += 1
+-            elif kind == 'concrete':
++            elif kind == 'concrete' and b != 'exact_brep':
+                 st[('concrete_as_prism', 'concrete footing/slab')] += 1
+             if kind in ('plate', 'rolled') and GRATING.match(nm):
+                 st[('grating_as_solid_panel', 'bar grating ' + nm[:20])] += 1

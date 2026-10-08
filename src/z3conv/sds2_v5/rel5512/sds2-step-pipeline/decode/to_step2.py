@@ -1,0 +1,2523 @@
+"""Stage 2: SDS2 job -> STEP with fabricated pieces (main material + connection plates/angles), 7.243 and 7.425 layouts.
+
+Each placed piece (mem material block: rotation M, global origin o, piece id) becomes a solid:
+  plate  : 2D convex hull of its vertices in the plate plane (thinnest bbox axis), extruded over the thickness
+  bent   : bent plates (thinnest extent >> thickness): end-face section polygon extruded along the bend line
+  rolled : AISC profile from job_mtrl (hollow sections keep their inner loop), extruded along local x over the vertex
+           x-range; profile orientation (4 sign flips) chosen so the most vertices lie on the profile boundary;
+           fitted to the vertex y/z bbox (round HSS: centred on the axis)
+Members with no fabricated pieces (joists) fall back to the stage-1 member solid.
+World point = o + M.T @ local  (validated on 50_Binney: plates 78% within 1in of the IFC part; on TRI NORTH 7.425,
+solid volume vs the piece weight in subm_idx: W 99%, HSS 95%, L 93%, plates 83-100% within 10%).
+By default every piece is first built from its own B-rep (brep.py: exact faces, copes and cuts, bolt holes and slots
+cut in); the builders above are the fallback when a piece has no usable topology.
+usage: python to_step2.py <job_dir> <out.step>
+"""
+import os, sys, csv, math, re, struct, collections
+import numpy as np
+from scipy.spatial import ConvexHull
+from instances import material_instances, subm_vertices, piece_vertices
+from piece_table import read_pieces, kind
+from sds2job import read_shapes, read_version, read_members
+import to_step as T
+import brep
+
+from OCP.gp import gp_Pnt, gp_Vec
+from OCP.BRepBuilderAPI import BRepBuilderAPI_MakePolygon, BRepBuilderAPI_MakeFace
+from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
+from OCP.ShapeFix import ShapeFix_Face
+from OCP.BRepCheck import BRepCheck_Analyzer
+from OCP.TDocStd import TDocStd_Document
+from OCP.TCollection import TCollection_ExtendedString
+from OCP.XCAFDoc import XCAFDoc_DocumentTool
+from OCP.TDataStd import TDataStd_Name
+from OCP.STEPCAFControl import STEPCAFControl_Writer
+from OCP.STEPControl import STEPControl_AsIs
+from OCP.Interface import Interface_Static
+from OCP.IFSelect import IFSelect_RetDone
+
+MM = 25.4
+
+
+def _revisits(pts, tol=5e-3):
+    """True if two non-adjacent ring points coincide (within tol): such rings pass shapely but not OCC / STEP."""
+    P = np.asarray([np.asarray(q, float)[:2] if len(q) == 2 else np.asarray(q, float) for q in pts])
+    n = len(P)
+    if n < 4: return False
+    D = np.linalg.norm(P[:, None, :] - P[None, :, :], axis=2)
+    iu = np.triu_indices(n, 2)
+    close = D[iu] < tol
+    adj_wrap = (iu[0] == 0) & (iu[1] == n - 1)
+    return bool(np.any(close & ~adj_wrap))
+
+
+def _clean_loop(loop, tol=5e-3):
+    """Drop near-duplicate and collinear points: tiny edges survive OCC's check but not the STEP round trip
+    (7.516 HENRY FORD piece 8861 read back invalid)."""
+    pts = [np.asarray(q, float) for q in loop]
+    changed = True
+    while changed and len(pts) > 3:
+        changed = False
+        for k in range(len(pts)):
+            a, b, c = pts[k - 1], pts[k], pts[(k + 1) % len(pts)]
+            ab, bc = b - a, c - b
+            la, lb = np.linalg.norm(ab), np.linalg.norm(bc)
+            if la < tol or (lb > 0 and np.linalg.norm(np.cross(ab, bc)) < 1e-4 * la * lb):   # duplicate / collinear
+                del pts[k]; changed = True; break
+    return pts
+
+
+def _wire(loop):
+    poly = BRepBuilderAPI_MakePolygon()
+    for q in _clean_loop(loop):
+        poly.Add(gp_Pnt(*(q * MM)))
+    poly.Close()
+    return poly.Wire()
+
+
+def prism(loop_world, extrude_world, holes_world=()):
+    """Planar face from an outer loop (+ inner loops for hollow sections), extruded along extrude_world.
+    Returns None for degenerate input (zero-length extrusion, collinear loop) instead of raising."""
+    if np.linalg.norm(extrude_world) < 1e-6:
+        return None
+    try:
+        f = BRepBuilderAPI_MakeFace(_wire(loop_world), True)
+        if not f.IsDone():
+            return None
+        for h in holes_world:
+            f.Add(_wire(h))
+        face = f.Face()
+        if holes_world:                            # let OCC orient the inner wires opposite to the outer one
+            fix = ShapeFix_Face(face); fix.FixOrientation(); face = fix.Face()
+        sh = BRepPrimAPI_MakePrism(face, gp_Vec(*(extrude_world * MM))).Shape()
+        if BRepCheck_Analyzer(sh).IsValid():
+            return sh
+        from OCP.ShapeFix import ShapeFix_Shape    # e.g. a self-touching section: repair, else reject
+        fx = ShapeFix_Shape(sh); fx.Perform()
+        return fx.Shape() if BRepCheck_Analyzer(fx.Shape()).IsValid() else None
+    except Exception:
+        return None
+
+
+def trim_to_length(V, axis, L, tol=0.25):
+    """Drop stray vertices along `axis` (e.g. a lone (-2,0,0) record) when the vertex span exceeds the piece length
+    from subm_idx: keep the window of length L that holds the most vertices."""
+    x = V[:, axis]
+    if not L or L <= 0 or np.ptp(x) <= L + tol:
+        return V
+    xs = np.sort(np.unique(np.round(x, 4)))
+    s = max(xs, key=lambda s0: np.sum((x >= s0 - 1e-4) & (x <= s0 + L + tol)))
+    keep = (x >= s - 1e-4) & (x <= s + L + tol)
+    kx = x[keep]
+    faces_ok = kx.size and np.sum(np.abs(kx - kx.min()) < 1e-3) >= 3 and np.sum(np.abs(kx - kx.max()) < 1e-3) >= 3 \
+        and kx.max() - kx.min() > 0.9 * L
+    if (~keep).sum() > max(2, 0.1 * len(x)) and not faces_ok:
+        return V                                   # length field and geometry disagree: keep all
+    return V[keep]                                 # a few strays, or a full end face at both ends of the window
+                                                   # (7.516 HENRY FORD angles: 5 marker points 600 in away)
+
+
+def _end_face_share(x):
+    """Share of vertices on the two most populated coordinate values (the two end faces of an extrusion)."""
+    _, c = np.unique(np.round(x, 3), return_counts=True)
+    return np.sort(c)[-2:].sum() / len(x)
+
+
+def bent_plate_local(V, p):
+    """Bent plate: extrusion of its end-face section. The section outline is the vertices lying on the min face of the
+    extrusion axis, in file order; arc helper points (bend centres) can make that ring self-intersect, so the fewest
+    points are dropped to get a simple polygon whose area matches the flat width x thickness (within 25%)."""
+    from itertools import combinations
+    from shapely.geometry import Polygon
+    ext0 = V.max(0) - V.min(0)
+    a = max((k for k in range(3) if ext0[k] > 0), key=lambda k: (round(_end_face_share(V[:, k]), 2), ext0[k]))
+    V = trim_to_length(V, a, p["L"])
+    lo, hi = V.min(0), V.max(0); ext = hi - lo
+    i, j = [k for k in range(3) if k != a]
+    ring = []
+    for q in V[np.abs(V[:, a] - lo[a]) < 1e-3][:, [i, j]]:
+        if not ring or np.abs(q - ring[-1]).max() > 1e-4:
+            ring.append(q)
+    if len(ring) > 1 and np.abs(ring[0] - ring[-1]).max() < 1e-4:
+        ring.pop()
+    target = p["W"] * p["T"]
+    if len(ring) < 3 or target <= 0:
+        return None
+    best = None
+    for drop in range(0, min(3, len(ring) - 3) + 1):
+        for rm in combinations(range(len(ring)), drop):
+            pts = [ring[k] for k in range(len(ring)) if k not in rm]
+            if _revisits(pts):
+                continue                           # revisits a vertex: valid for shapely, breaks after STEP export
+            poly = Polygon(pts)
+            if poly.is_valid and poly.area > 0:
+                err = abs(poly.area - target) / target
+                if best is None or err < best[0]:
+                    best = (err, pts)
+        if best and best[0] < 0.25:
+            break
+    if best is None or best[0] >= 0.25:
+        # multi-bend sections whose ring can't be repaired: concave hull of the section points, tightest that fits
+        import shapely
+        from shapely.geometry import MultiPoint
+        # section points from both end faces: some files list only part of the outline on the start face
+        # (7.516 HENRY FORD bent plates: 8 of the L-section's points at x=min, the rest at x=max)
+        allpts = [q for q in V[:, [i, j]]]
+        for pts_set, ratio in [(ring, r) for r in (0.02, 0.05, 0.1, 0.2, 0.3, 0.5)] + [(allpts, r) for r in (0.02, 0.05, 0.1, 0.2)]:
+            try:
+                poly = shapely.concave_hull(MultiPoint(pts_set), ratio=ratio)
+            except Exception:
+                continue
+            if poly.geom_type == "Polygon" and poly.is_valid and poly.area > 0:
+                err = abs(poly.area - target) / target
+                if best is None or err < best[0]:
+                    cc = [np.array(c) for c in poly.exterior.coords[:-1]]
+                    if not _revisits(cc):          # concave hulls can touch themselves at a point
+                        best = (err, cc)
+    if best is None or best[0] >= 0.35:
+        return None
+    loop = []
+    for u, v in best[1]:
+        q = np.zeros(3); q[i], q[j], q[a] = u, v, lo[a]; loop.append(q)
+    e = np.zeros(3); e[a] = ext[a]
+    return loop, e
+
+
+def plate_local_area(poly_pts):
+    from shapely.geometry import Polygon
+    return Polygon(poly_pts).area
+
+
+def plate_outline(V, t, a, b, target, hull_ring):
+    """Notched / cut plates: the convex hull fills cut-outs (on Fan Pier a 1/8in sheet came out 2.3x its weight).
+    Try the plate's own outline (vertices on one face, file order), then concave hulls; keep whichever polygon's
+    area is closest to weight / (density x thickness), and only if it beats the convex hull and is within 15%."""
+    import shapely
+    from shapely.geometry import Polygon, MultiPoint
+    # Some source piece records yield a zero or non-finite target area (data-3 7.425 / 7.433: ZeroDivisionError aborted
+    # the whole job); with no usable weight-derived area keep the convex hull
+    if not np.isfinite(target) or target <= 0:
+        return None
+    hull_err = abs(plate_local_area(hull_ring) - target) / target
+    if hull_err < 0.05:
+        return None
+    face = V[np.abs(V[:, t] - V[:, t].min()) < 1e-3][:, [a, b]]
+    ring = []
+    for q in face:
+        if not ring or np.abs(q - ring[-1]).max() > 1e-4:
+            ring.append(q)
+    cands = []
+    if len(ring) >= 3:
+        cands.append(ring)
+    for ratio in (0.05, 0.1, 0.2, 0.3, 0.5):
+        try:
+            g = shapely.concave_hull(MultiPoint(V[:, [a, b]]), ratio=ratio)
+        except Exception:                         # GEOS can fail on degenerate point sets; just skip this ratio
+            continue
+        if g.geom_type == "Polygon":
+            cands.append([np.array(c) for c in g.exterior.coords[:-1]])
+    best = None
+    for c in cands:
+        poly = Polygon(c)
+        if not poly.is_valid or poly.area <= 0: continue
+        if _revisits(c): continue                  # revisits a vertex
+        err = abs(poly.area - target) / target
+        if best is None or err < best[0]:
+            best = (err, c)
+    if best and best[0] < min(0.15, hull_err):
+        return np.array(best[1])
+    return None
+
+
+def _flat_outline(V, p):
+    """Plates stored as a 2D outline (8.007 350 Summer Street PL4x18: all vertices at z = -48, sometimes plus a stray
+    point at z = 0): if >= 70% of the vertices share one coordinate and the extent along that axis is not the plate
+    thickness, keep the points in that plane and extrude by T from the piece table."""
+    if p is None or p["T"] <= 0:
+        return None
+    for a in range(3):
+        vals, cnts = np.unique(np.round(V[:, a], 3), return_counts=True)
+        z0 = vals[np.argmax(cnts)]
+        on = np.abs(V[:, a] - z0) < 1e-3
+        ext_a = np.ptp(V[:, a])
+        if on.mean() >= 0.7 and on.sum() >= 3 and abs(ext_a - p["T"]) > 0.25 * p["T"]:
+            i, j = [k for k in range(3) if k != a]
+            pts = V[on][:, [i, j]]
+            if np.ptp(pts[:, 0]) <= 0 or np.ptp(pts[:, 1]) <= 0:
+                continue
+            try:
+                ring = pts[ConvexHull(pts).vertices]
+            except Exception:
+                continue
+            outline = plate_outline(np.c_[pts, np.zeros(len(pts))], 2, 0, 1, p["wt"] / 0.2836 / p["T"], ring) if p["wt"] > 0 else None
+            if outline is not None:
+                ring = outline
+            loop = []
+            for u, v in ring:
+                q = np.zeros(3); q[i], q[j], q[a] = u, v, z0; loop.append(q)
+            e = np.zeros(3); e[a] = p["T"]
+            return loop, e
+    return None
+
+
+def plate_local(V, p=None):
+    """Returns (loop in local coords, extrusion vector local) for a plate from its vertices."""
+    ext = V.max(0) - V.min(0)
+    flat = _flat_outline(V, p)
+    if flat is not None:
+        return flat
+    if p is not None and p["T"] > 0 and ext.min() > 1.5 * p["T"] + 0.05:   # thinnest extent >> thickness: bent
+        bent = bent_plate_local(V, p)
+        if bent is not None:
+            return bent
+    t = int(np.argmin(ext))
+    a, b = [i for i in range(3) if i != t]
+    pts2 = V[:, [a, b]]
+    try:
+        hull = ConvexHull(pts2)
+        ring = pts2[hull.vertices]
+    except Exception:
+        lo, hi = pts2.min(0), pts2.max(0)
+        ring = np.array([lo, [hi[0], lo[1]], hi, [lo[0], hi[1]]])
+    if p is not None and p["T"] > 0 and p["wt"] > 0:
+        outline = plate_outline(V, t, a, b, p["wt"] / 0.2836 / p["T"], ring)
+        if outline is not None:
+            ring = outline
+    loop = []
+    for p in ring:
+        q = np.zeros(3); q[a], q[b], q[t] = p[0], p[1], V[:, t].min(); loop.append(q)
+    e = np.zeros(3); e[t] = ext[t]
+    return loop, e
+
+
+def rolled_local(V, sh, L=None):
+    """Profile loop in local (y,z) at x = xmin, extrusion along local x (L: piece length, used to drop stray points)."""
+    loops = T.profile(sh)
+    if not loops:
+        return None
+    V = trim_to_length(V, 0, L)
+    outer = np.array(loops[0])                     # (u = depth dir, v = flange dir), centred
+    # The tagged vertex scanner occasionally accepts an unrelated coordinate
+    # hundreds of inches from an ordinary section. Use the section's own size
+    # around the robust median to exclude those points from the profile fit.
+    section_size = max(sh.d, sh.bf, 0.25)
+    center = np.median(V[:, 1:], axis=0)
+    fit = np.all(np.abs(V[:, 1:] - center) <= section_size + 0.1, axis=1)
+    if fit.sum() >= 4 and fit.mean() >= 0.5:
+        V = V[fit]
+    lo, hi = V.min(0), V.max(0)
+    cy, cz = (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2
+    span = np.ptp(outer, axis=0)
+    if (hi[1] - lo[1]) < 0.5 * span.min() and (hi[2] - lo[2]) < 0.5 * span.min():
+        cy = cz = 0.0                              # round HSS/pipe: vertices only describe the seam; tube is on the axis
+    best = None
+    for swap in (False, True):
+        uv = outer[:, ::-1] if swap else outer
+        for su in (1, -1):
+            for sv in (1, -1):
+                P = np.c_[uv[:, 0] * su + cy, uv[:, 1] * sv + cz]
+                # Score boundary agreement, then the section's y/z bbox. The
+                # bbox distinguishes unequal angle legs that boundary hits
+                # alone can exchange; all 8 flip/swap orientations are tried.
+                seg_a, seg_b = P, np.roll(P, -1, axis=0)
+                yz = V[:, 1:]
+                dist = np.full(len(yz), 1e9)
+                for A, Bp in zip(seg_a, seg_b):
+                    AB = Bp - A; L2 = AB @ AB
+                    if L2 == 0: continue
+                    tt = np.clip(((yz - A) @ AB) / L2, 0, 1)
+                    dist = np.minimum(dist, np.linalg.norm(yz - (A + np.outer(tt, AB)), axis=1))
+                ext_err = np.abs(np.ptp(P, axis=0) - np.ptp(yz, axis=0))
+                bbox_error = ext_err.sum()
+                # FIX item 10: an orientation whose y/z extents match the vertex box within 0.05 in wins over
+                # boundary hits alone (unequal angle legs exchanged: Binney G5 13,203 / 17,278 in the old builder)
+                score = (bool(ext_err.max() <= 0.05), int(np.sum(dist < 0.02)), -round(float(bbox_error), 5))
+                if best is None or score > best[0]:
+                    best = (score, P, su, sv, swap)
+    _, P, su, sv, swap = best
+    loop = [np.array([lo[0], y, z]) for y, z in P]
+    holes = [[np.array([lo[0], (v if swap else u) * su + cy, (u if swap else v) * sv + cz])
+              for u, v in inner] for inner in loops[1:]]
+    return loop, np.array([hi[0] - lo[0], 0, 0]), holes
+
+
+TURNED = re.compile(r"(WS|TWS|HS|BLT|AB|RB|RD|NS|DBA|THD|STUD)\b|(WS|TWS|HS|RB|RD|AB|DBA)\d")   # studs, bolts, rods, anchors
+
+
+def piece_instance_label(member_type, member_id, piece_name, piece_id, instance):
+    """Unambiguous STEP component name, including repeated uses of one piece by a member."""
+    return f"{member_type} #{member_id} / {piece_name} (piece {piece_id}, inst {instance})"
+
+
+def mesh_vertices(job, sid):
+    """Faceted pieces (weld studs, bolts, rods, concrete) store their mesh vertices as tag-0 records, count at +28."""
+    from instances import _scan_vertices, _is_71
+    if _is_71(job):                                # 7.1xx: every piece file is the same packed vertex list
+        return subm_vertices(job, sid)
+    fp = os.path.join(job, "subm", str(sid))
+    if not os.path.exists(fp):
+        return None                                  # piece file missing (partial extraction): no geometry
+    b = open(fp, "rb").read()
+    if len(b) < 40:
+        return None
+    nv = struct.unpack(">I", b[28:32])[0]
+    V = [v for v in _scan_vertices(b, (0,), False) if any(v)]
+    return np.array(V[:nv]) if nv >= 4 and len(V) >= 4 else None
+
+
+def turned_local(V):
+    """Studs/bolts/rods: rings of vertices at stations along one axis. Returns [(start, length, radius, axis)] local:
+    each segment between consecutive stations takes a radius present at both ends (the larger one only when the
+    segment is short, i.e. a head or nut; otherwise the shank)."""
+    best = None
+    for a in range(3):
+        o = [k for k in range(3) if k != a]
+        r = np.linalg.norm(V[:, o], axis=1)
+        ok = r > 0.05
+        if ok.sum() < 6: continue
+        score = len(np.unique(np.round(r[ok], 3)))
+        if best is None or score < best[0]:
+            best = (score, a, r)
+    if best is None:
+        return None
+    _, a, r = best
+    x = np.round(V[:, a], 3)
+    cnt = collections.Counter((xi, ri) for xi, ri in zip(x, np.round(r, 3)) if ri > 0.05)
+    st = {}
+    for (xi, ri), c in cnt.items():
+        if c >= 3:                                 # a ring, not a stray point (e.g. the weld-fillet ring of a stud)
+            st.setdefault(xi, set()).add(ri)
+    xs = sorted(st)
+    segs = []
+    for x0, x1 in zip(xs, xs[1:]):
+        common = sorted(st[x0] & st[x1])
+        if not common: continue
+        L = x1 - x0
+        rr = next((c for c in reversed(common) if L <= 2.5 * c), common[0])
+        segs.append((x0, L, rr, a))
+    return segs or None
+
+
+def concrete_local(V, p, M):
+    """Concrete piece (footing / grade beam): a T-thick prism (volume = the cubic yards in its name). Its mesh also
+    carries a reference level far above (world z 424 on TRI NORTH), so the solid is the bottom T band of the mesh
+    along the local axis that points vertically, with the plan extent of the mesh points inside that band."""
+    T = p["T"]
+    if T <= 0:
+        return None
+    t = int(np.argmax(np.abs(M[:, 2])))            # local axis k maps to world M[k] -> vertical component M[k, 2]
+    down = M[t, 2] > 0                              # local +t points up: the bottom is the local minimum
+    lo_t = V[:, t].min() if down else V[:, t].max() - T
+    lo, hi = V.min(0), V.max(0)
+    plan = [k for k in range(3) if k != t]
+    # plan size: L and W from the piece table, matched to the two plan axes by the full-mesh extents
+    ext = hi - lo
+    a, b = plan if abs(ext[plan[0]] - p["L"]) + abs(ext[plan[1]] - p["W"]) <= abs(ext[plan[0]] - p["W"]) + abs(ext[plan[1]] - p["L"]) \
+        else plan[::-1]
+    for k, d in ((a, p["L"]), (b, p["W"])):
+        if d > 0 and abs(ext[k] - d) > 0.5:
+            hi[k] = lo[k] + d
+    lo[t], hi[t] = lo_t, lo_t + T
+    return lo, hi
+
+
+def _compound(shapes):
+    from OCP.TopoDS import TopoDS_Compound
+    from OCP.BRep import BRep_Builder
+    c = TopoDS_Compound(); bb = BRep_Builder(); bb.MakeCompound(c)
+    for s in shapes: bb.Add(c, s)
+    return c
+
+
+def special_solid(job, sid, p, M, o):
+    """Solid for pieces without a vertex outline (weld studs, bolts, anchor rods, concrete), in world coords.
+    Returns (shape, kind) or (None, reason)."""
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder, BRepPrimAPI_MakeBox
+    from OCP.gp import gp_Ax2, gp_Dir
+    global SPECIAL_NOTE
+    SPECIAL_NOTE = ""
+    V = mesh_vertices(job, sid)
+    Rt = M.T
+    if p["name"].startswith("Conc"):
+        if V is None: return None, "concrete: no mesh"
+        lo, hi = concrete_local(V, p, M) or (None, None)
+        if lo is None: return None, "concrete: no dims"
+        corners = np.array([[x, y, z] for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])])
+        base = [corners[0], corners[4], corners[6], corners[2]]           # z = lo face ring
+        return prism([o + Rt @ q for q in base], Rt @ np.array([0, 0, hi[2] - lo[2]])), "concrete"
+    if TURNED.match(p["name"]):
+        Vt = subm_vertices(job, sid)                # rods keep a proper tagged outline; studs/bolts only the mesh
+        segs = turned_local(Vt) if Vt is not None and len(Vt) >= 6 else None
+        if segs and not _segs_ok(Vt, segs, p):
+            segs = None
+        if not segs and V is not None:
+            segs = turned_local(V)
+            if segs and not _segs_ok(V, segs, p):
+                segs = None
+        if not segs:
+            # [sgc] rings along an axis that is not a local coordinate axis through the origin (angled / offset rods):
+            # exact cylinders on the axis of the piece's own end caps
+            ax = _cap_axis_cylinders(_turned_from_brep(job, sid, p), M, o)
+            if ax is not None:
+                TURNED_ANY_AXIS.add((job, sid))
+                return ax, "fastener"
+        if not segs and p["W"] > 0 and p["L"] > 0:
+            # rings not stacked on one axis (hooked / bent anchors, 7.605 NFCU DBA1/2): straight rod of the
+            # piece's diameter and length along the mesh's longest direction
+            Vx = V if V is not None else Vt
+            if Vx is not None and len(Vx):
+                a = int(np.argmax(np.ptp(Vx, 0)))
+                segs = [(float(Vx[:, a].min()), p["L"], p["W"] / 2, a)]
+                SPECIAL_NOTE = "straight rod of the piece diameter and length along the mesh's longest direction (hook / bend not modelled)"
+                if not _segs_ok(None, segs, p):
+                    segs = None; SPECIAL_NOTE = ""
+        if not segs: return None, "fastener: no rings (or rings that disagree with the piece's mesh / SDS2's weight)"
+        parts = []
+        for x0, L, r, a in segs:
+            u = np.zeros(3); u[a] = 1.0
+            q0 = np.zeros(3); q0[a] = x0
+            P0 = (o + Rt @ q0) * MM; D = Rt @ u
+            try:
+                parts.append(BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(*P0), gp_Dir(*D)), r * MM, L * MM).Shape())
+            except Exception:
+                pass
+        if not parts: return None, "fastener: degenerate"
+        return (parts[0] if len(parts) == 1 else _compound(parts)), "fastener"
+    return None, "no geometry"
+
+
+def _segs_ok(V, segs, p):
+    """Turned segments (start, length, radius, axis) are the piece: on both axes across the rod the vertices span at
+    least the ring diameter (a full ring, not an arc), and the cylinders weigh 0.25-4x SDS2's weight when there is one
+    (gross errors only: weld studs weigh ~0.5x their SDS2 weight as rings). v5.5.7: data-3 7.331 'RB59' is a curved
+    shell 59 x 25.5 in across, 3,405 lb, that its rings along one axis made into a 186,000 lb rod."""
+    if BENT_BAR.match(p.get("name") or "") and (p.get("L") or 0) > 0 and \
+            sum(L for x0, L, r, a in segs) < 0.9 * p["L"]:
+        # v5.5.11: the rings along one axis cover only part of the bar's table length: a bent / hooked bar read as one
+        # straight leg (data-3 1b6216e0 7.039 RB5/8: 7.4 of 24 in, 0.31x SDS2's weight; a1a87e6b RB3/8: 0.53-0.64x).
+        # Not the piece: the caller tries the piece's own B-rep (bends included), else a tagged straight rod.
+        return False
+    for x0, L, r, a in segs:
+        if V is not None and len(V):
+            sel = V[(V[:, a] >= x0 - 1e-3) & (V[:, a] <= x0 + L + 1e-3)]
+            if len(sel):
+                for b in range(3):
+                    if b != a and np.ptp(sel[:, b]) < 0.9 * 2 * r - 0.02:
+                        return False
+    wt = p.get("wt", 0) or 0
+    if 0 < wt < 1e6:
+        vol = sum(np.pi * r * r * L for x0, L, r, a in segs)
+        if not 0.25 < vol * 0.2836 / wt < 4.0:
+            return False
+    return True
+
+
+SPECIAL_NOTE = ""     # set by special_solid when it had to guess a shape (tagged by the caller)
+BENT_BAR = re.compile(r"(RB|RD|AB|DBA|THD)\b|(RB|RD|AB|DBA)\d")   # bars that can be bent (not studs, bolts, nuts)
+TURNED_ANY_AXIS = set()  # [sgc] (job, piece) rods written as exact cylinders on their end-cap axis
+USE_BREP = True       # exact faceted solids from the piece file's own topology (brep.py); False = approximate builders
+USE_HOLES = True      # cut the piece's bolt holes / slots (brep.holes) into its exact solid
+_BREP = {}
+CONCRETE = set()      # (job, piece) whose exact volume matches SDS2's weight at concrete density
+HOLES_CUT = collections.Counter()
+BREP_WHY = {}         # (job, piece) -> why the exact B-rep was not used (stand-in reason)
+HOLES_NOT_CUT = set() # (job, piece) whose decoded holes the boolean could not cut
+
+
+SHAPES = {}                  # job_mtrl sections of the job being converted (set by convert)
+NC1_SRC = None               # --nc1: the job's NC1 / DSTV files (dir or zip); opt-in, see nc1.py
+NC1_PLAN = {}                # piece id -> strictly matched NC1 part
+NC1_CUT = {}                 # (job, piece) -> holes cut from NC1
+NC1_STATS = collections.Counter()
+VALIDATED_BY_SECTION = set() # (job, piece): B-rep checked against its section (dims + AISC weight per foot) instead of
+                             # SDS2's piece weight, which is missing or disagrees
+UNVALIDATED = set()          # (job, piece): stored B-rep written although the piece-table entry is unreadable
+OPEN_SURF = set()            # (job, piece): body with open rims written as SDS2's open surface (not closed)
+
+
+class _Done(Exception):
+    """brep_placed: the piece's shape is settled (open surface), skip the solid checks."""
+BREP_REPAIR = {}      # (job, piece) -> repair-stage fix that closed the stored faces (brep.LAST_REPAIR)
+BREP_WEIGHT_NOTE = {} # (job, piece) -> exact B-rep kept on an identity check although SDS2's weight cannot validate it
+BREP_NEG_WEIGHT = {}  # (job, piece) -> B-rep weight / |SDS2 weight| for weights stored with a negative sign
+
+
+def _stock_weighed(sh, p, net_lb):
+    """SDS2 records the plate's rectangular stock weight (L x W x T x 0.2836, within 2 %), the solid fills that stock
+    box (extents within 0.1 in, in the piece's own frame) and weighs less: a cut plate weighed as its stock."""
+    L, W, T_ = p.get("L") or 0, p.get("W") or 0, p.get("T") or 0
+    wt = p.get("wt") or 0
+    if not (L > 0 and W > 0 and T_ > 0 and wt > 0) or isinstance(sh, tuple) or sh is None:
+        return False
+    if abs(wt - L * W * T_ * 0.2836) > 0.02 * wt or net_lb >= 0.98 * wt:
+        return False
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
+    b = Bnd_Box(); BRepBndLib.Add_s(sh, b)
+    if b.IsVoid():
+        return False
+    lo, hi = b.CornerMin(), b.CornerMax()
+    ext = sorted([(hi.X() - lo.X()) / MM, (hi.Y() - lo.Y()) / MM, (hi.Z() - lo.Z()) / MM])
+    return bool(np.abs(np.array(ext) - np.array(sorted([L, W, T_]))).max() <= 0.1)
+
+
+def _vol_lb(sh):
+    from OCP.GProp import GProp_GProps
+    from OCP.BRepGProp import BRepGProp
+    g = GProp_GProps(); BRepGProp.VolumeProperties_s(sh, g)
+    return abs(g.Mass()) / MM ** 3 * 0.2836
+
+
+def _tube_identity(V, faces, p, sh):
+    """Hollow section on a curved / sloped path (data-3 IFC_MHP / Revit_MHP 7.708 HSS6x4x1/2, recorded at 0.39x the
+    geometry that SDS2's own IFC export of the job also has): accepted when the solid is a tube of the section's own
+    wall (2 x volume / surface 0.85-1.1x the wall; a hollow section closed as a bar is 4-5x), its thinnest extent is a
+    side of the section, its length (volume / section area) lies between its chord less a side and a half circle, and
+    its local x extent is the piece-table length (2 % + 0.05 in). Returns why, or ""."""
+    from OCP.GProp import GProp_GProps
+    from OCP.BRepGProp import BRepGProp
+    s_ = SHAPES.get(p.get("sec")) if p.get("sec", 0) > 0 else None
+    if s_ is None or not re.match(r"(HSS|PIPE|TS)", (s_.name or "").upper()) or not (s_.tw and s_.tw > 0):
+        return ""
+    A = _section_area(s_)
+    L = p.get("L", 0) or 0
+    if not A or not 0 < L < 1e5:
+        return ""
+    used = sorted({i for f in faces for i in f}); ext = np.ptp(np.asarray(V)[used], 0)
+    if abs(ext[0] - L) > 0.02 * L + 0.05:
+        return ""
+    g = GProp_GProps(); BRepGProp.VolumeProperties_s(sh, g); vol = abs(g.Mass()) / MM ** 3
+    g2 = GProp_GProps(); BRepGProp.SurfaceProperties_s(sh, g2); sa = abs(g2.Mass()) / MM ** 2
+    te = 2 * vol / sa if sa > 0 else 0
+    sd = sorted((s_.d, s_.bf if s_.bf and s_.bf > 0 else s_.d)); e3 = sorted(ext); Lv = vol / A
+    if (0.85 <= te / s_.tw <= 1.1 and sd[0] * 0.98 - 0.05 <= e3[0] <= sd[1] * 1.02 + 0.05
+            and 0.85 * (e3[2] - sd[1]) <= Lv <= 1.15 * np.pi / 2 * e3[2]):
+        return (f"{s_.name} tube: wall {te:.3f} in (2 x volume / surface) = {te / s_.tw:.2f}x its {s_.tw:g} in, "
+                f"x extent {ext[0]:.1f} in = table length {L:g} in, {Lv:.1f} in of section")
+    return ""
+
+
+def _repair_summary(job, rows, pieces):
+    """Manifest section: exact pieces that needed the repair stage, B-reps kept on an identity check, negative weights
+    (none is a stand-in: the geometry is SDS2's stored faces)."""
+    inst = collections.Counter(r["piece"] for r in rows if r.get("builder") == "exact_brep")
+    rep_ = {s: w for (j, s), w in BREP_REPAIR.items() if j == job and inst[s]}
+    wn = {s: w for (j, s), w in BREP_WEIGHT_NOTE.items() if j == job and inst[s]}
+    ng = {s: w for (j, s), w in BREP_NEG_WEIGHT.items() if j == job and inst[s]}
+    nm = lambda s: pieces[s]["name"] if s in pieces else ""
+    return dict(
+        note="exact pieces from SDS2's own stored faces that needed a repair-stage fix to close (no face added), and "
+             "exact B-reps kept although SDS2's piece weight disagrees (identity check / negative stored weight)",
+        repaired=dict(pieces=len(rep_), instances=sum(inst[s] for s in rep_), by_fix=dict(collections.Counter(rep_.values())),
+                      parts=[dict(piece=s, name=nm(s), fix=w, instances=inst[s]) for s, w in sorted(rep_.items())][:2000]),
+        weight_unvalidated=dict(pieces=len(wn), instances=sum(inst[s] for s in wn),
+                                parts=[dict(piece=s, name=nm(s), why=w, instances=inst[s]) for s, w in sorted(wn.items())][:2000]),
+        negative_weight=dict(pieces=len(ng), instances=sum(inst[s] for s in ng),
+                             parts=[dict(piece=s, name=nm(s), ratio=w, instances=inst[s]) for s, w in sorted(ng.items())][:2000]))
+
+
+def _n_solids(sh):
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopAbs import TopAbs_SOLID
+    ex = TopExp_Explorer(sh, TopAbs_SOLID); n = 0
+    while ex.More(): n += 1; ex.Next()
+    return n
+
+
+def _open_size_ok(V, faces, p):
+    """An open body's extents are the piece's own: a rolled piece's section depth / width and table length, or a
+    plate's table L x W x T."""
+    used = sorted({i for f in faces for i in f})
+    ext = np.sort(np.ptp(V[used], 0))
+    if _extents_match(V, faces, p):
+        return True
+    s_ = SHAPES.get(p.get("sec")) if p.get("sec", 0) > 0 else None
+    if s_ is None or not s_.d or s_.d <= 0 or not p.get("L", 0) > 0:
+        return False
+    dims = sorted([s_.d, s_.bf if s_.bf and s_.bf > 0 else s_.d])
+    near = lambda a, b: abs(a - b) <= 0.05 * b + 0.0625
+    return near(ext[0], dims[0]) and near(ext[1], dims[1]) and abs(ext[2] - p["L"]) <= 0.02 * p["L"] + 0.1
+
+
+def _table_unreadable(p):
+    """The piece-table slot does not hold a piece record: sizes that are not numbers or absurd, or a name that is
+    empty or text from another record (quotes, braces, colons, commas). Unusual but real names (MA2, CV6) are kept."""
+    vals = [p.get(k, 0) or 0 for k in ("L", "W", "T", "wt")]
+    if any(not np.isfinite(v) or abs(v) > 1e6 for v in vals):
+        return True
+    nm = (p.get("name") or "").strip()
+    return not nm or bool(re.search(r'["{}:,\\]|^[^A-Za-z0-9#]', nm))
+
+
+def _section_area(s_):
+    """Cross-section area (in2) from the section table's own dimensions, by family; None if unknown."""
+    n = (s_.name or "").upper().replace(" ", "")
+    d, bf, tf, tw = s_.d or 0, s_.bf or 0, s_.tf or 0, s_.tw or 0
+    if d <= 0:
+        return None
+    if re.match(r"(W|M|S|HP|C|MC)\d", n) and tf > 0 and tw > 0 and bf > 0:
+        return 2 * bf * tf + (d - 2 * tf) * tw
+    if re.match(r"(WT|MT|ST)\d", n) and tf > 0 and tw > 0 and bf > 0:
+        return bf * tf + (d - tf) * tw
+    t = tf or tw
+    if t <= 0:
+        return None
+    if re.match(r"L\d", n):
+        return t * (d + (bf or d) - t)
+    if n.startswith("PIPE") or (n.startswith("HSS") and n.count("X") == 1):
+        return np.pi * t * (d - t)
+    if n.startswith(("HSS", "TS")):
+        return 2 * t * (d + (bf or d) - 2 * t)
+    return None
+
+
+def _section_ok(V, faces, sh, p):
+    """B-rep of a rolled piece is its own section over its length: the two smaller extents are the section's depth and
+    width (5 % + 1/16 in), the longest is the table length when there is one, and the volume over that length is the
+    section's area from its own dimensions (0.75-1.3) or 0.6-1.6x its weight per foot (user-added sections can carry
+    wrong weights: data-3 UOM L1x1x3/16 0.354 lb/ft, S-Park HSS1 1/2x1 1/2x14GA 3.55 lb/ft). Returns the ratio or None."""
+    from OCP.GProp import GProp_GProps
+    from OCP.BRepGProp import BRepGProp
+    s_ = SHAPES.get(p.get("sec")) if p.get("sec", 0) > 0 else None
+    if s_ is None or not s_.d or s_.d <= 0:
+        return None
+    used = sorted({i for f in faces for i in f})
+    ext = np.sort(np.ptp(V[used], 0))
+    dims = sorted([s_.d, s_.bf if s_.bf and s_.bf > 0 else s_.d])
+    near = lambda a, b: abs(a - b) <= 0.05 * b + 0.0625
+    if not (near(ext[0], dims[0]) and near(ext[1], dims[1])):
+        return None
+    if p.get("L", 0) > 0 and abs(ext[2] - p["L"]) > 0.02 * p["L"] + 0.1:
+        return None
+    g = GProp_GProps(); BRepGProp.VolumeProperties_s(sh, g)
+    area = abs(g.Mass()) / MM ** 3 / ext[2]
+    A = _section_area(s_)
+    if A and 0.75 < area / A < 1.3:
+        return area / A
+    if s_.weight and s_.weight > 0:
+        r = area * 12 * 0.2836 / s_.weight
+        if 0.6 < r < 1.6:
+            return r
+    return None
+
+
+def _extents_match(V, faces, p, tol=0.02):
+    """B-rep extents equal the piece table's L x W x T (sorted, within 2%): the solid is the stock piece, cut."""
+    dims = sorted(x for x in (p.get("L", 0), p.get("W", 0), p.get("T", 0)))
+    if min(dims) <= 0:
+        return False
+    used = sorted({i for f in faces for i in f})
+    ext = sorted(np.ptp(V[used], 0))
+    return all(abs(e - d) <= tol * d + 1e-3 for e, d in zip(ext, dims))
+
+
+def brep_placed(job, sid, p, M, o):
+    """Piece's exact solid (built once per piece, cached) placed at o + M.T @ local, or None -> approximate builders.
+    Accepted only when its volume is within 0.6-1.6x of SDS2's recorded weight (guards against misparsed layouts)."""
+    from OCP.gp import gp_Trsf
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+    from OCP.GProp import GProp_GProps
+    from OCP.BRepGProp import BRepGProp
+    if not USE_BREP:
+        return None
+    key = (job, sid)
+    if key not in _BREP:
+        sh = None
+        try:
+            with open(os.path.join(job, "subm", str(sid)), "rb") as f:
+                data = f.read()
+            r = brep.parse(data)
+            BREP_WHY[key] = "piece file has no readable face topology"
+            if r is not None:
+                # v5.5.8: the repair stage (keyhole bridges incl. the 7.6xx first-vertex bridge, bridge / spike
+                # cancel across a face's loops, ring caps, isolated faces, zero-width flaps, coplanar overlaps, 0.001 in
+                # weld) runs only after the v5.5.3 passes fail, so every piece v5.5.3 builds is built as before
+                # (v5.5.4-v5.5.7 split keyholes always and lost DSCC 7.312 W10x12 #5513, SOCORRO 7.425 HSS5x2x5/16 #3492)
+                sh = brep.solid(*r, repair=True)
+                if sh is not None and getattr(brep, "LAST_REPAIR", ""):
+                    BREP_REPAIR[key] = brep.LAST_REPAIR
+                if sh is None:
+                    BREP_WHY[key] = "piece faces do not sew into a closed solid"
+                    # v5.5.4: a body whose only defect is open planar rims (tube ends, a missing face) is written as
+                    # the open surface SDS2 stores, tagged, never closed (owner: open meshes are not filled); accepted
+                    # when its extents are the piece's own section / table size (data-3 Spectrum HSS1.5x0.1875)
+                    if brep.rims_only(r[1]) and _open_size_ok(r[0], r[1], p):
+                        # the unsewn face set: sewn open shells of steel pieces read back invalid once placed in
+                        # the assembly (v5.5.4 data-3 Spectrum HSS1.5x0.1875: 31 of 265), face sets read back valid
+                        so = brep.face_set(*r)
+                        if so is None:
+                            so = brep.shell(*r)
+                        if so is not None and BRepCheck_Analyzer(so).IsValid():
+                            OPEN_SURF.add(key); _BREP[key] = so; HOLES[key] = []
+                            BREP_WHY[key] = "piece faces do not close (open rims): written as SDS2's open surface"
+                            raise _Done()
+            if sh is not None and _table_unreadable(p):
+                # v5.5.4: the piece-table entry is not a piece record (data-3 SUAC 7.331: JSON text in 271 slots, sizes
+                # 1e243) while the piece file holds a closed, valid solid: write SDS2's stored B-rep, tagged as not
+                # validated, instead of an approximation built from garbage dimensions
+                used = sorted({i for f in r[1] for i in f}); ext = np.ptp(r[0][used], 0)
+                if np.isfinite(ext).all() and 0 < ext.max() < 2400:
+                    UNVALIDATED.add(key)
+                else:
+                    sh = None; BREP_WHY[key] = "piece-table entry unreadable and the B-rep size is not plausible"
+            elif sh is not None and -1e9 < p["wt"] < 0 and 0.98 <= _vol_lb(sh) / -p["wt"] <= 1.02:
+                # v5.5.8: some 7.1xx-8.0xx piece tables store the weight with a negative sign (data-3 CLAYTON 7.245
+                # W24x55, DUPONT 7.312 C10x15.3, IFC_19189 7.708 MC12x10.6): its magnitude is SDS2's weight of the
+                # stored B-rep (1.000x on 47 of 47 such closed pieces, 14 jobs); tiny constants (-0.189) fail this
+                BREP_NEG_WEIGHT[key] = round(_vol_lb(sh) / -p["wt"], 4)
+            elif sh is not None and not 0 < p["wt"] < 1e9:
+                # no usable SDS2 weight (v4 refused the exact B-rep outright): accept it when its extents are the
+                # piece table's L x W x T, or for a rolled piece when its longest extent is the table length
+                used = sorted({i for f in r[1] for i in f}); ext = np.ptp(r[0][used], 0)
+                okx = _extents_match(r[0], r[1], p) or (p.get("sec", 0) > 0 and p.get("L", 0) > 0
+                                                        and abs(ext.max() - p["L"]) <= 0.02 * p["L"] + 0.05)
+                if not okx and _section_ok(r[0], r[1], sh, p) is not None:
+                    okx = True; VALIDATED_BY_SECTION.add(key)
+                if not okx:
+                    why_t = _tube_identity(r[0], r[1], p, sh)
+                    if why_t:
+                        okx = True; BREP_WEIGHT_NOTE[key] = why_t + " (no SDS2 weight)"
+                if not okx:
+                    sh = None; BREP_WHY[key] = "no SDS2 weight and B-rep extents differ from the piece table"
+            elif sh is not None:
+                g = GProp_GProps(); BRepGProp.VolumeProperties_s(sh, g)
+                r_ = abs(g.Mass()) / MM ** 3 * 0.2836 / p["wt"]
+                if 3.1 < r_ < 3.45:
+                    # weighed as concrete (150 pcf = steel / 3.267): slabs / walls not named "Conc" (8.007 350 Summer
+                    # Street 5x494: 71,450 lb as steel, 21,868 lb as concrete vs SDS2 21,870)
+                    CONCRETE.add(key)
+                elif r_ <= 0.6 and _extents_match(r[0], r[1], p):
+                    pass          # cut plate weighed as its rectangular stock (SUNY triangular stiffeners: 0.495)
+                elif not 0.6 < r_ < 1.6:
+                    if _section_ok(r[0], r[1], sh, p) is not None:
+                        # v5.5.4: SDS2's piece weight disagrees but the B-rep is the piece's own section over its
+                        # length (data-3 UOM 7.312 L1x1x3/16: 0.105 lb recorded, 0.44 lb by AISC weight; Spectrum
+                        # HSS1.5x0.1875: 2.8x)
+                        VALIDATED_BY_SECTION.add(key)
+                    elif _tube_identity(r[0], r[1], p, sh):
+                        BREP_WEIGHT_NOTE[key] = (_tube_identity(r[0], r[1], p, sh)
+                                                 + f" (piece B-rep {r_:.2f}x SDS2's weight)")
+                    else:
+                        sh = None
+                        BREP_WHY[key] = f"piece B-rep volume {r_:.2f}x SDS2's weight (outside 0.6-1.6)"
+            if sh is not None and USE_HOLES:
+                H = brep.holes(data)
+                HOLES[key] = H
+                if H:
+                    cut = brep.cut_holes(sh, H)
+                    HOLES_CUT["pieces with holes"] += 1
+                    HOLES_CUT["holes" if cut is not sh else "holes not cut"] += len(H)
+                    if cut is sh:
+                        HOLES_NOT_CUT.add(key)
+                    sh = cut
+                if sid in NC1_PLAN and key not in HOLES_NOT_CUT:
+                    import nc1 as NC
+                    extra, st_ = NC.extra_holes(NC1_PLAN[sid], r[0], r[1], H)
+                    NC1_STATS.update({"holes: " + k: v for k, v in st_.items()})
+                    if extra:
+                        cut = brep.cut_holes(sh, extra)
+                        if cut is not sh and _n_solids(cut) == 1:
+                            sh = cut; NC1_CUT[key] = len(extra)
+                        else:
+                            NC1_STATS["holes: boolean failed or split the piece (not cut)"] += len(extra)
+        except _Done:
+            sh = _BREP[key]
+        except FileNotFoundError:
+            sh = None; BREP_WHY[key] = "no piece file (subm/<id> missing)"
+        except Exception as e:
+            sh = None; BREP_WHY[key] = f"piece B-rep error {type(e).__name__}"
+        _BREP[key] = sh
+    sh = _BREP[key]
+    if sh is None:
+        return None
+    t = placement(M, o)
+    if t is None:
+        return None                                     # rotation not orthonormal: approximate builders apply M as-is
+    if SHARED:
+        return ("shared", sh, t)                        # convert() places the cached solid as an assembly component
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+    return BRepBuilderAPI_Transform(sh, t, True).Shape()
+
+
+# [sgc] patch sds2-grating-cylinders: nominal diameter of a round bar / stud / anchor from its name (RB1/2, RB1 1/4,
+# THD STUD 5/8, TWS3/4, DBA1/2) -> inches
+# v5.5.8: the size ends at a non-digit that is not part of a fraction ('RB3/4x12' -> 0.75; with \b it read 3.0)
+_DIA_RX = re.compile(r"^(?:RB|RD|AB|DBA|TWS|WS|HS|NS|THD STUD|STUD)\s*(\d+ \d+/\d+|\d+/\d+|\d+(?:\.\d+)?)(?![\d/.])")
+
+
+def _name_dia(name):
+    m = _DIA_RX.match(name or "")
+    if not m:
+        return None
+    try:
+        return sum(float(a) / float(b) if "/" in t else float(t) for t in m.group(1).split()
+                   for a, b in [t.split("/") if "/" in t else (t, 1)])
+    except (ValueError, ZeroDivisionError):
+        return None
+
+
+def _cluster(x, tol):
+    """1-D values -> labels of runs whose sorted gaps are <= tol, and the run means."""
+    o = np.argsort(x); lab = np.empty(len(x), int); k = 0
+    for i in range(len(o)):
+        if i and x[o[i]] - x[o[i - 1]] > tol:
+            k += 1
+        lab[o[i]] = k
+    return lab, np.array([x[lab == j].mean() for j in range(k + 1)])
+
+
+def turned_any_axis(V, F, p):
+    """Rods, studs and anchors whose rings are not stacked on a piece-local coordinate axis through the origin (joist
+    web rods at an angle, bars offset from the piece origin): v5.4 wrote them as a straight-rod guess along the mesh's
+    longest direction (data-3 sample: 26,783 of 30,708 guessed rods are straight). The axis is the common normal of
+    the piece's planar end caps (faces of >= 6 vertices, stored duplicates dropped) through their centroids; the rings
+    are read along it as turned_local does. Accepted only when every face vertex lies on a ring, the shank diameter
+    is the name's (RB1/2 -> 0.5 in) and the cylinders weigh SDS2's weight (0.75-1.33).
+    -> [(start point, length, radius, unit axis)] in piece-local inches, or None."""
+    used = sorted({i for f in F for i in f})
+    if len(used) < 6:
+        return None
+    U = V[used]
+    caps = {}
+    for f in F:
+        ls = brep.loops_of(f)
+        if len(ls) != 1 or len(ls[0]) < 6 or frozenset(ls[0]) in caps:
+            continue
+        P = V[ls[0]]; c = P.mean(0)
+        nrm = sum(np.cross(P[k] - c, P[(k + 1) % len(P)] - c) for k in range(len(P)))
+        if np.linalg.norm(nrm) < 1e-12:
+            continue
+        nrm = nrm / np.linalg.norm(nrm)
+        if np.abs((P - c) @ nrm).max() < 1e-3:
+            caps[frozenset(ls[0])] = (c, nrm)
+    if len(caps) < 2:
+        return None
+    C = np.array([c for c, _ in caps.values()]); n0 = next(iter(caps.values()))[1]
+    if any(abs(nr @ n0) < 0.9999 for _, nr in caps.values()):
+        return None
+    t = (C - C[0]) @ n0
+    if np.linalg.norm((C - C[0]) - np.outer(t, n0), axis=1).max() > 2e-3:
+        return None                                        # cap centres not on one line: bent / hooked
+    c0 = C[int(np.argmin(t))]
+    u = np.cross(n0, [1.0, 0, 0] if abs(n0[0]) < 0.9 else [0, 1.0, 0]); u /= np.linalg.norm(u); w = np.cross(n0, u)
+    X = (U - c0) @ np.array([n0, u, w]).T
+    x, r = X[:, 0], np.linalg.norm(X[:, 1:], axis=1)
+    on = r > 0.05
+    if on.sum() < 6:
+        return None
+    xl, xc = _cluster(x, 2e-3)
+    rl, rc = _cluster(r[on], 2e-3)
+    cnt = collections.Counter(zip(xl[on], rl))
+    if any(cnt[(a, b)] < 3 for a, b in zip(xl[on], rl)):
+        return None                                        # a vertex off every ring
+    if np.any(~on & ~np.isin(xl, list({a for a, _ in cnt}))):
+        return None                                        # an axis point between stations
+    st = collections.defaultdict(set)
+    for a, b in cnt:
+        st[a].add(b)
+    xs = sorted(st, key=lambda a: xc[a])
+    segs = []
+    for a0, a1 in zip(xs, xs[1:]):
+        common = sorted(st[a0] & st[a1], key=lambda b: rc[b])
+        if not common:
+            return None
+        L = float(xc[a1] - xc[a0])
+        rr = next((rc[b] for b in reversed(common) if L <= 2.5 * rc[b]), rc[common[0]])
+        segs.append((c0 + n0 * xc[a0], L, float(rr), n0))
+    if not segs:
+        return None
+    d = _name_dia(p.get("name"))
+    shank = max(segs, key=lambda s: s[1])
+    if d and abs(2 * shank[2] - d) > 0.03 * d + 0.01:
+        return None
+    vol = sum(np.pi * r_ ** 2 * L_ for _, L_, r_, _ in segs)
+    if p.get("wt", 0) > 0 and not 0.75 <= vol * 0.2836 / p["wt"] <= 1.33:
+        return None
+    return segs
+
+
+def _cap_axis_cylinders(segs, M, o):
+    """turned_any_axis() segments -> world cylinders (one solid, or a compound for stepped studs), or None."""
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
+    from OCP.gp import gp_Ax2, gp_Dir
+    if not segs:
+        return None
+    parts = []
+    for q0, L, r, u in segs:
+        try:
+            parts.append(BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(*((o + M.T @ q0) * MM)), gp_Dir(*(M.T @ u))),
+                                                  r * MM, L * MM).Shape())
+        except Exception:
+            return None
+    return parts[0] if len(parts) == 1 else _compound(parts)
+
+
+def _turned_from_brep(job, sid, p):
+    try:
+        with open(os.path.join(job, "subm", str(sid)), "rb") as f:
+            r = brep.parse(f.read())
+    except OSError:
+        return None
+    return turned_any_axis(r[0], r[1], p) if r is not None else None
+
+
+_ROD = {}
+ROD_SEW_TOL = 0.002   # in: bend facets of SDS2 rod meshes that miss each other by 0.001-0.002 in (SUSQUEHANNOCK RB1/4)
+
+
+def _merge_vertices(V, F, tol):
+    """Single-loop faces with vertices closer than tol merged into one; degenerate faces dropped. None if any face has
+    several loops (hollow end faces: not a rod)."""
+    from scipy.spatial import cKDTree
+    if any(len(brep.loops_of(f)) != 1 for f in F):
+        return None
+    used = sorted({i for f in F for i in f})
+    par = {i: i for i in used}
+
+    def find(a):
+        while par[a] != a:
+            par[a] = par[par[a]]; a = par[a]
+        return a
+    for i, j in cKDTree(V[used]).query_pairs(tol):
+        a, b = find(used[i]), find(used[j])
+        if a != b:
+            par[max(a, b)] = min(a, b)
+    out = []
+    for f in F:
+        nf = []
+        for i in brep.loops_of(f)[0]:
+            i = find(i)
+            if not nf or nf[-1] != i:
+                nf.append(i)
+        if len(nf) > 1 and nf[0] == nf[-1]:
+            nf.pop()
+        if len(set(nf)) >= 3:
+            out.append(nf)
+    return out
+
+
+def rod_brep_placed(job, sid, p, M, o):
+    """Bent / hooked rods and anchors ([sgc]): the piece's own faceted B-rep, also when its bend facets miss each other by
+    up to ROD_SEW_TOL (coincident vertices merged, then sewn as brep.solid does). Accepted on brep_placed's rule: volume
+    within 0.6-1.6x SDS2's weight. Shared part + placement like brep_placed, or None."""
+    if not USE_BREP:
+        return None
+    key = (job, sid)
+    if key not in _ROD:
+        sh = None
+        try:
+            with open(os.path.join(job, "subm", str(sid)), "rb") as f:
+                r = brep.parse(f.read())
+            if r is not None:
+                sh = brep.solid(*r)
+                if sh is None:
+                    F2 = _merge_vertices(r[0], r[1], ROD_SEW_TOL)
+                    sh = brep.solid(r[0], F2) if F2 else None
+            if sh is not None:
+                from OCP.GProp import GProp_GProps
+                from OCP.BRepGProp import BRepGProp
+                g = GProp_GProps(); BRepGProp.VolumeProperties_s(sh, g)
+                if not (p["wt"] > 0 and 0.6 < abs(g.Mass()) / MM ** 3 * 0.2836 / p["wt"] < 1.6):
+                    sh = None
+        except Exception:
+            sh = None
+        _ROD[key] = sh
+    sh = _ROD[key]
+    if sh is None:
+        return None
+    t = placement(M, o)
+    if t is None:
+        return None
+    if SHARED:
+        return ("shared", sh, t)
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+    return BRepBuilderAPI_Transform(sh, t, True).Shape()
+
+
+GRATING = re.compile(r"G[TR]\d")   # bar grating (GR) and grating treads (GT)
+_GRATING = {}          # (job, piece) -> built local grating solid or None
+GRATING_WHY = {}       # (job, piece) -> why the grating could not be built (tagged panel reason)
+GRATING_INFO = {}      # (job, piece) -> grating.build() info (manifest)
+GRATING_BUDGET_S = float(os.environ.get("SDS2_GRATING_BUDGET_S", "1800"))   # grating build time per job
+_GRATING_T = {}        # job -> seconds spent building gratings
+_IDX = {}
+
+
+def _piece_record(job, sid, name):
+    """Raw piece-table record of a piece: the slot layout whose name field holds the piece's own name."""
+    from piece_table import LAYOUTS
+    if job not in _IDX:
+        _IDX.clear()
+        with open(os.path.join(job, "subm", "subm_idx"), "rb") as f:
+            _IDX[job] = f.read()
+    b = _IDX[job]
+    for Lo in LAYOUTS.values():
+        S, o = Lo["slot"], Lo["name"]
+        q = sid * S + o
+        if (sid + 1) * S <= len(b) and b[q:q + len(name)] == name.encode() and not 32 <= b[q + len(name)] <= 126:
+            return b[sid * S:(sid + 1) * S]
+    return None
+
+
+def grating_placed(job, sid, p, M, o):
+    """Bar grating / grating tread built by grating.build() from the piece's own faces and record (cached per piece),
+    placed like brep_placed; None (reason in GRATING_WHY) -> the caller's tagged panel."""
+    import grating as GRT
+    import time as _t
+    key = (job, sid)
+    if key not in _GRATING:
+        sh, why, info = None, "", {}
+        t0 = _t.time()
+        try:
+            if _GRATING_T.get(job, 0.0) > GRATING_BUDGET_S:
+                raise TimeoutError
+            with open(os.path.join(job, "subm", str(sid)), "rb") as f:
+                r = brep.parse(f.read())
+            rec = _piece_record(job, sid, p["name"])
+            if r is None:
+                why = "piece file has no readable face topology"
+            elif rec is None:
+                why = "piece record not found"
+            else:
+                sh, info = GRT.build(r[0], r[1], p["wt"], rec)
+                why = info.get("why", "")
+            if sh is not None and _absurd(sh):
+                sh, why = None, "absurd extent"
+        except FileNotFoundError:
+            why = "no piece file (subm/<id> missing)"
+        except TimeoutError:
+            why = f"grating build time budget exceeded ({GRATING_BUDGET_S:g} s per job, SDS2_GRATING_BUDGET_S)"
+        except Exception as e:
+            sh, why = None, f"grating build error {type(e).__name__}"
+        _GRATING_T[job] = _GRATING_T.get(job, 0.0) + _t.time() - t0
+        _GRATING[key] = sh
+        GRATING_INFO[key] = dict(info, name=p["name"], ok=sh is not None)
+        if sh is None:
+            GRATING_WHY[key] = why or "not built"
+    sh = _GRATING[key]
+    if sh is None:
+        return None
+    t = placement(M, o)
+    if t is None:
+        return None
+    if SHARED:
+        return ("shared", sh, t)
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+    return BRepBuilderAPI_Transform(sh, t, True).Shape()
+
+
+_REF = {}
+REF_OPEN = set()      # reference parts written as open shells (faces as stored, not a closed solid)
+REF_FACES = set()     # reference parts written as unsewn face sets (their sewn shell fails BRepCheck)
+REF_BUDGET_S = float(os.environ.get("SDS2_REF_BUDGET_S", "5400"))   # time for building reference-model parts per job
+REF_MAX_FACES = 20000                                               # larger imported meshes are left out (reported)
+
+
+def brep_reference(job, sid, M, o):
+    """Exact B-rep of a reference-model piece (no SDS2 weight exists to validate it): accepted when its faces sew into a
+    closed, valid solid of sane size. Shared part + placement like brep_placed."""
+    key = (job, sid)
+    if key not in _REF:
+        sh = None
+        try:
+            r = brep.parse(open(os.path.join(job, "subm", str(sid)), "rb").read())
+            if r is not None and len(r[1]) <= REF_MAX_FACES:
+                sh = brep.solid(*r)
+                if sh is None:
+                    # open imported mesh (data-3 n2: 99,656 of 101,751 parts): keep SDS2's stored faces as a sewn shell
+                    sh = brep.shell(*r)
+                    if sh is not None:
+                        REF_OPEN.add(key)
+                    if sh is None or not BRepCheck_Analyzer(sh).IsValid():
+                        # the sewn shell fails BRepCheck (v5.2-v5.5.0 dropped the part): write the stored faces
+                        # as an unsewn surface set, never filled or closed (owner: keep open meshes as surfaces)
+                        sh = brep.face_set(*r)
+                        if sh is not None:
+                            REF_OPEN.add(key); REF_FACES.add(key)
+            if sh is not None and (_absurd(sh, 1e5) or not BRepCheck_Analyzer(sh).IsValid()):
+                sh = None
+        except Exception:
+            sh = None
+        _REF[key] = sh
+    sh = _REF[key]
+    if sh is None:
+        return None
+    t = placement(M, o)
+    if t is None:
+        return None
+    if SHARED:
+        return ("shared", sh, t)
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+    return BRepBuilderAPI_Transform(sh, t, True).Shape()
+
+
+def placement(M, o):
+    """gp_Trsf for world = o + M.T @ local (inches -> mm), or None if M isn't a rotation."""
+    from OCP.gp import gp_Trsf
+    from instances import _is_frame
+    if not _is_frame(np.asarray(M, float)) or not np.isfinite(o).all():
+        return None                                     # v4 wrote a NaN placement into Greenwood's STEP (#219849)
+    R = M.T
+    try:
+        t = gp_Trsf()
+        t.SetValues(*R[0], o[0] * MM, *R[1], o[1] * MM, *R[2], o[2] * MM)
+        return t
+    except Exception:
+        return None
+
+
+FORCE_FLAT = set()    # labels to write as placed copies (read-back repair pass, sds2_to_step)
+DROP_LABELS = set()   # labels to leave out (still invalid after the repair pass); reported as skipped
+# BRepCheck every placed exact part instance in memory (invalid placements become placed copies). Off by default: it
+# found none of the read-back failures in regression (those are caught by the --verify repair pass) and costs ~verify
+# time on the largest jobs. SDS2_CHECK_PLACED=1 enables it.
+CHECK_PLACED = os.environ.get("SDS2_CHECK_PLACED", "0") == "1"
+ASSEMBLY_CHECK_MAX = int(os.environ.get("SDS2_ASSEMBLY_CHECK_MAX", "5000"))
+INVALID_DROPPED = []  # labels of instances with no valid form (reported as skipped in the manifest)
+# v5.5.10: read-back repair rewrites, listed in the manifest (readback_repair.rewritten)
+AS_COMPONENT = set()  # labels of world-built rods rewritten as a local part + placement (read back invalid flat)
+READBACK_REWRITTEN = []  # (label, form) of every instance the read-back repair wrote in another form
+
+
+def _dup_vertices(job, sid):
+    """v5.5.11: the piece's own vertex set (topology vertices, else tagged vertices) for the identical-solid test."""
+    V = piece_vertices(job, sid)
+    if V is None or len(V) == 0:
+        return None
+    return np.asarray(V, float)
+
+
+def _header_main(job, n, pieces):
+    """A member's own main material placement, from its header block (piece at 0xE8, rotation at 0x88, origin at
+    0xD0): (piece, M, o) or None. Not read on 7.1xx layouts (other header)."""
+    import struct
+    from instances import _is_71, _is_frame
+    if _is_71(job):
+        return None
+    try:
+        b = open(os.path.join(job, "mem", str(n)), "rb").read(0xEC)
+    except OSError:
+        return None
+    if len(b) < 0xEC:
+        return None
+    sid = struct.unpack(">i", b[0xE8:0xEC])[0]
+    if sid not in pieces:
+        return None
+    with np.errstate(all="ignore"):
+        M = np.array(struct.unpack(">9d", b[0x88:0xD0])).reshape(3, 3)
+        o = np.array(struct.unpack(">3d", b[0xD0:0xE8]))
+        if not (np.isfinite(M).all() and np.isfinite(o).all()) or np.abs(o).max() > 1e6 or not _is_frame(M):
+            return None
+    return sid, M, o
+
+
+def _same_points(A, B, tol=0.02):
+    """Two placed vertex sets coincide within 0.02 in (each point of either set has a partner in the other): the same
+    solid. Box + centroid is not enough: the two rods of an X brace share both (data-3 ca1a958a MISC #174 / #175);
+    a tolerance, not a grid, because two members can store one plate 0.002 in apart (AGNEWS-R PL3/8x4 piece 88)."""
+    if A.shape != B.shape or not len(A):
+        return False
+    from scipy.spatial import cKDTree
+    return bool(cKDTree(B).query(A)[0].max() <= tol and cKDTree(A).query(B)[0].max() <= tol)
+
+
+def repair_action(label, key_bad=False, as_component=False):
+    """v5.5.10: what the read-back repair does with one written instance, by its label (compared stripped: members
+    without a type give labels starting with " #"). 'drop' wins over every other form, also for parts written as
+    placed copies (assembly check failures, world-built rods, flat mode), which v5.5.4-v5.5.9 never left out.
+    Returns 'drop', 'flat' (assembly-check failure, placed copy as before), 'component' (rewritten world-built rod),
+    'placed_copy' (named by pass 1), or '' (unchanged)."""
+    ls = label.strip()
+    if ls in DROP_LABELS:
+        return "drop"
+    if key_bad:
+        return "flat"
+    if as_component and ls in AS_COMPONENT:
+        return "component"
+    if ls in FORCE_FLAT:
+        return "placed_copy"
+    return ""
+SHARED = False        # set by convert(): write each exact piece once, placed per instance as an assembly component
+USE_BOLTS = True      # nominal heavy-hex bolts through coaxial hole stacks of >= 2 pieces
+HOLES = {}            # (job, piece) -> decoded holes (piece-local), filled by brep_placed
+
+# ASTM A325 / A490 heavy hex: head height, nut height by bolt diameter (in); across flats = 1.5 d + 1/8
+HEX_H = {0.5: (5 / 16, 31 / 64), 0.625: (25 / 64, 39 / 64), 0.75: (15 / 32, 47 / 64), 0.875: (35 / 64, 55 / 64),
+         1.0: (39 / 64, 63 / 64), 1.125: (11 / 16, 1 + 7 / 64), 1.25: (25 / 32, 1 + 7 / 32), 1.375: (27 / 32, 1 + 11 / 32),
+         1.5: (15 / 16, 1 + 15 / 32)}
+
+
+def assembly_check(first):
+    """{part key: (local solid, first placement)} -> set of keys whose component reads back invalid from a STEP
+    assembly. One temporary file holding every part once; results mapped by component order."""
+    import tempfile
+    from OCP.TopLoc import TopLoc_Location
+    from OCP.TopoDS import TopoDS_Iterator
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopAbs import TopAbs_SOLID
+    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.STEPControl import STEPControl_Reader
+    keys = list(first)
+    doc = TDocStd_Document(TCollection_ExtendedString("XmlOcaf")); st = XCAFDoc_DocumentTool.ShapeTool_s(doc.Main())
+    root = st.NewShape()
+    for k in keys:
+        local, trsf = first[k]
+        st.AddComponent(root, st.AddShape(local, False), TopLoc_Location(trsf))
+    st.UpdateAssemblies()
+    fd, f = tempfile.mkstemp(suffix=".step"); os.close(fd)
+    try:
+        w = STEPCAFControl_Writer(); w.Transfer(doc, STEPControl_AsIs)
+        if w.Write(f) != IFSelect_RetDone:
+            return set()
+        rd = STEPControl_Reader(); rd.ReadFile(f); rd.TransferRoots()
+        top = rd.OneShape(); kids = []
+        it = TopoDS_Iterator(top)
+        while it.More(): kids.append(it.Value()); it.Next()
+        if len(kids) == 1 and len(keys) > 1:                   # one extra compound level
+            it = TopoDS_Iterator(kids[0]); kids = []
+            while it.More(): kids.append(it.Value()); it.Next()
+        if len(kids) != len(keys):
+            print(f"  note: assembly check skipped ({len(kids)} components read for {len(keys)} parts)")
+            return set()
+        bad = set()
+        for k, s in zip(keys, kids):
+            ex = TopExp_Explorer(s, TopAbs_SOLID)
+            while ex.More():
+                if not BRepCheck_Analyzer(ex.Current()).IsValid():
+                    bad.add(k); break
+                ex.Next()
+        return bad
+    finally:
+        try: os.remove(f)
+        except OSError: pass
+
+
+def bolt_local(d, grip, L=None):
+    """Bolt along +z: head z in [-H, 0], shank z in [0, L] (nominal: grip + nut + 1/4 in stick-out), nut z in
+    [grip, grip + N]."""
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder, BRepPrimAPI_MakePrism
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Vec
+    H, N = HEX_H.get(round(d, 4), (0.625 * d, d))
+    F = 1.5 * d + 0.125; R = F / np.sqrt(3)                     # hex circumradius from across-flats
+    def hexp(z0, h):
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_MakePolygon, BRepBuilderAPI_MakeFace
+        poly = BRepBuilderAPI_MakePolygon()
+        for k in range(6):
+            a = np.pi / 3 * k; poly.Add(gp_Pnt(R * np.cos(a) * MM, R * np.sin(a) * MM, z0 * MM))
+        poly.Close()
+        return BRepPrimAPI_MakePrism(BRepBuilderAPI_MakeFace(poly.Wire(), True).Face(), gp_Vec(0, 0, h * MM)).Shape()
+    L = L if L and L > grip else grip + N + 0.25
+    return _compound([hexp(-H, H), BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1)), d / 2 * MM, L * MM).Shape(),
+                      hexp(grip, N)])
+
+
+def bolt_stacks(C, A, D, T, I):
+    """Group placed holes into coaxial stacks (same bolt diameter, parallel axes, lateral offset < 1/16 in, within
+    6 in); keep stacks through >= 2 piece instances -> list of (entry point, unit axis, grip, bolt dia)."""
+    from scipy.spatial import cKDTree
+    if not len(C):
+        return []
+    mid = C + A * D[:, None] / 2
+    # A corrupt decoded hole can be finite but astronomically far away; cKDTree
+    # rejects it (and scipy may overflow while subtracting two such points).
+    # These cannot be credible bolt stacks in an architectural steel job.
+    valid = np.isfinite(mid).all(axis=1) & np.isfinite(A).all(axis=1) & np.isfinite(D) & np.isfinite(T) \
+        & (np.abs(mid).max(axis=1) < 1e7) & (D > 0) & (D < 1e4)
+    if not valid.any():
+        return []
+    C, A, D, T, I, mid = (x[valid] for x in (C, A, D, T, I, mid))
+    tree = cKDTree(mid); used = np.zeros(len(C), bool); out = []
+    for i in range(len(C)):
+        if used[i]: continue
+        cand = [j for j in tree.query_ball_point(mid[i], 6.0) if not used[j] and abs(abs(A[j] @ A[i]) - 1) < 1e-3]
+        g = [j for j in cand if np.linalg.norm(np.cross(mid[j] - mid[i], A[i])) < 1 / 16 and abs(T[j] - T[i]) < 1e-3]
+        used[g] = True
+        if len({I[j] for j in g}) < 2 or not 0.2 <= T[i] <= 2.0: continue
+        a = A[i]; s = [(C[j] - C[i]) @ a for j in g] + [(C[j] + A[j] * D[j] - C[i]) @ a for j in g]
+        out.append((C[i] + a * min(s), a, max(s) - min(s), float(T[i])))
+    return out
+
+
+def main():
+    convert(sys.argv[1], sys.argv[2])
+
+
+USE_DERIVED_HOLES = True   # v5.4: holes where a decoded bolt crosses a piece that has no hole there (see below)
+DERIVED_INFO = {}
+
+
+def derive_bolt_holes(job, todo, hw, shared_inst, stats, skip_keys=frozenset()):
+    """Bolt-derived holes (v5.4). Main members carry no hole records of their own (7.2/7.3: their piece files hold
+    0-diameter markers; the member-file 658-B blocks are bolt records). For every decoded bolt - an SDS2 bolt record
+    or a stack of >= 2 coaxial decoded holes - each exact placed piece whose own material the bolt line crosses between
+    the head and head + grip gets a hole over that material span, unless it already has a decoded hole there. The
+    diameter is copied from a coaxial decoded (round) hole of the same bolt; with none, nothing is cut and the case is
+    listed. Holes are cut into the shared part (identical pieces share piece ids, so their holes coincide).
+    Returns dict(derived_by_piece, not_cut (reason counts), examples, parts) and replaces cut parts in shared_inst."""
+    from scipy.spatial import cKDTree
+    from OCP.IntCurvesFace import IntCurvesFace_ShapeIntersector
+    from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+    from OCP.TopAbs import TopAbs_IN
+    from OCP.gp import gp_Lin, gp_Pnt, gp_Dir
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
+    out = dict(derived_by_piece={}, not_cut=collections.Counter(), not_cut_examples=[], bolts_checked=0)
+    # decoded holes, world: entry C, direction A (into the material), depth D, hole dia HD, slot SL
+    if hw:
+        HC = np.array([h[0] for h in hw]); HA = np.array([h[1] for h in hw]); HD = np.array([h[5] for h in hw])
+        HSL = np.array([h[6] for h in hw]); hmid = HC + HA * np.array([h[2] for h in hw])[:, None] / 2
+        htree = cKDTree(hmid)
+    else:
+        htree = None
+    # exact part instances (shared): local solid (mm) + (R, t) with world_in = t + R @ local_in
+    inst = []
+    loc_box = {}
+    for k, (key, local, trsf, label) in enumerate(shared_inst):
+        if isinstance(key, tuple) or key in skip_keys:
+            continue                                        # bolts, SDS2 bolt / nut / washer pieces, concrete
+        R = np.array([[trsf.Value(r, c) for c in (1, 2, 3)] for r in (1, 2, 3)])
+        t = np.array([trsf.Value(r, 4) for r in (1, 2, 3)]) / MM
+        if key not in loc_box:
+            b = Bnd_Box(); BRepBndLib.Add_s(local, b)
+            if b.IsVoid():                                  # v5.5.11: a part with no geometry never stops the pass
+                loc_box[key] = None; continue
+            lo, hi = b.CornerMin(), b.CornerMax()
+            loc_box[key] = np.array([[lo.X(), lo.Y(), lo.Z()], [hi.X(), hi.Y(), hi.Z()]]) / MM
+        lb = loc_box[key]
+        if lb is None:
+            continue
+        corners = np.array([[x, y, z] for x in lb[:, 0] for y in lb[:, 1] for z in lb[:, 2]])
+        W = corners @ R.T + t
+        inst.append((key, local, R, t, W.min(0), W.max(0), k))
+    if not inst:
+        return out
+    cell = 24.0
+    grid = collections.defaultdict(list)
+    for i, (_, _, _, _, lo, hi, _) in enumerate(inst):
+        a0 = np.floor(lo / cell).astype(int); a1 = np.floor(hi / cell).astype(int)
+        if np.prod(a1 - a0 + 1) > 4000:
+            continue                                        # absurdly large part: not a bolted ply
+        for gx in range(a0[0], a1[0] + 1):
+            for gy in range(a0[1], a1[1] + 1):
+                for gz in range(a0[2], a1[2] + 1):
+                    grid[(gx, gy, gz)].append(i)
+    inter = {}; clas = {}
+    holes_local = collections.defaultdict(list)             # part key -> [hole dict (local inches)]
+    for (e, a, grip, d, L, ty, src) in todo:
+        e = np.asarray(e, float); a = np.asarray(a, float)
+        if not (np.isfinite(e).all() and np.isfinite(a).all()) or not 0.05 < grip < 24:
+            continue
+        out["bolts_checked"] += 1
+        # diameter: coaxial decoded round holes of this bolt
+        dia = None
+        if htree is not None:
+            mid = e + a * grip / 2
+            cand = htree.query_ball_point(mid, grip / 2 + 1.0)
+            ds = [HD[j] for j in cand if abs(abs(HA[j] @ a) - 1) < 1e-3 and np.linalg.norm(np.cross(hmid[j] - e, a)) < 1 / 16
+                  and HSL[j] <= 0 and 0 < HD[j] < 4]
+            if ds:
+                dia = float(min(ds))
+        seg_lo = np.minimum(e, e + a * grip) - 0.5; seg_hi = np.maximum(e, e + a * grip) + 0.5
+        cands = set()
+        g0 = np.floor(seg_lo / cell).astype(int); g1 = np.floor(seg_hi / cell).astype(int)
+        for gx in range(g0[0], g1[0] + 1):
+            for gy in range(g0[1], g1[1] + 1):
+                for gz in range(g0[2], g1[2] + 1):
+                    cands.update(grid.get((gx, gy, gz), ()))
+        for i in cands:
+            key, local, R, t, lo, hi, k = inst[i]
+            if np.any(seg_hi < lo) or np.any(seg_lo > hi):
+                continue
+            p0 = R.T @ (e - t); u = R.T @ a                  # local inches
+            if key not in inter:
+                inter[key] = IntCurvesFace_ShapeIntersector(); inter[key].Load(local, 1e-4)
+                clas[key] = BRepClass3d_SolidClassifier(local)
+            it = inter[key]
+            try:
+                it.Perform(gp_Lin(gp_Pnt(*(p0 * MM)), gp_Dir(*u)), -0.5 * MM, (grip + 0.5) * MM)
+            except Exception:
+                continue
+            ts = sorted({round(it.WParameter(j) / MM, 5) for j in range(1, it.NbPnt() + 1)})
+            spans = []
+            for t0, t1 in zip(ts, ts[1:]):
+                if t1 - t0 < 0.05:
+                    continue
+                mpt = p0 + u * (t0 + t1) / 2
+                clas[key].Perform(gp_Pnt(*(mpt * MM)), 1e-3)
+                if clas[key].State() == TopAbs_IN and t1 > 0.02 and t0 < grip - 0.02:
+                    spans.append((max(t0, -0.05), min(t1, grip + 0.05)))
+            for t0, t1 in spans:
+                c_loc = p0 + u * t0
+                # already a decoded hole here (piece-file hole, coaxial)?
+                have = False
+                for h in HOLES.get((job, key), ()):
+                    if abs(abs(np.asarray(h["axis"]) @ u) - 1) < 1e-3 and np.linalg.norm(np.cross(np.asarray(h["c"]) - p0, u)) < 1 / 16:
+                        have = True; break
+                if have:
+                    continue
+                if dia is None:
+                    out["not_cut"]["bolt without a coaxial decoded round hole (diameter unknown)"] += 1
+                    if len(out["not_cut_examples"]) < 200:
+                        out["not_cut_examples"].append(dict(piece=key, bolt_head=np.round(e, 3).tolist(), src=src))
+                    continue
+                hl = dict(c=c_loc, axis=-u, depth=t1 - t0, dia=dia, bolt=d, slot=0.0, ang=0.0, R=np.eye(3), type=0, src=src)
+                if not any(np.linalg.norm(x["c"] - c_loc) < 0.01 and abs(x["axis"] @ hl["axis"]) > 0.999 for x in holes_local[key]):
+                    holes_local[key].append(hl)
+    # decoded piece-file holes that no bolt (record or >= 2-ply stack) passes through: their bolt continues into an
+    # adjoining piece that SDS2 did not store a hole for (single shear tab / clip angle on a web). By rule nothing is
+    # extended into that piece; the holes are counted and listed so the gap is visible.
+    if htree is not None and todo:
+        BE = np.array([np.asarray(t_[0], float) for t_ in todo]); BA = np.array([np.asarray(t_[1], float) for t_ in todo])
+        BG = np.array([float(t_[2]) for t_ in todo])
+        ok_ = np.isfinite(BE).all(1) & np.isfinite(BA).all(1) & np.isfinite(BG)
+        btree = cKDTree(BE[ok_] + BA[ok_] * BG[ok_, None] / 2) if ok_.any() else None
+        BEo, BAo, BGo = BE[ok_], BA[ok_], BG[ok_]
+        single = 0
+        for j in range(len(hmid)):
+            covered = False
+            if btree is not None:
+                for i in btree.query_ball_point(hmid[j], 13.0):
+                    if abs(abs(BAo[i] @ HA[j]) - 1) < 1e-3 and np.linalg.norm(np.cross(hmid[j] - BEo[i], BAo[i])) < 1 / 16:
+                        covered = True; break
+            if not covered:
+                single += 1
+                if len(out["not_cut_examples"]) < 400:
+                    out["not_cut_examples"].append(dict(piece=int(hw[j][7]), hole_world=np.round(hmid[j], 3).tolist(),
+                                                        reason="single-ply"))
+        if single:
+            out["not_cut"]["decoded hole with no bolt record or >= 2-ply stack: adjoining piece not drilled (rule)"] = single
+    elif htree is not None:
+        out["not_cut"]["decoded hole with no bolt record or >= 2-ply stack: adjoining piece not drilled (rule)"] = len(hmid)
+    # cut, once per part, and swap the cut solid into every instance of that part
+    cut_of = {}
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopAbs import TopAbs_SOLID
+
+    def nsol(sh_):
+        ex_ = TopExp_Explorer(sh_, TopAbs_SOLID); k_ = 0
+        while ex_.More(): k_ += 1; ex_.Next()
+        return k_
+    for key, H in holes_local.items():
+        local = next(x[1] for x in inst if x[0] == key)
+        n0 = nsol(local)
+        cut = brep.cut_holes(local, H)
+        if cut is not local and nsol(cut) > n0:
+            # a derived hole that splits the part (cylinder along an edge / through a thin tip) is not a real hole:
+            # keep only the holes that cut cleanly one by one
+            keep = []
+            for h in H:
+                c1 = brep.cut_holes(local, keep + [h])
+                if c1 is not local and nsol(c1) == n0:
+                    keep.append(h)
+                else:
+                    out["not_cut"]["derived hole would split the part"] += 1
+            H = keep
+            cut = brep.cut_holes(local, H) if H else local
+        if cut is local:
+            if H:
+                out["not_cut"]["boolean failed (part left as decoded)"] += len(H)
+            continue
+        cut_of[key] = cut
+        out["derived_by_piece"][key] = len(H)
+        # v5.5.12: from an SDS2 bolt record (exact by the owner's rule) or from a guessed bolt through a hole stack
+        nst = sum(1 for h in H if h.get("src") != "sds2")
+        if nst:
+            out.setdefault("stack_by_piece", {})[key] = nst
+        HOLES.setdefault((job, key), [])
+        HOLES[(job, key)] = list(HOLES[(job, key)]) + H
+    for k, (key, local, trsf, label) in enumerate(shared_inst):
+        if key in cut_of:
+            shared_inst[k] = (key, cut_of[key], trsf, label)
+    stats["holes_derived"] = sum(out["derived_by_piece"].values())
+    stats["holes_derived_from_hole_stacks"] = sum((out.get("stack_by_piece") or {}).values())
+    stats["pieces_with_derived_holes"] = len(out["derived_by_piece"])
+    stats["holes_not_derived"] = sum(out["not_cut"].values())
+    return out
+
+
+def _absurd(sh, limit_in=2e5):
+    """Solid larger than ~3 miles in any direction: corrupt source numbers, never real steel (no stored length or
+    section is that large). A shared exact part ("shared", local solid, placement) is measured on its local solid: a
+    rigid placement keeps its size. v5-v5.4.1 handed the shared tuple itself to the bounding box, which raised and
+    counted as absurd, so exact bars, rods and rebar on the special-piece path (SB1/2, RB*, #-bars, couplers) were
+    dropped as absurd_extent_corrupt_source_geometry: 5,076 pieces on 13 jobs (data-3 Edge_West 7.711: 1,504
+    square-bar balusters, 905 x 13 x 13 mm, that v4c wrote and the job's IFC holds)."""
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
+    if isinstance(sh, tuple):
+        sh = sh[1]
+    try:
+        b = Bnd_Box(); BRepBndLib.Add_s(sh, b)
+        lo, hi = b.CornerMin(), b.CornerMax()
+        ext = max(hi.X() - lo.X(), hi.Y() - lo.Y(), hi.Z() - lo.Z()) / MM
+        return not np.isfinite(ext) or ext > limit_in
+    except Exception:
+        return True
+
+
+def _centre(sh):
+    """Bounding-box centre of a solid, in inches."""
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
+    b = Bnd_Box(); BRepBndLib.Add_s(sh, b)
+    if b.IsVoid():
+        return None
+    lo, hi = b.CornerMin(), b.CornerMax()
+    return np.array([lo.X() + hi.X(), lo.Y() + hi.Y(), lo.Z() + hi.Z()]) / (2 * MM)
+
+
+def _tag(label, why):
+    """Stand-in marker appended to a STEP product name: everything not exact is named so."""
+    return f"{label} [approx: {why}]" if why else label
+
+
+def _local_prism(loop, e, holes=()):
+    return prism([np.asarray(q, float) for q in loop], np.asarray(e, float), [[np.asarray(q, float) for q in h] for h in holes])
+
+
+def _place(sh, M, o):
+    """Local solid -> world (o + M.T @ local); None if M is not a rotation or no valid placed form exists."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+    from OCP.ShapeFix import ShapeFix_Shape
+    t = placement(M, o)
+    if t is None or sh is None:
+        return None
+    w = BRepBuilderAPI_Transform(sh, t, True).Shape()
+    if BRepCheck_Analyzer(w).IsValid():
+        return w
+    fx = ShapeFix_Shape(w); fx.Perform()
+    return fx.Shape() if BRepCheck_Analyzer(fx.Shape()).IsValid() else None
+
+
+def table_standin(V, p, sh_):
+    """Last-resort local solid from the piece table when no builder works: plate -> L x W x T slab, rolled -> the
+    nominal section over L. Positioned on the piece's vertex box when it has one (else from the piece origin)."""
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
+    from OCP.gp import gp_Pnt
+    L, W, Tk = p.get("L", 0), p.get("W", 0), p.get("T", 0)
+    if sh_ is not None and L > 0 and sh_.d > 0:
+        loops = T.profile(sh_)
+        if loops:
+            VV = np.array([[x, y, z] for x in (0.0, L) for y in (0.0, -sh_.d) for z in (-sh_.bf / 2, sh_.bf / 2)])
+            if V is not None and len(V) >= 2 and np.ptp(V[:, 0]) > 0.5 * L:
+                VV[:, 0] = np.where(VV[:, 0] == 0, V[:, 0].min(), V[:, 0].min() + L)
+            loc = rolled_local(VV, sh_, L)
+            if loc is not None:
+                return _local_prism(*loc)
+    dims = sorted([d for d in (L, W, Tk) if d > 0], reverse=True)
+    if len(dims) < 3:
+        return None
+    if V is not None and len(V) >= 2:
+        lo = V.min(0); ext = np.ptp(V, 0)
+        order = np.argsort(-ext)                       # longest vertex extent gets the longest table dimension
+        size = np.zeros(3)
+        for k, d in zip(order, dims): size[k] = d
+    else:
+        lo = np.zeros(3); size = np.array(dims)
+    try:
+        return BRepPrimAPI_MakeBox(gp_Pnt(*(lo * MM)), *(size * MM)).Shape()
+    except Exception:
+        return None
+
+
+def reset():
+    """Clear per-job caches before converting again in the same process (read-back repair pass)."""
+    for c in (_BREP, HOLES, BREP_WHY, _REF):
+        c.clear()
+    REF_OPEN.clear(); REF_FACES.clear(); DERIVED_INFO.clear(); VALIDATED_BY_SECTION.clear(); UNVALIDATED.clear()
+    BREP_REPAIR.clear(); BREP_WEIGHT_NOTE.clear(); BREP_NEG_WEIGHT.clear()
+    NC1_PLAN.clear(); NC1_CUT.clear(); NC1_STATS.clear()
+    CONCRETE.clear(); HOLES_NOT_CUT.clear(); HOLES_CUT.clear(); del INVALID_DROPPED[:]
+    AS_COMPONENT.clear(); del READBACK_REWRITTEN[:]
+
+
+def convert(job, out, shared=True):
+    """shared=True: exact pieces are written once and placed per instance (STEP assembly); False: one copy each.
+    v5: every part that is not SDS2's exact piece geometry is written with an `[approx: ...]` name suffix and listed
+    in <out>_manifest.json (real type + reason); joists without pieces become open-web stand-ins; phantom material
+    blocks are ignored; a piece placed identically by two non-twin members is written once (FIX item 12)."""
+    global SHARED
+    SHARED = shared
+    import joist as J
+    import manifest as MF
+    from instances import piece_vertices
+    pieces = read_pieces(job); shapes = read_shapes(job)
+    SHAPES.clear(); SHAPES.update(shapes)
+    mems, lay = read_members(job)
+    mtype = {m.id: m.type for m in mems}
+    OPEN_SURF.clear()
+    NC1_PLAN.clear(); NC1_CUT.clear(); NC1_STATS.clear()
+    if NC1_SRC and USE_HOLES:
+        import nc1 as NC
+        try:
+            plan_, st_ = NC.plan(job, NC1_SRC, mems, lay, pieces)
+            NC1_PLAN.update(plan_); NC1_STATS.update(st_)
+        except Exception as e:
+            NC1_STATS[f"NC1 plan failed: {type(e).__name__}"] += 1
+        print("  NC1 opt-in:", dict(NC1_STATS))
+    mem_by_id = {m.id: m for m in mems}
+    # twin members (SDS2's own duplicate members): same type, section and work line, whichever end is stored first
+    # (v5.5.11: data-3 ca1a958a MISC #174 / #175 hold the same RB3/4 on one line drawn in opposite directions)
+    sig = {m.id: (m.type, m.section.name if m.section else None,
+                  tuple(sorted([tuple(np.round(m.p1, 2).tolist()), tuple(np.round(m.p2, 2).tolist())])))
+           for m in mems}
+    doc = TDocStd_Document(TCollection_ExtendedString("XmlOcaf"))
+    st = XCAFDoc_DocumentTool.ShapeTool_s(doc.Main())
+    rows = []; skipped_rows = []; dup_rows = []
+    stats = {"plate": 0, "rolled": 0, "skipped": 0, "member_fallback": 0, "exact": 0}
+    instance_counts = collections.Counter()
+    skipped = collections.Counter()
+    written = {}                                # (piece, origin, rotation) -> (member, row index): FIX item 12
+    # v5.5.11: identical placed solids by their vertex sets (also when the two frames differ by a symmetry of the piece)
+    geo_seen = collections.defaultdict(list)    # (piece, placed vertex centroid, 0.5 in grid) -> [(member, row, M, o)]
+    geo_name = collections.defaultdict(list)    # (piece name, centroid grid) -> [(member, row index, piece, M, o)]
+    src_dups = []                               # identical solids SDS2's own data places twice: kept as stored, listed
+    mains = {}                                  # member -> its main material piece
+    row_hdr = {}                                # row index -> written from its member's own main placement (header)
+    hdr_row = {}                                # member -> row index of its main material
+    pending_also = collections.defaultdict(list)  # owner member -> members whose files also list its main material
+    hdr_main, hdr_at = {}, collections.defaultdict(list)   # member -> (piece, M, o, W); (piece, centroid grid) -> [member]
+
+    def twin_of(m0, n_, hdr_now, hdr_prev):
+        """Twin members (SDS2's own duplicate member): same type, section and work line, or - v5.5.11 - both placements
+        are their members' own main material (header blocks) in one space: a member has one main material, so two
+        coincident ones are two members (data-3 TYSONS f3482a0d: PL5/16x4 1868 of members 739 and 1869, stored from
+        opposite ends 0.01 in apart). A member's file also lists other members' main materials (GMS_Test 1014 lists
+        its 22 sibling channels twice each): those listings are not twins."""
+        return m0 != n_ and (sig.get(m0) == sig.get(n_) or (hdr_now and hdr_prev))
+    cur_geo = [None]                            # keys of the instance being written, registered by add_row
+    from OCP.GProp import GProp_GProps
+    from OCP.BRepGProp import BRepGProp
+    wsum = [0.0, 0.0]; wcache = {}; wdiff = collections.Counter()
+    fam_w = collections.defaultdict(lambda: [0.0, 0.0, 0])
+    stockc = {}; stock_w = [0.0, 0.0, 0]          # v5.5.11: plates SDS2 weighs as their rectangular stock
+    env_w = [0.0]; big = []
+
+    def track(sid, sh, how):
+        """Steel weight of the placed solid vs SDS2's piece weight (concrete excluded), one volume per piece build."""
+        p = pieces[sid]
+        if p["name"].startswith("Conc") or not 0 < p["wt"] < 1e6:          # corrupt weights (Centene: 3e311 lb)
+            return
+        if re.match(r"G[TR]\d", p["name"]):
+            return        # bar grating: SDS2 weighs the open mesh, the solid panel is ~7x that (SampleJob, Centene)
+        if (sid, how) not in wcache:
+            g = GProp_GProps(); BRepGProp.VolumeProperties_s(sh, g); wcache[(sid, how)] = abs(g.Mass()) / MM ** 3 * 0.2836
+        if not np.isfinite(wcache[(sid, how)]) or wcache[(sid, how)] > 1e7 or p["wt"] < 1e-3:
+            return        # corrupt geometry / weight (run-2 GHTUG canary: steel ratio 2.8e214) stays out of the tally
+        if (sid, how) not in stockc:
+            stockc[(sid, how)] = how == "exact" and _stock_weighed(sh, p, wcache[(sid, how)])
+        if stockc[(sid, how)]:
+            # v5.5.11: a cut plate (gusset, clipped corners) that SDS2 weighs as its rectangular stock L x W x T: its
+            # weight cannot check the net shape, so it stays out of the steel ratio (data-3 80ea451b 7.021: 260 PL1/2x3 1/2
+            # gussets at 0.50x, the job at 0.86x); counted and listed in weight_check.stock_weighed_plates
+            stock_w[0] += wcache[(sid, how)]; stock_w[1] += p["wt"]; stock_w[2] += 1
+            return
+        wsum[0] += wcache[(sid, how)]; wsum[1] += p["wt"]
+        wdiff[(sid, p["name"], how)] += wcache[(sid, how)] - p["wt"]
+        big.append((wcache[(sid, how)] - p["wt"], p["wt"], p["name"], sid))
+        f = MF.family(p["name"]); fw = fam_w[f]
+        fw[0] += wcache[(sid, how)]; fw[1] += p["wt"]; fw[2] += 1
+
+    def record_skip(n, sid, inst_no, p, k, origin, reason):
+        stats["skipped"] += 1
+        skipped[p["name"][:12]] += 1
+        skipped_rows.append(dict(member=n, member_type=mtype[n], piece=sid, inst=inst_no,
+                                 name=p["name"], kind=k, reason=reason,
+                                 ox=round(origin[0], 4), oy=round(origin[1], 4), oz=round(origin[2], 4)))
+
+    def add_row(row, dkey=None, label="", standin="", real=""):
+        row.update(label=label, standin=standin, real_type=real if standin else "", also_on_member="")
+        rows.append(row)
+        if dkey is not None:
+            written.setdefault(dkey, (row["member"], len(rows) - 1))
+            if cur_geo[0] is not None:
+                g1, g2, sid_, M_, o_, hdr_ = cur_geo[0]
+                geo_seen[g1].append((row["member"], len(rows) - 1, M_, o_))
+                geo_name[g2].append((row["member"], len(rows) - 1, sid_, M_, o_))
+                row_hdr[len(rows) - 1] = hdr_
+                if hdr_:
+                    hdr_row[row["member"]] = len(rows) - 1
+                    for m_ in pending_also.pop(row["member"], ()):
+                        row["also_on_member"] = (row["also_on_member"] + ";" if row["also_on_member"] else "") + str(m_)
+
+    parts = {}; root = [None]; hw = []          # hw: placed holes (entry, axis, depth, bolt dia, instance)
+    shared_inst = []                            # (part key, local solid, placement, instance label)
+    frames = {}                                 # member -> main material placement (bolt record frame)
+    bolt_rows = []
+    hardware = []                               # world centres of SDS2's stored bolt hardware pieces (BLT: head, nut, washer)
+
+    def add_hardware(sh, M, o):
+        """Remember where a stored BLT hardware piece sits (shared part: centre of the local solid, placed)."""
+        try:
+            c = _centre(sh[1] if isinstance(sh, tuple) else sh)
+            if c is not None:
+                hardware.append(o + M.T @ c if isinstance(sh, tuple) else c)
+        except Exception:
+            pass
+
+    def add_exact(sid, res, label):
+        """Write an exact piece: shared mode -> one part per piece + a located component per instance under the job
+        assembly; flat mode -> the placed copy. Returns the (local or placed) solid for the weight tally."""
+        if isinstance(res, tuple):
+            _, local, trsf = res
+            shared_inst.append((sid, local, trsf, label))           # written at the end, after the part check
+            return local
+        if repair_action(label) == "drop":
+            # v5.5.10: placed copies (world-built rods, flat mode, bolts) are left out by the repair too
+            INVALID_DROPPED.append(label); return res
+        lab = st.AddShape(res, False)
+        TDataStd_Name.Set_s(lab, TCollection_ExtendedString(label))
+        return res
+
+    def add_flat(sh, label):
+        if label.strip() in DROP_LABELS:
+            INVALID_DROPPED.append(label); return
+        lab = st.AddShape(sh, False)
+        TDataStd_Name.Set_s(lab, TCollection_ExtendedString(label))
+
+    n_members_without_geometry = 0
+    from sds2job import REFERENCE_TYPES
+    ref_pieces = None
+    # v5.5.11: every member's own main material placement, so a placement another member's file also lists is
+    # written once, under its owner, whichever member comes first
+    for n_ in sorted(mtype):
+        if mtype[n_] == "Ref Point" or mtype[n_] in REFERENCE_TYPES:
+            continue
+        hm = _header_main(job, n_, pieces)
+        if hm is not None:
+            Vh = _dup_vertices(job, hm[0])
+            if Vh is not None:
+                Wh = hm[2] + Vh @ hm[1]
+                hdr_main[n_] = hm + (Wh,)
+                hdr_at[(hm[0],) + tuple((np.round(Wh.mean(0) * 2) / 2).tolist())].append(n_)
+    for n in sorted(mtype):
+        if mtype[n] == "Ref Point":
+            continue
+        if mtype[n] in REFERENCE_TYPES:
+            # imported reference model: its piece files have no piece-table entry; place SDS2's stored B-rep of each
+            # (no weight to check against, never approximated: a part whose faces don't close is left out)
+            if ref_pieces is None:
+                ids_ = [int(x) for x in os.listdir(os.path.join(job, "subm")) if x.isdigit()]
+                ref_pieces = {i: pieces.get(i) or dict(name="REFERENCE", sec=0, L=0, W=0, T=0, wt=0) for i in ids_}
+            _, rinst = material_instances(job, n, ref_pieces)
+            stats["reference_members"] = stats.get("reference_members", 0) + 1
+            stats["reference_placements"] = stats.get("reference_placements", 0) + len(rinst)
+            if not rinst:
+                from instances import count_frames
+                try:
+                    stats["reference_unlinked_frames"] = stats.get("reference_unlinked_frames", 0) + count_frames(job, n)
+                except OSError:
+                    pass
+            import time as _t
+            t_ref = _t.time()
+            for sid, M, o in rinst:
+                if _t.time() - t_ref > REF_BUDGET_S and (job, sid) not in _REF:
+                    # bounded: imported meshes can hold tens of thousands of faceted parts (pp3: 78k files)
+                    instance_counts[(n, sid)] += 1
+                    record_skip(n, sid, instance_counts[(n, sid)], ref_pieces[sid], "reference", o, "reference_time_budget_exceeded")
+                    continue
+                p = ref_pieces[sid]
+                if sid in pieces and pieces[sid]["wt"] > 0:
+                    continue                            # named SDS2 pieces placed by the model: handled below if listed
+                instance_counts[(n, sid)] += 1; inst_no = instance_counts[(n, sid)]
+                sh = brep_reference(job, sid, M, o)
+                if sh is None:
+                    record_skip(n, sid, inst_no, p, "reference", o, "reference_part_no_closed_brep"); continue
+                opn = (job, sid) in REF_OPEN
+                fset = (job, sid) in REF_FACES
+                label = (f"{mtype[n]} #{n} / reference part (piece {sid}, inst {inst_no}) [reference: imported model geometry "
+                         f"as stored by SDS2, not fabricated steel"
+                         f"{'; open surface (stored faces, not sewn), not a closed solid' if fset else '; open surface, not a closed solid' if opn else ''}]")
+                add_exact(sid, sh, label)
+                stats["reference_parts"] = stats.get("reference_parts", 0) + 1
+                if opn:
+                    stats["reference_open_shells"] = stats.get("reference_open_shells", 0) + 1
+                if fset:
+                    stats["reference_face_sets"] = stats.get("reference_face_sets", 0) + 1
+                add_row(dict(member=n, member_type=mtype[n], piece=sid, inst=inst_no, name=p["name"], kind="reference",
+                             builder="reference_brep", ox=round(o[0], 4), oy=round(o[1], 4), oz=round(o[2], 4)),
+                        label=label)
+            continue
+        main_sid, inst = material_instances(job, n, pieces)
+        mains[n] = main_sid
+        for sid_, M_, o_ in inst:
+            if sid_ == main_sid:
+                frames[n] = (M_, o_); break
+        if not inst:
+            m = mem_by_id[n]
+            if mtype[n] not in T.STRUCTURAL:
+                n_members_without_geometry += 1
+                continue
+            sec = m.section.name if m.section else ""
+            sh = None
+            if T.is_joist(m):
+                # SDS2 7.0-7.6: vendor joists are members with a designation only (FIX item 1): open-web stand-in
+                wt, basis = J.typical_weight(sec, m.section.d, m.section.weight)
+                jl_ = J.joist_placed(m, wt) if SHARED else (None, None, None)
+                if jl_[0] is not None:
+                    sh, info = ("shared", jl_[0], jl_[1]), jl_[2]           # local part + placement (v5.5.9)
+                else:
+                    sh, info = J.joist_solid(m, wt)
+                if sh is not None:
+                    label = _tag(f"{m.type} #{n} / {sec} (joist stand-in)",
+                                 f"derived_from_designation open-web joist {info['chord_angle']} chords + {info['web_bar_dia']:g} in web bars, "
+                                 f"{wt:g} lb/ft ({basis}); SDS2 stores only the designation")
+                    builder, why = "joist_openweb_standin", f"derived_from_designation: open-web joist sized to {wt:g} lb/ft ({basis}); no chord/web data in the job"
+                    real = f"open-web steel joist {sec} (vendor-designed)"
+                    stats["joist_standin"] = stats.get("joist_standin", 0) + 1
+                    env_w[0] += wt * np.linalg.norm(np.subtract(m.p2, m.p1)) / 12
+            if sh is None:
+                sh = T.solid_for(m, "X", 1)
+                if sh is None:
+                    n_members_without_geometry += 1
+                    if T.is_joist(m):
+                        # never silent (v5.2-v5.4.1 dropped 50 DSLH joists without a trace): list it as not built
+                        skipped_rows.append(dict(member=n, member_type=m.type, piece=0, inst=0, name=sec, kind="member",
+                                                 reason="joist_without_depth",
+                                                 ox=round(m.p1[0], 4), oy=round(m.p1[1], 4), oz=round(m.p1[2], 4)))
+                        stats["skipped"] += 1
+                    elif not (np.isfinite(m.p1).all() and np.isfinite(m.p2).all()) or \
+                            max(np.abs(m.p1).max(), np.abs(m.p2).max()) > 1e7:
+                        # structural member whose stored end points are not numbers / absurd (data-3 CSU 15-027
+                        # 7.312: 810 of 10,452): nothing can be placed; listed, never silent
+                        fin = lambda v: round(float(v), 4) if np.isfinite(v) and abs(v) < 1e7 else ""
+                        skipped_rows.append(dict(member=n, member_type=m.type, piece=0, inst=0, name=sec, kind="member",
+                                                 reason="member_end_points_unusable",
+                                                 ox=fin(m.p1[0]), oy=fin(m.p1[1]), oz=fin(m.p1[2])))
+                        stats["skipped"] += 1
+                    continue
+                why = "member work-line envelope: the job has no fabricated pieces for this member"
+                if m.section is not None and m.section.name in T.PROFILE_NOTES:
+                    why += f"; {T.PROFILE_NOTES[m.section.name]} (real section dimensions not in the job)"
+                label = _tag(f"{m.type} #{n} / {sec} (member envelope)", why)
+                builder, real = ("joist_envelope_approx", f"open-web steel joist {sec}") if m.type == "JOIST" else \
+                    ("member_envelope", f"{m.type} {sec}")
+                if m.type == "JOIST":
+                    stats["joist_envelope"] = stats.get("joist_envelope", 0) + 1
+            if isinstance(sh, tuple):
+                add_exact(("joist", n), sh, label)
+            else:
+                add_flat(sh, label)
+            stats["member_fallback"] += 1
+            add_row(dict(member=n, member_type=m.type, piece=0, inst=0, name=sec, kind="member", builder=builder,
+                         ox=round(m.p1[0], 4), oy=round(m.p1[1], 4), oz=round(m.p1[2], 4)),
+                    label=label, standin=why, real=real)
+            continue
+        for sid, M, o in inst:
+            p = pieces[sid]; k = kind(p)
+            instance_counts[(n, sid)] += 1
+            inst_no = instance_counts[(n, sid)]
+            label = piece_instance_label(mtype[n], n, p["name"], sid, inst_no)
+            # 0.1 in origin grid: the two members of a connection can store the same piece 0.005-0.01 in apart
+            # (AGNEWS-R 7.331: bolt pieces at z -14.87 / -14.88), which a 0.01 grid split
+            hm_ = hdr_main.get(n)
+            is_hdr = bool(hm_ is not None and sid == hm_[0] and np.allclose(M, hm_[1], atol=1e-6) and np.allclose(o, hm_[2], atol=1e-4))
+            Vg = _dup_vertices(job, sid)
+            W = o + Vg @ M if Vg is not None else None    # row form of o + M.T @ v
+            if W is not None and not is_hdr:
+                # v5.5.11: another member's own main material, listed in this member's file too: the owner writes it
+                # same piece record only: an identical solid under another piece record stays a source duplicate
+                # (kept, listed), and the verifier's completeness check matches listings by piece id
+                cg_ = (sid,) + tuple((np.round(W.mean(0) * 2) / 2).tolist())
+                own = next((m_ for m_ in hdr_at.get(cg_, ()) if m_ != n and _same_points(W, hdr_main[m_][3])), None)
+                if own is not None:
+                    dup_rows.append(dict(member=n, piece=sid, inst=inst_no, name=p["name"], written_with_member=own,
+                                         why="another member's main material, also listed in this member's file"))
+                    stats["duplicate_skipped"] = stats.get("duplicate_skipped", 0) + 1
+                    if own in hdr_row:
+                        r0 = rows[hdr_row[own]]
+                        r0["also_on_member"] = (r0["also_on_member"] + ";" if r0["also_on_member"] else "") + str(n)
+                    else:
+                        pending_also[own].append(n)
+                    continue
+            dkey = (sid, tuple(np.round(o, 1)), tuple(np.round(M, 2).ravel()))
+            prev = written.get(dkey)
+            if prev is not None and prev[0] != n and not twin_of(prev[0], n, is_hdr, row_hdr.get(prev[1], False)):
+                # the same piece at the same place, listed by both members of a connection (FIX item 12): write once
+                r0 = rows[prev[1]]
+                r0["also_on_member"] = (r0["also_on_member"] + ";" if r0["also_on_member"] else "") + str(n)
+                dup_rows.append(dict(member=n, piece=sid, inst=inst_no, name=p["name"], written_with_member=prev[0],
+                                     why="same placement listed by both members"))
+                stats["duplicate_skipped"] = stats.get("duplicate_skipped", 0) + 1
+                continue
+            # v5.5.11 duplicates by geometry (the same solid twice, whatever the stored frames):
+            #  (a) converter-made, removed and listed: one physical piece listed by two members whose frames differ by a
+            #      symmetry of the piece (data-3 8d3cfac8: PL3x26 piece 1 under COLUMN #9 and BEAM #65), or a member's
+            #      main material read from its header block and again from a material block (EC-27);
+            #  (b) source, kept as stored and listed: SDS2 places the same piece twice at one transform in one member
+            #      or in twin members (6eeedc27: piece 4134), or two piece records with one solid.
+            cur_geo[0] = None
+            if Vg is not None:
+                cg = tuple((np.round(W.mean(0) * 2) / 2).tolist())
+                g1, g2 = (sid,) + cg, (p["name"],) + cg
+                hit = next((h for h in geo_seen.get(g1, ()) if _same_points(W, h[3] + Vg @ h[2])), None)
+                if hit is not None:
+                    m0, r0 = hit[0], rows[hit[1]]
+                    twin = twin_of(m0, n, is_hdr, row_hdr.get(hit[1], False))
+                    if (m0 != n and not twin) or (m0 == n and (is_hdr or row_hdr.get(hit[1], False))):
+                        r0["also_on_member"] = (r0["also_on_member"] + ";" if r0["also_on_member"] else "") + str(n)
+                        dup_rows.append(dict(member=n, piece=sid, inst=inst_no, name=p["name"], written_with_member=m0,
+                                             why="same solid listed by both members (stored frames differ by a symmetry of the piece)"
+                                             if m0 != n else "main material in the header block and again in a material block"))
+                        stats["duplicate_skipped"] = stats.get("duplicate_skipped", 0) + 1
+                        continue
+                    src_dups.append(dict(member=n, piece=sid, inst=inst_no, name=p["name"], same_as=r0.get("label") or f"#{m0}",
+                                         kind="twin members" if twin else "same member"))
+                else:
+                    for h2 in geo_name.get(g2, ()):
+                        V0 = _dup_vertices(job, h2[2]) if h2[2] != sid else None
+                        if V0 is not None and _same_points(W, h2[4] + V0 @ h2[3]):
+                            src_dups.append(dict(member=n, piece=sid, inst=inst_no, name=p["name"],
+                                                 same_as=rows[h2[1]].get("label") or f"#{h2[0]}", kind="different piece record"))
+                            break
+                cur_geo[0] = (g1, g2, sid, M, o, is_hdr)
+            if USE_BREP and GRATING.match(p["name"]):
+                # [sgc] bar grating / grating tread as SDS2 models it (grating.py): bearing bars, bands, carrier plates
+                # and nosing from the piece faces, cross bars from their stored rectangles and the record's cross bar
+                # depth; validated against SDS2's weight (v4 / v5.4: solid panel, tagged)
+                gsh = grating_placed(job, sid, p, M, o)
+                if gsh is not None:
+                    # v5.5.6 (owner decision): bars / bands from SDS2's faces and cross bars from the stored outline x
+                    # the record's stored depth are the model's own records -> exact when the grating weighs SDS2's
+                    # weight (+-3 %), or is a cut panel whose outline is the stored faces (no partition cells);
+                    # anything else stays tagged grating_crossbars_from_record (class 2)
+                    gi = GRATING_INFO.get((job, sid), {})
+                    exact_g = (gi.get("weight_ratio") is not None and abs(gi["weight_ratio"] - 1) <= 0.03) or \
+                              (gi.get("cut_from_stock") and not gi.get("cells"))
+                    gwhy = "" if exact_g else (
+                        "cross bars built from SDS2's stored cross-bar outlines and the grating record's cross-bar "
+                        "depth (weight / outline not confirmed by SDS2's own data)")
+                    glab = _tag(label, gwhy)
+                    sh = add_exact(sid, gsh, glab)
+                    stats["grating"] = stats.get("grating", 0) + 1; stats["exact"] += 1
+                    stats["exact_brep"] = stats.get("exact_brep", 0) + 1
+                    add_row(dict(member=n, member_type=mtype[n], piece=sid, inst=inst_no,
+                                 name=p["name"], kind="grating", builder="exact_brep" if exact_g else "grating_from_record",
+                                 ox=round(o[0], 4), oy=round(o[1], 4), oz=round(o[2], 4)), dkey,
+                            label=glab, standin=gwhy, real="bar grating")
+                    continue
+            # exact B-rep: plates / rolled / joists, and bolts (SDS2 stores each nut, head and washer as its own
+            # faceted hex / ring piece). Studs and rods keep the true cylinders of special_solid; concrete its prism.
+            if (k in ("plate", "rolled") and not TURNED.match(p["name"]) or p["name"].startswith("BLT")) \
+                    and not p["name"].startswith("Conc"):
+                sh = brep_placed(job, sid, p, M, o)
+                if sh is not None:
+                    conc = (job, sid) in CONCRETE
+                    k2 = "concrete" if conc else "fastener" if p["name"].startswith("BLT") else k
+                    notes = []
+                    if (job, sid) in HOLES_NOT_CUT:
+                        notes.append("bolt holes decoded but not cut")
+                    if re.match(r"G[TR]\d", p["name"]):
+                        notes.append("bar grating written as SDS2's solid panel (open mesh not modelled)")
+                    opn = (job, sid) in OPEN_SURF
+                    if opn:
+                        notes.append("open surface as stored by SDS2 (its rims are open), not a closed solid")
+                    unval = (job, sid) in UNVALIDATED
+                    if unval:
+                        label = piece_instance_label(mtype[n], n, f"piece {sid}", sid, inst_no)
+                        notes.append("SDS2's stored B-rep, not validated: the piece-table entry is unreadable")
+                    if (job, sid) in VALIDATED_BY_SECTION:
+                        stats["validated_by_section"] = stats.get("validated_by_section", 0) + 1
+                    for k_, d_ in (("exact_brep_repaired", BREP_REPAIR), ("exact_brep_weight_unvalidated", BREP_WEIGHT_NOTE),
+                                   ("exact_brep_negative_weight", BREP_NEG_WEIGHT)):
+                        if (job, sid) in d_:
+                            stats[k_] = stats.get(k_, 0) + 1
+                    if (job, sid) in NC1_CUT:
+                        notes.append(f"holes_from_nc1: {NC1_CUT[(job, sid)]} hole(s) from the job's NC1 file "
+                                     f"{NC1_PLAN[sid]['mark']} (missing in SDS2's piece file)")
+                        stats["holes_from_nc1"] = stats.get("holes_from_nc1", 0) + NC1_CUT[(job, sid)]
+                    lab_ = _tag(label, "; ".join(notes))
+                    if p["name"].startswith("BLT"):
+                        add_hardware(sh, M, o)
+                    sh = add_exact(sid, sh, lab_)
+                    for h in HOLES.get((job, sid), ()) if USE_BOLTS else ():
+                        hw.append((o + M.T @ h["c"], -(M.T @ h["axis"]), h["depth"], h["bolt"], len(rows), h["dia"], h["slot"], sid))
+                    stats[k2] = stats.get(k2, 0) + 1; stats["exact"] += 1
+                    stats["exact_brep"] = stats.get("exact_brep", 0) + 1
+                    if not conc and not opn: track(sid, sh, "exact")
+                    add_row(dict(member=n, member_type=mtype[n], piece=sid, inst=inst_no,
+                                 name=f"piece {sid}" if unval else p["name"], kind=k2,
+                                 builder="exact_brep_unvalidated" if unval else "exact_brep",
+                                 ox=round(o[0], 4), oy=round(o[1], 4), oz=round(o[2], 4)), dkey,
+                            label=lab_, standin="; ".join(notes),
+                            real=("bar grating" if re.match(r"G[TR]\d", p["name"]) else
+                                  "fabricated piece (piece-table entry unreadable)" if unval else p["name"]))
+                    continue
+            exact_why = BREP_WHY.get((job, sid)) or ("approximate builders requested (--approx)" if not USE_BREP else
+                                                     "piece has no SDS2 weight to validate its B-rep")
+            if k == "rolled" and J.is_joist_section(p["name"]) and p.get("L", 0) > 0:
+                # 7.7+/8.0 joist pieces whose multi-body B-rep does not close (TYSONS 7.720: 20 joists): open-web joist
+                # derived from the designation over the piece's own length, placed on its vertex box (top at max y)
+                Vj = piece_vertices(job, sid)
+                sh_ = shapes.get(p["sec"])
+                depth = sh_.d if sh_ is not None and sh_.d > 0 else (float(J.DESIG.match(p["name"]).group(1)) if J.DESIG.match(p["name"]) else 0)
+                if Vj is not None and len(Vj) >= 4 and depth > 0:
+                    wt_j, basis_j = J.typical_weight(p["name"], depth, 0)
+                    try:
+                        loc_j, info_j = J.joist_local(depth, float(np.ptp(Vj[:, 0])) or p["L"], wt_j)
+                        from OCP.gp import gp_Trsf
+                        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+                        tj = gp_Trsf(); tj.SetTranslation(gp_Vec(Vj[:, 0].min() * MM, Vj[:, 1].max() * MM, Vj[:, 2].mean() * MM))
+                        tw_ = placement(M, o) if SHARED else None
+                        if tw_ is not None:
+                            # v5.5.9: local part + placement (world-built cylinders far from the origin read back invalid)
+                            shj = ("shared", BRepBuilderAPI_Transform(loc_j, tj, True).Shape(), tw_)
+                        else:
+                            shj = _place(BRepBuilderAPI_Transform(loc_j, tj, True).Shape(), M, o)
+                    except Exception:
+                        shj = None
+                    if shj is not None:
+                        why = (f"derived_from_designation open-web joist {info_j['chord_angle']} chords + {info_j['web_bar_dia']:g} in "
+                               f"web bars, {wt_j:g} lb/ft ({basis_j}); SDS2's own joist B-rep not usable ({exact_why})")
+                        lab_ = _tag(label, why)
+                        if isinstance(shj, tuple):
+                            add_exact(("joistp", sid), shj, lab_)
+                        else:
+                            add_flat(shj, lab_)
+                        stats["joist_standin"] = stats.get("joist_standin", 0) + 1
+                        add_row(dict(member=n, member_type=mtype[n], piece=sid, inst=inst_no, name=p["name"], kind="rolled",
+                                     builder="joist_openweb_standin", ox=round(o[0], 4), oy=round(o[1], 4), oz=round(o[2], 4)),
+                                dkey, label=lab_, standin=why, real=f"open-web steel joist {p['name']}")
+                        continue
+            V = piece_vertices(job, sid) if k in ("plate", "rolled") and not TURNED.match(p["name"]) else subm_vertices(job, sid)
+            if (V is None or len(V) < 4) and k in ("plate", "rolled") and not TURNED.match(p["name"]) \
+                    and not p["name"].startswith("Conc"):
+                V = mesh_vertices(job, sid)        # no tagged outline: use the piece's mesh vertices instead
+            nominal = False
+            if (V is None or len(V) < 4) and k == "rolled" and p["sec"] in shapes and p["L"] > 0:
+                # piece file holds no geometry (e.g. 216-B stubs on 7.516 HENRY FORD): nominal straight piece,
+                # section over its length, top of section at local y = 0 like the decoded rolled pieces
+                s_ = shapes[p["sec"]]
+                V = np.array([[x, y, z] for x in (0.0, p["L"]) for y in (0.0, -s_.d) for z in (-s_.bf / 2, s_.bf / 2)])
+                nominal = True
+            if V is None or len(V) < 4 or k == "other" or TURNED.match(p["name"]) or p["name"].startswith("Conc"):
+                # weld studs, bolts, anchor rods, concrete: built from their mesh / piece-table dimensions
+                sh, k2 = special_solid(job, sid, p, M, o)
+                builder = "special_primitive"
+                if sh is not None and SPECIAL_NOTE and not p["name"].startswith("Conc"):
+                    # [sgc] special_solid had to guess (hooked / bent rod as a straight rod): the piece's own faceted
+                    # B-rep is SDS2's geometry when it closes (sds2 fixer draft), also with bend facets 0.002 in apart
+                    ex_ = brep_placed(job, sid, p, M, o) or rod_brep_placed(job, sid, p, M, o)
+                    if ex_ is not None:
+                        sh, k2, builder = ex_, "fastener", "exact_brep"
+                        stats["exact"] += 1; stats["rod_brep"] = stats.get("rod_brep", 0) + 1
+                        globals()["SPECIAL_NOTE"] = ""
+                if sh is None and not p["name"].startswith("Conc"):
+                    # e.g. threaded studs with no rings; square / round bars and rebar keep their table kind
+                    sh, k2 = brep_placed(job, sid, p, M, o), ("fastener" if TURNED.match(p["name"]) else k)
+                    if sh is None and TURNED.match(p["name"]):
+                        sh = rod_brep_placed(job, sid, p, M, o)             # [sgc] bend facets 0.002 in apart
+                    if sh is not None:
+                        stats["exact"] += 1
+                        builder = "exact_brep"
+                why = ""
+                if sh is not None and builder == "exact_brep" and (job, sid) in OPEN_SURF:
+                    why = "open surface as stored by SDS2 (its rims are open), not a closed solid"
+                if sh is not None and builder == "exact_brep" and (job, sid) in UNVALIDATED:
+                    builder, why = "exact_brep_unvalidated", "SDS2's stored B-rep, not validated: the piece-table entry is unreadable"
+                    label = piece_instance_label(mtype[n], n, f"piece {sid}", sid, inst_no)
+                if sh is None and k in ("plate", "other"):
+                    loc_sh = table_standin(V, p, None)
+                    sh = _place(loc_sh, M, o)
+                    if sh is not None:
+                        builder, k2 = "piece_table_standin", ("plate" if k == "plate" else "other")
+                        why = f"L x W x T slab from the piece table ({exact_why}; no usable vertices)"
+                        if GRATING.match(p["name"]):
+                            why = f"bar grating as an {why} (bars not built: {GRATING_WHY.get((job, sid), 'no grating data')})"
+                if sh is None:
+                    # v5.5.7: name the cause when the piece file itself is absent from the job (source data absent)
+                    record_skip(n, sid, inst_no, p, k, o,
+                                "no_piece_file" if not os.path.exists(os.path.join(job, "subm", str(sid)))
+                                else "no_usable_special_geometry")
+                    continue
+                if builder == "special_primitive" and p["name"].startswith("Conc"):
+                    why = "concrete as its L x W x T prism at the bottom of its mesh (volume = SDS2 quantity)"
+                elif builder == "special_primitive" and SPECIAL_NOTE:
+                    why = SPECIAL_NOTE
+                if sh is not None and _absurd(sh):
+                    record_skip(n, sid, inst_no, p, k, o, "absurd_extent_corrupt_source_geometry")
+                    continue
+                lab_ = _tag(label, why)
+                if p["name"].startswith("BLT"):
+                    add_hardware(sh, M, o)
+                key_ = sid
+                if SHARED and builder == "special_primitive" and TURNED.match(p["name"]) \
+                        and repair_action(lab_) == "placed_copy" and not isinstance(sh, tuple):
+                    # v5.5.10: a rod built in world coordinates that reads back invalid (data-3 7.516 RB1/2 rods on
+                    # joists ~62,000 in from the origin, like v5.5.9's joist bars): rewrite it as the same rod built
+                    # at the origin plus a placement. Still invalid -> left out by the next pass and listed.
+                    note_ = SPECIAL_NOTE
+                    loc_, _ = special_solid(job, sid, p, np.eye(3), np.zeros(3))
+                    globals()["SPECIAL_NOTE"] = note_
+                    t_ = placement(M, o)
+                    from OCP.BRepCheck import BRepCheck_Analyzer as _BCA    # convert() imports the name later (local)
+                    if loc_ is not None and t_ is not None and _BCA(loc_).IsValid():
+                        AS_COMPONENT.add(lab_.strip())
+                        sh, key_ = ("shared", loc_, t_), ("rod", sid)
+                sh = add_exact(key_, sh, lab_)
+                stats[k2] = stats.get(k2, 0) + 1
+                if (job, sid) not in OPEN_SURF:
+                    track(sid, sh, k2)
+                stats[builder] = stats.get(builder, 0) + 1
+                unval = builder == "exact_brep_unvalidated"
+                add_row(dict(member=n, member_type=mtype[n], piece=sid, inst=inst_no,
+                             name=f"piece {sid}" if unval else p["name"], kind=k2, builder=builder,
+                             ox=round(o[0], 4), oy=round(o[1], 4), oz=round(o[2], 4)), dkey,
+                        label=lab_, standin=why,
+                        real="fabricated piece (piece-table entry unreadable)" if unval else p["name"])
+                continue
+            bent = False
+            if k == "plate":
+                loc = plate_local(V, p)
+                bent = loc is not None and p["T"] > 0 and np.ptp(V, 0).min() > 1.5 * p["T"] + 0.05
+            elif k == "rolled" and p["sec"] in shapes:
+                loc = rolled_local(V, shapes[p["sec"]], p["L"])
+            else:
+                loc = None
+            builder = "profile_fallback" if k == "rolled" else ("bent_plate_fallback" if bent else "plate_fallback")
+            if loc is None and k == "rolled" and V is not None and len(V) >= 4 and np.ptp(V[:, 0]) > 0:
+                # section record without dimensions (8.007 joists: 30K11 has d = bf = 0): envelope box of the
+                # piece's own vertices along local x, like the joist envelopes elsewhere
+                lo_, hi_ = V.min(0), V.max(0)
+                loc = ([np.array([lo_[0], y, z]) for y, z in ((lo_[1], lo_[2]), (hi_[1], lo_[2]), (hi_[1], hi_[2]), (lo_[1], hi_[2]))],
+                       np.array([hi_[0] - lo_[0], 0.0, 0.0]))
+                builder = "vertex_box_fallback"
+            sh = None
+            if loc is not None:
+                sh = _local_prism(loc[0], loc[1], loc[2] if len(loc) > 2 else [])
+                if sh is None and k == "plate":
+                    # refined outline (bent / concave) rejected: fall back to the plain convex-hull plate
+                    loc2 = plate_local(V)
+                    if loc2 is not None:
+                        sh = _local_prism(loc2[0], loc2[1]); builder = "plate_hull_fallback"
+            if sh is None and k == "rolled" and sid == main_sid and mem_by_id[n].section is not None:
+                # main material stored as a flat 2D outline (zero extent along local x; 7.613 Building_101j W10x26):
+                # use the member's own stage-1 solid, oriented from its end points and roll
+                shw = T.solid_for(mem_by_id[n], "X", 1)
+                if shw is not None:
+                    why = f"member work-line envelope for the main material ({exact_why})"
+                    if mem_by_id[n].section.name in T.PROFILE_NOTES:
+                        why += f"; {T.PROFILE_NOTES[mem_by_id[n].section.name]}"
+                    lab_ = _tag(label, why)
+                    add_flat(shw, lab_)
+                    stats["member_fallback"] += 1
+                    add_row(dict(member=n, member_type=mtype[n], piece=sid, inst=inst_no,
+                                 name=p["name"], kind="member", builder="member_envelope",
+                                 ox=round(o[0], 4), oy=round(o[1], 4), oz=round(o[2], 4)), dkey,
+                            label=lab_, standin=why, real=p["name"])
+                    continue
+            if sh is None:
+                sh = table_standin(V, p, shapes.get(p["sec"]) if k == "rolled" else None)
+                if sh is not None:
+                    builder = "piece_table_standin"
+            holes_txt = "no holes"
+            if sh is not None and USE_HOLES and builder != "piece_table_standin":
+                # cut the piece's own decoded holes into the approximate solid too (FIX item 8)
+                try:
+                    H = brep.holes(open(os.path.join(job, "subm", str(sid)), "rb").read())
+                except OSError:
+                    H = []
+                if H:
+                    cut = brep.cut_holes(sh, H)
+                    HOLES_CUT["holes (approximate pieces)" if cut is not sh else "holes not cut (approximate pieces)"] += len(H)
+                    holes_txt = "holes cut" if cut is not sh else "holes decoded but not cut"
+                    if cut is not sh:
+                        HOLES[(job, sid)] = H
+                    sh = cut
+            placed = _place(sh, M, o)
+            if placed is None and sh is not None:
+                record_skip(n, sid, inst_no, p, k, o, "approx_solid_invalid_at_placement_or_bad_frame"); continue
+            sh = placed
+            skip_reason = "fallback_builder_failed"
+            if sh is not None and 0 < p["wt"] < 1e6:
+                # approximate solid wildly heavier than SDS2's weight (7.708 Center Grove: wall "plate" 7 5/8x384
+                # whose vertices coincide -> mesh box of 50 million lb): report instead of writing it
+                g_ = GProp_GProps(); BRepGProp.VolumeProperties_s(sh, g_); w_ = abs(g_.Mass()) / MM ** 3 * 0.2836
+                if w_ > 5 * p["wt"] and w_ - p["wt"] > 1000:
+                    sh = None
+                    skip_reason = "fallback_over_5x_source_weight"
+                    # v4 skipped these (CHOWNS 6.336: 34 bent plates whose convex hull fills the bend): write the
+                    # piece-table slab instead, tagged as a stand-in
+                    ts = _place(table_standin(V, p, shapes.get(p["sec"]) if k == "rolled" else None), M, o)
+                    if ts is not None:
+                        g2 = GProp_GProps(); BRepGProp.VolumeProperties_s(ts, g2)
+                        if abs(g2.Mass()) / MM ** 3 * 0.2836 < 2 * p["wt"] + 1000:
+                            sh, builder, holes_txt = ts, "piece_table_standin", "no holes"
+            if sh is None:
+                record_skip(n, sid, inst_no, p, k, o, skip_reason)
+                continue
+            what = {"profile_fallback": "section profile extruded over the piece's vertex length",
+                    "plate_fallback": "plate outline from the piece's vertices extruded by its thickness",
+                    "bent_plate_fallback": "bent plate end section extruded along the bend line",
+                    "plate_hull_fallback": "convex-hull plate from the piece's vertices",
+                    "vertex_box_fallback": "box of the piece's vertices (section without dimensions)",
+                    "piece_table_standin": "piece-table size (L x W x T / nominal section)"}[builder]
+            if nominal and builder == "profile_fallback":
+                what = "nominal section over the piece-table length (piece file holds no geometry)"
+            if GRATING.match(p["name"]):
+                what = f"bar grating as its panel outline (bars not built: {GRATING_WHY.get((job, sid), 'no grating data')})"
+            note = T.PROFILE_NOTES.get(shapes[p["sec"]].name) if k == "rolled" and p["sec"] in shapes else None
+            why = f"{what}; copes/cuts not modelled; {holes_txt} ({exact_why})" + (f"; {note}" if note else "")
+            lab_ = _tag(label, why)
+            add_flat(sh, lab_)
+            stats[k] += 1; track(sid, sh, "approx")
+            stats[builder] = stats.get(builder, 0) + 1
+            add_row(dict(member=n, member_type=mtype[n], piece=sid, inst=inst_no,
+                         name=p["name"], kind=k, builder=builder,
+                         ox=round(o[0], 4), oy=round(o[1], 4), oz=round(o[2], 4)), dkey,
+                    label=lab_, standin=why, real=p["name"])
+    if USE_BOLTS:
+        # SDS2's own bolt records (bolts.py: head point, axis, diameter, length, grip, type) where the job has them;
+        # nominal heavy-hex bolts only for coaxial hole stacks of >= 2 pieces that no record covers
+        import bolts as BR
+        recs = []
+        for n in sorted(mtype):
+            try: recs += BR.member_bolts(job, n, frames.get(n))
+            except Exception: pass
+        btype = BR.bolt_types(job)
+        if recs:
+            # the same bolt can be stored by both connected members: keep one per head point + axis
+            from scipy.spatial import cKDTree
+            hp = np.array([r["head"] for r in recs]); drop = set()
+            for i, j in sorted(cKDTree(hp).query_pairs(1e-3)):
+                if i not in drop and abs(abs(recs[i]["axis"] @ recs[j]["axis"]) - 1) < 1e-3: drop.add(j)
+            recs = [r for k, r in enumerate(recs) if k not in drop]
+        stacks = []
+        if hw:
+            C, A, D, Tb, I = (np.array([h[i] for h in hw]) for i in range(5))
+            stacks = bolt_stacks(C, A, D, Tb, I)
+        if any(r["layout"] == "f32" for r in recs):
+            # 7.0xx / early 7.1xx records: only those landing on a decoded hole face are trusted (SUNY 7.021 has
+            # many that don't, with no consistent offset); f64 records (7.1xx-8.0xx) are all kept
+            from scipy.spatial import cKDTree
+            face = cKDTree(np.vstack([C, C + A * D[:, None]])) if hw else None
+            on = {id(r): face is not None and bool(np.isfinite(face.query(r["head"], distance_upper_bound=2e-3)[0]))
+                  for r in recs if r["layout"] == "f32"}
+            rate = sum(on.values()) / max(len(on), 1)
+            stats["bolt_records_f32_on_holes"] = round(rate, 3)
+            if rate < 0.35:
+                # healthy jobs of every layout put 34-56 % of bolt heads on a decoded hole face (Merriam's two copies
+                # agree bolt for bolt); far below that (SUNY 5.5 %, RCMS 22 %) only the validated ones are kept
+                recs = [r for r in recs if r["layout"] == "f64" or on[id(r)]]
+        covered = set()
+        if recs and stacks:
+            from scipy.spatial import cKDTree
+            ends = [(e, si) for si, (e, a, g, d) in enumerate(stacks)] + [(e + a * g, si) for si, (e, a, g, d) in enumerate(stacks)]
+            tree = cKDTree(np.array([x for x, _ in ends]))
+            for r in recs:
+                dist, j = tree.query(r["head"], distance_upper_bound=2e-3)
+                if np.isfinite(dist): covered.add(ends[j][1])
+        bparts = {}
+        hwp = np.array(hardware) if hardware else None
+        hw_tree = None
+        if hwp is not None:
+            from scipy.spatial import cKDTree
+            hw_tree = cKDTree(hwp)
+
+        def stored_hardware(e, a, grip, d):
+            """SDS2 stores this bolt's own hardware (a BLT head / nut / washer piece centred on its axis, at most a bolt
+            diameter + 2 in outside the grip): the stored pieces are the bolt, no bolt solid is added on top
+            (data-3 Befor North: 276 of 276 nominal bolts sat on stored BLT hardware, v5-v5.5.0 wrote both)."""
+            if hw_tree is None:
+                return False
+            reach = d + 2.0
+            for j in hw_tree.query_ball_point(e + a * grip / 2, grip / 2 + reach):
+                v = hwp[j] - e; t_ = float(v @ a)
+                if -reach <= t_ <= grip + reach and np.linalg.norm(v - t_ * a) <= max(0.3 * d, 0.1):
+                    return True
+            return False
+        todo = [(r["head"], r["axis"], r["grip"], r["dia"], r["length"], btype.get(r["type"], ""), "sds2") for r in recs] + \
+               [(e, a, g, d, None, "", "nominal") for si, (e, a, g, d) in enumerate(stacks) if si not in covered]
+        for bolt_inst, (e, a, grip, d, L, ty, src) in enumerate(todo, 1):
+            if stored_hardware(e, a, grip, d):
+                stats["bolts_on_stored_hardware_" + src] = stats.get("bolts_on_stored_hardware_" + src, 0) + 1
+                continue
+            key = (round(d, 4), round(grip * 16) / 16, round(L * 16) / 16 if L else None)
+            x = np.cross(a, [0, 0, 1.0] if abs(a[2]) < 0.9 else [1.0, 0, 0]); x /= np.linalg.norm(x); y = np.cross(a, x)
+            t = placement(np.array([x, y, a]), e)
+            if t is None: continue
+            if key not in bparts:
+                bparts[key] = bolt_local(key[0], key[1], key[2])
+            lab = (f"BOLT {ty + ' ' if ty else ''}{d:g} x {L:g} (grip {grip:g})" if src == "sds2"
+                   else f"BOLT {d:g} x {key[1]:g} grip (nominal heavy hex)") + f" (inst {bolt_inst})"
+            if src == "nominal":
+                lab = _tag(lab, "bolt guessed through a decoded hole stack: diameter and grip from the holes, "
+                                "length / head side / washers not in the data")
+                bolt_rows.append(lab)
+            if SHARED:
+                add_exact(("bolt",) + key, ("shared", bparts[key], t), lab)
+            else:
+                from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+                add_exact(None, BRepBuilderAPI_Transform(bparts[key], t, True).Shape(), lab)
+            stats["bolts"] = stats.get("bolts", 0) + 1
+            stats["bolts_" + src] = stats.get("bolts_" + src, 0) + 1
+        if USE_HOLES and USE_DERIVED_HOLES and SHARED and todo:
+            skip = {k for k in pieces if pieces[k]["name"].startswith(("BLT", "Conc")) or TURNED.match(pieces[k]["name"])
+                    or (job, k) in CONCRETE or (job, k) in OPEN_SURF}
+            derived = derive_bolt_holes(job, todo, hw, shared_inst, stats, skip)
+            DERIVED_INFO.update(derived)
+    if shared_inst:
+        # a few parts read back invalid once placed through an assembly location although the same solid is valid as a
+        # placed copy (SCHUCKERS C12x20.7, PIPE 1 1/2: 6 of 288 parts); test each part once at its first placement
+        # and write the instances of failing parts as placed copies
+        first = {}
+        for key, local, trsf, _ in shared_inst: first.setdefault(key, (local, trsf))
+        # the temporary assembly STEP holds every unique part once more in memory; above ASSEMBLY_CHECK_MAX parts
+        # (imported reference meshes: 12,000+) it is skipped - the --verify read-back repair pass covers those parts
+        bad = assembly_check(first) if len(first) <= ASSEMBLY_CHECK_MAX else set()
+        if len(first) > ASSEMBLY_CHECK_MAX:
+            stats["assembly_check_skipped_parts"] = len(first)
+        from OCP.TopLoc import TopLoc_Location
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        root[0] = st.NewShape()
+        TDataStd_Name.Set_s(root[0], TCollection_ExtendedString(os.path.basename(job.rstrip("\\/"))))
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.ShapeFix import ShapeFix_Shape
+        for key, local, trsf, label in shared_inst:
+            act = repair_action(label, key in bad, True)
+            if act == "drop":
+                # v5.5.10: before the assembly-check branch, so placed copies named by the repair are left out too
+                stats["invalid_at_placement_dropped"] = stats.get("invalid_at_placement_dropped", 0) + 1
+                INVALID_DROPPED.append(label); continue
+            if act == "flat":
+                lab = st.AddShape(BRepBuilderAPI_Transform(local, trsf, True).Shape(), False)
+                TDataStd_Name.Set_s(lab, TCollection_ExtendedString(label)); continue
+            if act == "component":
+                READBACK_REWRITTEN.append((label, "local part + placement (was built in world coordinates)"))
+            elif act == "placed_copy" or (CHECK_PLACED and not isinstance(key, tuple)
+                                          and not BRepCheck_Analyzer(local.Moved(TopLoc_Location(trsf))).IsValid()):
+                # ~1 in 10,000 exact parts is valid locally but invalid at one of its placements; v4 wrote it and the
+                # whole job was rejected on read-back (data-4: 13 jobs with 1-22 such solids). Write that instance as
+                # a placed copy (ShapeFix if needed); if no form is valid, leave it out and report it.
+                cp = BRepBuilderAPI_Transform(local, trsf, True).Shape()
+                if not BRepCheck_Analyzer(cp).IsValid():
+                    fx = ShapeFix_Shape(cp); fx.Perform(); cp = fx.Shape()
+                if BRepCheck_Analyzer(cp).IsValid():
+                    lab = st.AddShape(cp, False)
+                    TDataStd_Name.Set_s(lab, TCollection_ExtendedString(label))
+                    stats["placed_copy_for_validity"] = stats.get("placed_copy_for_validity", 0) + 1
+                    if act == "placed_copy":
+                        READBACK_REWRITTEN.append((label, "placed copy (was an assembly component)"))
+                else:
+                    stats["invalid_at_placement_dropped"] = stats.get("invalid_at_placement_dropped", 0) + 1
+                    INVALID_DROPPED.append(label)
+                continue
+            if key not in parts:
+                parts[key] = st.AddShape(local, False)
+                pn = f"{pieces[key]['name']} (piece {key})" if key in pieces else label
+                nd = DERIVED_INFO.get("derived_by_piece", {}).get(key)
+                if nd:
+                    pn += f" [derived: bolt record + coaxial hole: {nd} hole(s)]"
+                TDataStd_Name.Set_s(parts[key], TCollection_ExtendedString(pn))
+            comp = st.AddComponent(root[0], parts[key], TopLoc_Location(trsf))
+            TDataStd_Name.Set_s(comp, TCollection_ExtendedString(label))
+        stats["parts_written_flat"] = len(bad)
+    if root[0] is not None:
+        st.UpdateAssemblies()
+        stats["unique_parts"] = len(parts)
+    for lab_ in INVALID_DROPPED:
+        # v5.5.7: members without a type give labels " #<n> / ..." (the old pattern needed a type and dropped these
+        # parts without a skipped row); anything unparsed is still listed by its label, never silent
+        mm = re.match(r"^\s*(.*?)\s*#(\d+) / (.*?) \(piece (\d+), inst (\d+)\)", lab_)
+        if mm:
+            # v5.5.12: an imported reference-model part left out counts as a reference skip, not as steel not built
+            # (data-3 41074a87: 12 unsewn reference face sets graded "12 of 69 steel pieces not built" -> class 0)
+            ref_ = "[reference:" in lab_ or mm.group(3) == "reference part"
+            skipped_rows.append(dict(member=int(mm.group(2)), member_type=mm.group(1), piece=int(mm.group(4)),
+                                     inst=int(mm.group(5)), name=mm.group(3), kind="reference" if ref_ else "",
+                                     reason="exact_solid_invalid_at_placement", ox="", oy="", oz=""))
+            for r in rows:
+                if r["member"] == int(mm.group(2)) and r["piece"] == int(mm.group(4)) and r["inst"] == int(mm.group(5)):
+                    rows.remove(r); break
+        else:
+            skipped_rows.append(dict(member=0, member_type="", piece=0, inst=0, name=lab_[:120], kind="",
+                                     reason="exact_solid_invalid_at_placement", ox="", oy="", oz=""))
+            for r in rows:
+                if r.get("label") == lab_:
+                    rows.remove(r); break
+    Interface_Static.SetCVal_s("write.step.schema", "AP214IS")
+    Interface_Static.SetCVal_s("write.step.unit", "MM")
+    w = STEPCAFControl_Writer(); w.SetNameMode(True)
+    w.Transfer(doc, STEPControl_AsIs)
+    ok = w.Write(out) == IFSelect_RetDone
+    base = os.path.splitext(out)[0]
+    with open(base + "_pieces.csv", "w", newline="") as f:
+        cw = csv.DictWriter(f, fieldnames=("member", "member_type", "piece", "inst", "name", "kind",
+                                           "builder", "ox", "oy", "oz", "standin", "also_on_member"), extrasaction="ignore")
+        cw.writeheader(); cw.writerows(rows)
+    with open(base + "_skipped.csv", "w", newline="") as f:
+        cw = csv.DictWriter(f, fieldnames=("member", "member_type", "piece", "inst", "name", "kind",
+                                           "reason", "ox", "oy", "oz"))
+        cw.writeheader(); cw.writerows(skipped_rows)
+    print(f"version {read_version(job)}; solids: {stats}; write ok={ok} -> {out}")
+    if wsum[1] > 0:
+        print(f"  steel pieces: solids {wsum[0] / 2000:.1f} t vs SDS2 piece weights {wsum[1] / 2000:.1f} t "
+              f"(ratio {wsum[0] / wsum[1]:.3f}; member envelopes not included)")
+        if abs(wsum[0] / wsum[1] - 1) > 0.05:
+            print("  largest differences (lb, piece, name, builder):",
+                  [(round(v), s, nm, h) for (s, nm, h), v in sorted(wdiff.items(), key=lambda kv: -abs(kv[1]))[:3]])
+    stats["steel_ratio"] = round(wsum[0] / wsum[1], 4) if wsum[1] else None
+    if HOLES_CUT:
+        print("  bolt holes (unique pieces):", dict(HOLES_CUT))
+    if skipped:
+        print("  not built (no usable geometry):", dict(skipped.most_common(10)))
+    if NC1_SRC:
+        stats["nc1"] = dict(NC1_STATS)
+        print("  NC1 opt-in result:", dict(NC1_STATS))
+    placed_total = sum(instance_counts.values())
+    # [sgc] what the grating builder and the exact rod paths did (manifest "grating" / "rods";
+    # caches are keyed by (job, piece), so a read-back repair pass reuses them)
+    gi = [v for (j_, _), v in GRATING_INFO.items() if j_ == job]
+    stats["sgc_grating"] = dict(pieces=len(gi), built=sum(1 for v in gi if v.get("ok")),
+                                cut_from_stock=sum(1 for v in gi if v.get("ok") and v.get("cut_from_stock")),
+                                tread_cells=sum(1 for v in gi if v.get("ok") and v.get("cells")),
+                                cross_bars=sum(v.get("cross_bars", 0) for v in gi if v.get("ok")),
+                                placed_written=stats.get("grating", 0), build_seconds=round(_GRATING_T.get(job, 0.0), 1),
+                                not_built=dict(collections.Counter(GRATING_WHY[k_] for k_ in GRATING_WHY if k_[0] == job)),
+                                note="bars, bands, carrier plates and nosing from the piece faces; cross bars = the stored "
+                                     "cross bar rectangles extruded by the record's cross bar depth; built weight within 3 % "
+                                     "of SDS2's, or a cut of the record's W x L stock (SDS2 weighs the uncut panel)")
+    stats["sgc_rods"] = dict(exact_cylinders_on_cap_axis=sum(1 for r in rows if r.get("builder") == "special_primitive"
+                                                             and (job, r.get("piece")) in TURNED_ANY_AXIS),
+                             exact_brep_bent=stats.get("rod_brep", 0),
+                             straight_rod_guesses=sum(1 for r in rows if r.get("builder") == "special_primitive"
+                                                      and "straight rod" in (r.get("standin") or "")))
+    man = MF.build(job=job, out=out, version=read_version(job), stats=stats, rows=rows, skipped=skipped_rows,
+                   dups=dup_rows, bolt_standins=bolt_rows, mems=mems, placed=placed_total, src_dups=src_dups,
+                   members_without_geometry=n_members_without_geometry,
+                   weights=dict(step_lb=wsum[0], sds2_lb=wsum[1], joist_standin_lb=env_w[0],
+                                stock_weighed_plates=dict(instances=stock_w[2], net_t=round(stock_w[0] / 2000, 3),
+                                                          sds2_stock_t=round(stock_w[1] / 2000, 3)) if stock_w[2] else None,
+                                by_family={f: dict(step_lb=round(v[0], 1), sds2_lb=round(v[1], 1), n=v[2],
+                                                   ratio=round(v[0] / v[1], 4) if v[1] else None)
+                                           for f, v in sorted(fam_w.items(), key=lambda kv: -kv[1][1])}),
+                   holes=dict(HOLES_CUT, derived=dict(holes=stats.get("holes_derived", 0),
+                                                      pieces=stats.get("pieces_with_derived_holes", 0),
+                                                      bolts_checked=DERIVED_INFO.get("bolts_checked", 0),
+                                                      by_piece={str(k): v for k, v in DERIVED_INFO.get("derived_by_piece", {}).items()},
+                                                      from_bolt_records=stats.get("holes_derived", 0) - stats.get("holes_derived_from_hole_stacks", 0),
+                                                      from_hole_stacks=stats.get("holes_derived_from_hole_stacks", 0),
+                                                      stack_by_piece={str(k): v for k, v in (DERIVED_INFO.get("stack_by_piece") or {}).items()},
+                                                      tag="derived: bolt record + coaxial hole"),
+                              holes_not_cut=dict(by_reason=dict(DERIVED_INFO.get("not_cut", {})),
+                                                 examples=DERIVED_INFO.get("not_cut_examples", []))),
+                   write_ok=ok, piece_dev=big)
+    if BREP_REPAIR or BREP_WEIGHT_NOTE or BREP_NEG_WEIGHT:
+        man["brep_repairs"] = _repair_summary(job, rows, pieces)
+    if isinstance(lay, dict) and lay.get("untyped"):
+        # v5.5.9: pieces placed from the members' own files; the member index holds no typed record
+        man["index_proof"] = lay.get("proof")
+    if READBACK_REWRITTEN or INVALID_DROPPED:
+        # v5.5.10: every instance the read-back repair wrote in another form or left out, by name
+        man["readback_repair"] = dict(
+            note="instances that read back invalid from the STEP: rewritten in another form (same geometry), or left "
+                 "out when no form read back valid (also under skipped, reason exact_solid_invalid_at_placement)",
+            rewritten=[dict(part=l_, form=f_) for l_, f_ in READBACK_REWRITTEN][:2000],
+            left_out=[l_ for l_ in INVALID_DROPPED][:2000])
+    MF.write(man, base + "_manifest.json")
+    print(f"  manifest: class {man['class']} corpus {man['corpus']} ({'; '.join(man['class_reasons'][:4])})")
+    return ok, stats
+
+
+if __name__ == "__main__":
+    main()

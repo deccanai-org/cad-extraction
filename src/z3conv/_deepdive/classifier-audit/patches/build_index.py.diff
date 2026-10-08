@@ -1,0 +1,117 @@
+--- a/coord/build_index.py	2026-10-01 15:14:32
++++ b/coord/build_index.py	2026-10-01 15:15:57
+@@ -174,12 +174,22 @@
+ 
+ def vol_issues(row, j):
+     vol = (j or {}).get('volume') or {}
+-    n = (vol.get('outside_5pct') or 0) + ((vol.get('outside_curved') or 0) if RULES['curved_volume_counts'] else 0)
+-    row['weight_ratio'] = {k: vol.get(k) for k in ('checked', 'within_5pct', 'outside_5pct', 'outside_curved', 'median', 'p5', 'p95')} if vol else None
++    # round sections: tessellation loses up to ~4 %, so +-5 % is not applied to them, but a curved part outside the
++    # tessellation band (grade_join CURVED_BAND 0.90..1.05: wrong length / section) counts like any other part
++    n = (vol.get('outside_5pct') or 0) + ((vol.get('outside_curved') or 0) if RULES['curved_volume_counts'] else (vol.get('outside_curved_gross') or 0))
++    row['weight_ratio'] = {k: vol.get(k) for k in ('checked', 'within_5pct', 'outside_5pct', 'outside_curved', 'outside_curved_gross', 'median', 'p5', 'p95')} if vol else None
+     if n > RULES['volume_outside_parts_allowed']:
+         row['issues'].append(f'parts_outside_volume_tolerance:{n}/{vol.get("checked")}')
+ 
+ 
++def grading_failed(row, r):
++    """reused STEP whose re-grading failed: no verdict from absent signals (before: fell through to class 3 'step_read_failed')"""
++    row['status'] = 'grading_failed'; row['issues'].append(f'grading:{r.get("reason")}')
++    if r.get('reason') == 'reused_step_missing':
++        row['class'] = 3; row['reasons'].append('reused_step_missing')
++    return row                 # otherwise class None (ungraded): re-graded by the grade fleet, listed under by_status
++
++
+ def finish_class(row, has_conn, src_conn, steel=True):
+     cm = row['coverage_members']; ca = row.get('coverage_all')
+     if row['reasons']:
+@@ -242,7 +252,7 @@
+         if r is None:
+             row['status'] = 'grading_pending'; return row
+         if r.get('status') != 'ok':
+-            row['status'] = 'grading_failed'; row['issues'].append(f'grading:{r.get("reason")}')
++            return grading_failed(row, r)
+     else:
+         r = res
+         if r is None:
+@@ -278,13 +288,17 @@
+             row['issues_info'] = ['coverage matched by part name (older writer without source ids)']
+         elif j.get('mode') == 'count':
+             row['issues_info'] = ['coverage by part count: names of the older writer do not match the source (no source ids in that STEP)']
++            row['issues'].append('coverage_by_part_count_only')     # no part identity and no per-part volume check: not provable 100 %
+         for s_ in j.get('standins') or []:
+             row['standins'].append({'type': s_['type'], 'real_type': s_['real_type'], 'count': s_['count']})
+         if j.get('missing_examples') and (cov.get('all') or 1) < 1:
+             row['missing_examples'] = j['missing_examples'][:10]
+         vol_issues(row, j)
+         if j.get('surface_parts'):
+-            row['issues_info'] = (row.get('issues_info') or []) + [f'surface_parts:{j["surface_parts"]} (source surface models, not solids)']
++            # a part that reads back with faces but no solid: SHELL_BASED_SURFACE_MODEL / OPEN_SHELL (the transcode of
++            # IfcShellBasedSurfaceModel, also when its shells are IfcClosedShell) or a FACETED_BREP whose shell is not closed.
++            # No validity / volume check is possible on it, so 'all solids valid' is unproven -> class 2
++            row['issues'].append(f'parts_without_solid:{j["surface_parts"]}')
+     exc = r.get('excluded_elements') or (r.get('prior_result') or {}).get('excluded_elements')
+     if exc:
+         row['issues'].append(f'kernel_crash_elements_excluded:{len(exc) if isinstance(exc, list) else exc}')
+@@ -341,7 +355,7 @@
+         if r.get('step_key'):
+             row['step_key'] = r['step_key']
+         if r.get('status') != 'ok':
+-            row['status'] = 'grading_failed'; row['issues'].append(f'grading:{r.get("reason")}')
++            return grading_failed(row, r)
+     else:
+         r = res
+         if r is None:
+@@ -430,13 +444,18 @@
+     if r.get('excluded_elements'):
+         row['issues'].append(f'kernel_crash_elements_excluded:{len(r["excluded_elements"])}')
+     vol_issues(row, j)
++    if j.get('surface_parts'):
++        row['issues'].append(f'parts_without_solid:{j["surface_parts"]}')
+     has_conn = (wr.get('connection') or 0) > 0
+     return finish_class(row, has_conn=has_conn, src_conn=ec, steel=True)
+ 
+ 
+-SDS2_FAIL = {'no_members_to_calibrate': 'source_no_members (seed/training job: nothing to calibrate)', 'job_folder_incomplete': 'source_job_files_missing',
++SDS2_FAIL = {'no_members_to_calibrate': 'no_member_records_read (source emptiness NOT proven: most such data-3 jobs hold one DWF Import / '
++                                       'REFERENCE MODEL member with thousands of placed pieces; re-run on v5.1 for corpus R or empty_job_proof)',
++             'job_folder_incomplete': 'source_job_files_missing',
+              'missing_job_file': 'source_job_files_missing', 'invalid_solids': 'step_invalid_solids',
+-             'step_write_failed': 'source_no_buildable_pieces (nothing writable: e.g. only DWF-imported objects)',
++             'step_write_failed': 'converter_wrote_nothing (source NOT proven empty: e.g. a DWF-imported reference model the v4/v5 '
++                                  'builders skip; re-run on v5.1)',
+              'timeout': 'converter_timeout', 'out_of_memory': 'converter_out_of_memory', 'unsupported_job_mtrl_layout': 'decoder_limit: job_mtrl layout',
+              'verification_counts_missing': 'step_read_failed', 'absurd_bbox': 'bbox_absurd', 'steel_weight_mismatch': 'steel_weight_mismatch',
+              'model_files_unavailable': 'source_copy_not_found'}
+@@ -455,7 +474,7 @@
+         if r.get('step_key'):
+             row['step_key'] = r['step_key']
+         if r.get('status') != 'ok':
+-            row['status'] = 'grading_failed'; row['issues'].append(f'grading:{r.get("reason")}')
++            return grading_failed(row, r)
+         s2 = r.get('stage2') or {}; stage = 2
+         row['version'] = (r.get('prior_result') or {}).get('version') or s2.get('version')
+     else:
+@@ -786,6 +805,9 @@
+             add('decoded model held back by a geometry sanity guard', None, f'decoder fix for Tekla {eng} attribute/orientation links', CF, f'decoder guard Tekla {eng}')
+         elif t.startswith('source_no_members'):
+             add('SDS/2 job has no members (seed / training / empty job)', None, 'a job with modelled members (nothing to convert here)', SDA, 'empty SDS/2 job')
++        elif t.startswith(('no_member_records_read', 'converter_wrote_nothing')):
++            add('SDS/2 job: converter read no buildable member (imported reference model or empty job, not yet told apart)', None,
++                'v5.1 re-run: reference-model pieces from the stored B-rep (corpus R) or empty_job_proof', CF, 'sds2 reference model / empty proof')
+         elif t.startswith('source_no_buildable_pieces'):
+             add('SDS/2 job holds no buildable steel (e.g. only DWF-imported objects)', None, 'nothing to convert: the job has no steel members', SDA, 'job without steel')
+         elif t.startswith('source_job_files_missing'):
+@@ -808,6 +830,12 @@
+             add(f'{n} solids inside-out or not closed (non-positive volume)', n, 'shell orientation / closing in the converter', CF, f'{p} shell orientation')
+         elif t == 'parts_outside_volume_tolerance':
+             add(f'{x.split(":")[1]} parts differ > 5% from the source volume', n, 'exact geometry for those parts (tessellation / boolean accuracy)', CF, f'{p} volume tolerance')
++        elif t == 'parts_without_solid':
++            add(f'{n} parts read back as surfaces, not solids', n, 'IFC writer: IfcShellBasedSurfaceModel of IfcClosedShell as CLOSED_SHELL / '
++                'FACETED_BREP, close or heal open faceted shells (re-convert reused STEP)', CF, f'{p} parts without solid')
++        elif t == 'coverage_by_part_count_only':
++            add('coverage proven only by part count (older STEP without source ids or usable names)', None,
++                're-convert with the current writer (PRODUCT.id = source GlobalId)', CF, f'{p} re-convert old writer')
+         elif t == 'not_read_back_out_of_memory':
+             add('STEP not verified (read-back ran out of memory on a shared box)', None, 'read-back on a dedicated large-memory box (final pass)', CF, 'read-back memory')
+         elif t == 'not_read_back_large_file':

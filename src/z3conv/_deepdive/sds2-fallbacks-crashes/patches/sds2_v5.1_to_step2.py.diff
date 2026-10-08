@@ -1,0 +1,170 @@
+--- a/sds2-step-pipeline/decode/to_step2.py
++++ b/sds2-step-pipeline/decode/to_step2.py
+@@ -478,6 +478,7 @@
+ USE_HOLES = True      # cut the piece's bolt holes / slots (brep.holes) into its exact solid
+ _BREP = {}
+ CONCRETE = set()      # (job, piece) whose exact volume matches SDS2's weight at concrete density
++CONCRETE_BREP = True  # "Conc" pieces: try SDS2's stored B-rep first (kept when it weighs as concrete), prism otherwise
+ HOLES_CUT = collections.Counter()
+ BREP_WHY = {}         # (job, piece) -> why the exact B-rep was not used (stand-in reason)
+ HOLES_NOT_CUT = set() # (job, piece) whose decoded holes the boolean could not cut
+@@ -687,8 +688,93 @@
+     L = L if L and L > grip else grip + N + 0.25
+     return _compound([hexp(-H, H), BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1)), d / 2 * MM, L * MM).Shape(),
+                       hexp(grip, N)])
++
++
++def bolts_in_best_frame(job, n, frame, candidates, hole_faces, stats, tol=0.25):
++    """SDS2 bolt records of member n placed in the frame that puts their heads on decoded hole faces.
++    v4 placed every record in the member's 0xE8 main-material frame (header block when absent). That frame is wrong
++    when the header names a connection plate (7.331 VOID: BEAM W30x132 whose header piece is a PL5/8 -> its 28 bolts
++    written 3-9 in off and perpendicular to their holes, plus 28 nominal bolts in the empty holes) and on 7.1xx files
++    (7.135 BAHAMAR: 2 of 413 records on a hole; the member's own work-line frame puts 336 there). The v4 frame is kept
++    whenever every record lands on a hole face, when no holes were decoded, or when no other frame does better."""
++    import bolts as BR
++    from instances import _is_frame
++    if hole_faces is None:
++        return BR.member_bolts(job, n, frame)
++    raw = BR.member_bolts(job, n, (np.eye(3), np.zeros(3)))          # records in the record frame
++    if not raw:
++        return []
++    H = np.array([r["head"] for r in raw]); X = np.array([r["axis"] for r in raw])
++
++    def hits(M, o):
++        W = o + H @ M                                                # = o + M.T @ head, row-wise
++        ok = np.isfinite(W).all(1) & (np.abs(W).max(1) < 1e7)
++        if not ok.any():
++            return 0
++        d, _ = hole_faces.query(W[ok], distance_upper_bound=tol)
++        return int(np.isfinite(d).sum())
++
++    def placed(M, o):
++        return [dict(r, head=o + M.T @ r["head"], axis=M.T @ r["axis"]) for r in raw]
++
++    cands = []
++    if frame is not None:
++        cands.append((np.asarray(frame[0], float), np.asarray(frame[1], float)))
++    try:
++        import struct
++        b = open(os.path.join(job, "mem", str(n)), "rb").read(0xE8)
++        if len(b) >= 0xE8:
++            cands.append((np.array(struct.unpack(">9d", b[0x88:0xD0])).reshape(3, 3), np.array(struct.unpack(">3d", b[0xD0:0xE8]))))
++    except OSError:
++        pass
++    base = hits(*cands[0]) if cands else 0
++    if base == len(raw):
++        return placed(*cands[0])
++    best, bh = (cands[0] if cands else None), base
++    seen = set()
++    for M, o in list(cands[1:]) + [(np.asarray(M_, float), np.asarray(o_, float)) for M_, o_ in candidates]:
++        k = (tuple(np.round(M, 4).ravel()), tuple(np.round(o, 3)))
++        if k in seen or not _is_frame(M):
++            continue
++        seen.add(k)
++        h = hits(M, o)
++        if h > bh:
++            best, bh = (M, o), h
++    if best is None:
++        return BR.member_bolts(job, n, frame)
++    if bh > base and bh >= 0.5 * len(raw):
++        stats["bolt_record_frames_reselected"] = stats.get("bolt_record_frames_reselected", 0) + 1
++        return placed(*best)
++    return BR.member_bolts(job, n, frame)
+ 
+ 
++def stacks_covered(stacks, recs, lat_tol=1 / 16):
++    """Indices of hole stacks that an SDS2 bolt record already fills: record axis parallel to the stack, head within
++    1/16 in of the stack axis, and the record's plies [head, head + grip] overlapping the stack span by > 25 % of the
++    shorter. v4 required the head within 0.002 in of a stack end, so a record whose head sits on a washer / shim face
++    or a ply the stack does not include (8.004 Fire Station 41: 0.03-0.6 in) left its stack 'uncovered' and a second,
++    nominal bolt was written into the same holes (69 duplicates on that job)."""
++    from scipy.spatial import cKDTree
++    mids = np.array([e + a * g / 2 for e, a, g, d in stacks])
++    tree = cKDTree(mids); out = set()
++    for r in recs:
++        h, ax, gr = np.asarray(r["head"], float), np.asarray(r["axis"], float), float(r["grip"])
++        if not (np.isfinite(h).all() and np.isfinite(ax).all() and np.abs(h).max() < 1e7):
++            continue
++        for si in tree.query_ball_point(h + ax * gr / 2, 6.0):
++            e, a, g, d = stacks[si]
++            c = ax @ a
++            if abs(abs(c) - 1) > 1e-3:
++                continue
++            v = h - e; t0 = v @ a
++            if np.linalg.norm(v - t0 * a) > lat_tol:
++                continue
++            t1 = t0 + np.sign(c) * gr
++            if min(max(t0, t1), g) - max(min(t0, t1), 0.0) > 0.25 * min(g, gr):
++                out.add(si)
++    return out
++
++
+ def bolt_stacks(C, A, D, T, I):
+     """Group placed holes into coaxial stacks (same bolt diameter, parallel axes, lateral offset < 1/16 in, within
+     6 in); keep stacks through >= 2 piece instances -> list of (entry point, unit axis, grip, bolt dia)."""
+@@ -856,6 +942,7 @@
+     parts = {}; root = [None]; hw = []          # hw: placed holes (entry, axis, depth, bolt dia, instance)
+     shared_inst = []                            # (part key, local solid, placement, instance label)
+     frames = {}                                 # member -> main material placement (bolt record frame)
++    member_frames = {}                          # member -> every material placement (bolt record frame candidates)
+     bolt_rows = []
+ 
+     def add_exact(sid, res, label):
+@@ -911,6 +998,7 @@
+                         label=label)
+             continue
+         main_sid, inst = material_instances(job, n, pieces)
++        member_frames[n] = [(M_, o_) for _, M_, o_ in inst]
+         for sid_, M_, o_ in inst:
+             if sid_ == main_sid:
+                 frames[n] = (M_, o_); break
+@@ -968,9 +1056,17 @@
+                 continue
+             # exact B-rep: plates / rolled / joists, and bolts (SDS2 stores each nut, head and washer as its own
+             # faceted hex / ring piece). Studs and rods keep the true cylinders of special_solid; concrete its prism.
++            is_conc = p["name"].startswith("Conc")
+             if (k in ("plate", "rolled") and not TURNED.match(p["name"]) or p["name"].startswith("BLT")) \
+-                    and not p["name"].startswith("Conc"):
++                    and (not is_conc or CONCRETE_BREP):
+                 sh = brep_placed(job, sid, p, M, o)
++                if sh is not None and is_conc and (job, sid) not in CONCRETE:
++                    # a "Conc" piece's own B-rep replaces the L x W x T prism only when it weighs as concrete
++                    # (BAHAMAR 7.135: 35 / 35 walls and footings at 150 pcf = SDS2's weight to 0.1 %; WLCSC 7.331: 7 / 7)
++                    if 0 < p["wt"] < 1e9:
++                        sh = None
++                    else:
++                        CONCRETE.add((job, sid))         # no weight: brep_placed matched its extents to the piece table
+                 if sh is not None:
+                     conc = (job, sid) in CONCRETE
+                     k2 = "concrete" if conc else "fastener" if p["name"].startswith("BLT") else k
+@@ -1169,8 +1265,15 @@
+         # nominal heavy-hex bolts only for coaxial hole stacks of >= 2 pieces that no record covers
+         import bolts as BR
+         recs = []
++        hole_faces = None
++        if hw:
++            from scipy.spatial import cKDTree
++            _C = np.array([h[0] for h in hw]); _A = np.array([h[1] for h in hw]); _D = np.array([h[2] for h in hw])
++            _P = np.vstack([_C, _C + _A * _D[:, None]])
++            _P = _P[np.isfinite(_P).all(1) & (np.abs(_P).max(1) < 1e7)]
++            hole_faces = cKDTree(_P) if len(_P) else None
+         for n in sorted(mtype):
+-            try: recs += BR.member_bolts(job, n, frames.get(n))
++            try: recs += bolts_in_best_frame(job, n, frames.get(n), member_frames.get(n, ()), hole_faces, stats)
+             except Exception: pass
+         btype = BR.bolt_types(job)
+         if recs:
+@@ -1199,12 +1302,7 @@
+                 recs = [r for r in recs if r["layout"] == "f64" or on[id(r)]]
+         covered = set()
+         if recs and stacks:
+-            from scipy.spatial import cKDTree
+-            ends = [(e, si) for si, (e, a, g, d) in enumerate(stacks)] + [(e + a * g, si) for si, (e, a, g, d) in enumerate(stacks)]
+-            tree = cKDTree(np.array([x for x, _ in ends]))
+-            for r in recs:
+-                dist, j = tree.query(r["head"], distance_upper_bound=2e-3)
+-                if np.isfinite(dist): covered.add(ends[j][1])
++            covered = stacks_covered(stacks, recs)
+         bparts = {}
+         todo = [(r["head"], r["axis"], r["grip"], r["dia"], r["length"], btype.get(r["type"], ""), "sds2") for r in recs] + \
+                [(e, a, g, d, None, "", "nominal") for si, (e, a, g, d) in enumerate(stacks) if si not in covered]

@@ -1,0 +1,75 @@
+--- grade/worker.py.orig	2026-10-01 16:46:39
++++ grade/worker.py	2026-10-01 16:47:28
+@@ -17,14 +17,16 @@
+ import convfleet as cf
+ import grade_join
+ 
+-CODE = 'z3-grade-2026-10-01c'
++CODE = 'z3-grade-2026-10-01c+svb'
+ W = os.environ.get('CONV_HOME', '/opt/conv')
+ PY = os.path.join(W, 'env/bin/python'); PY84 = os.path.join(W, 'ifc84/bin/python')
+ CHECK = os.path.join(HERE, 'step_check.py'); CENSUS = os.path.join(HERE, 'ifc_census.py')
++BIG = os.path.join(HERE, 'step_verify_big.py')     # streamed read-back: same signals as step_check, bounded memory
++SVB_WORKERS = int(os.environ.get('SVB_WORKERS', '4')); SVB_MEM_GB = float(os.environ.get('SVB_MEM_GB', '8'))
+ DET = cf.ROOT + '/_state/conv/grade/detail'; REN = cf.ROOT + '/_state/conv/grade/renders'
+ RB_MAX = int(os.environ.get('RB_MAX_MB', '1024')) << 20
+ FILES = ('worker.py', 'convfleet.py', 'step_check.py', 'ifc_census.py', 'grade_join.py', 'db1dec.py', 'db1step.py', 'db1old.py', 'db1bolts.py',
+-         'convert_one.py', 'layouts.json')
++         'convert_one.py', 'layouts.json', 'step_verify_big.py')
+ LAYOUTS = json.load(open(os.path.join(HERE, 'layouts.json')))
+ GRATING = re.compile(r'^(GT|GR|GRTG|GRATING|BAR\s*GRATING)', re.I)
+ 
+@@ -47,7 +49,8 @@
+ 
+ 
+ def need_bytes(job):
+-    return max(4 << 30, (job.get('size') or 0) * 16, (job.get('step_bytes') or 0) * 40)
++    sb = job.get('step_bytes') or 0
++    return max(4 << 30, (job.get('size') or 0) * 16, sb * 40 if sb < RB_MAX else int((SVB_MEM_GB + 1) * (1 << 30)))
+ 
+ 
+ def need_disk(job):
+@@ -59,6 +62,17 @@
+         return cf.s3.head_object(Bucket=cf.B, Key=key)['ContentLength']
+     except Exception:
+         return None
++
++
++def streamed_check(fl, jid, stp, chk, parts, d):
++    """OCC read-back of a STEP too large for one read (>= RB_MAX, or memory-killed twice): step_verify_big.py reads it in
++    self-contained chunks under SVB_MEM_GB and writes step_check's JSON / parts records (no render)"""
++    rc = fl.run(jid, [PY, BIG, stp, chk, '--parts', parts, '--workers', str(SVB_WORKERS), '--mem-gb', str(SVB_MEM_GB),
++                      '--workdir', os.path.join(d, 'svb')], os.path.join(d, 'val.log'), 12 * 3600)
++    try:
++        return json.load(open(chk)) if rc == 0 else {'error': f'read-back rc {rc}', 'rc': rc, 'streamed': True}
++    except Exception:
++        return {'error': f'read-back rc {rc}', 'rc': rc, 'streamed': True, 'log': tail_of(os.path.join(d, 'val.log'), 300)}
+ 
+ 
+ def check_step(fl, jid, key, d, title):
+@@ -72,17 +86,15 @@
+         rc = fl.run(jid, [PY, CHECK, stp, chk, '--png', png, '--parts', parts, '--title', title], os.path.join(d, 'val.log'), 4 * 3600)
+         if rc == -9:                              # memory kill: once more without the render (read-back only)
+             rc = fl.run(jid, [PY, CHECK, stp, chk, '--parts', parts], os.path.join(d, 'val.log'), 4 * 3600)
+-        try:
+-            v = json.load(open(chk)) if rc == 0 else {'error': f'read-back rc {rc}', 'rc': rc}
+-        except Exception:
+-            v = {'error': f'read-back rc {rc}', 'rc': rc, 'log': tail_of(os.path.join(d, 'val.log'), 300)}
++        if rc == -9:                              # memory kill again: streamed read-back (bounded memory)
++            v = streamed_check(fl, jid, stp, chk, parts, d)
++        else:
++            try:
++                v = json.load(open(chk)) if rc == 0 else {'error': f'read-back rc {rc}', 'rc': rc}
++            except Exception:
++                v = {'error': f'read-back rc {rc}', 'rc': rc, 'log': tail_of(os.path.join(d, 'val.log'), 300)}
+     else:
+-        fl.run(jid, [PY, CHECK, stp, chk, '--no-occ'], os.path.join(d, 'val.log'), 3600)
+-        try:
+-            v = json.load(open(chk))
+-        except Exception:
+-            v = {}
+-        v['skipped'] = f'STEP >= {RB_MAX >> 20} MB: text checks only (markers, products), no OCC read-back'
++        v = streamed_check(fl, jid, stp, chk, parts, d)
+     v['step_bytes'] = n
+     os.remove(stp)
+     return v, (parts if os.path.exists(parts) else None), (png if os.path.exists(png) else None)

@@ -1,0 +1,39 @@
+--- a/adapters/zen3.py	2026-10-02 17:06:42
++++ c/adapters/zen3.py	2026-10-02 17:48:04
+@@ -35,6 +35,12 @@
+     return re.sub(r'[^A-Za-z0-9._-]+', '_', s)
+ 
+ 
++def _sc(s):
++    """the Disk-1/2 extraction worker's folder / member naming (safe_component): '_' runs collapsed, '!+' kept"""
++    s = re.sub(r"[^A-Za-z0-9._!+\-]+", "_", s)
++    return re.sub(r"_+", "_", s).strip("_") or "_"
++
++
+ class Adapter:
+     disk = 'Zenitude-data-3'
+ 
+@@ -155,14 +161,15 @@
+                 h = pc.head(B, f'{disk}/{rel}')
+                 if not h or int(h['ContentLength']) != int(proj.get('size') or -1):
+                     continue
+-                flat = _san(rel)
+-                for pref in (f'cad-disk-extract/{disk}/{flat}-{hashlib.sha256(f"{disk}/{rel}".encode()).hexdigest()[:12]}/',
+-                             f'cad-disk-extract/{disk}/{flat}/'):
+-                    ks = pc.list_keys(B, pref)
+-                    if ks:
+-                        for k, sz, et in ks:
+-                            out.setdefault(_lk(k[len(pref):]), []).append((k, sz))
+-                        used = pref; break
++                h12 = hashlib.sha256(f"{disk}/{rel}".encode()).hexdigest()[:12]
++                for flat in dict.fromkeys((_sc(rel)[:240], _san(rel))):   # worker naming first; old _san kept as fallback
++                    for pref in (f'cad-disk-extract/{disk}/{flat}-{h12}/', f'cad-disk-extract/{disk}/{flat}/'):
++                        ks = pc.list_keys(B, pref)
++                        if ks:
++                            for k, sz, et in ks:
++                                out.setdefault(_lk(k[len(pref):]), []).append((k, sz))
++                            used = pref; break
++                    if used: break
+                 if used: break
+         self._peer[pid] = (out, used)
+         return self._peer[pid]

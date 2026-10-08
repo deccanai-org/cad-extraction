@@ -1,0 +1,26 @@
+--- grade/step_check.py
++++ grade/step_check.py
+@@ -127,7 +127,8 @@
+ out['check_fraction'] = round(check_p, 4)
+ builder = BRep_Builder(); comp = TopoDS_Compound(); builder.MakeCompound(comp)
+ gbox = Bnd_Box()
+-tot = dict(transferred=0, empty_roots=0, solids=0, shells=0, faces=0, checked=0, valid=0, invalid=0, nonpos_vol=0, nonfinite=0)
++tot = dict(transferred=0, empty_roots=0, solids=0, shells=0, faces=0, checked=0, valid=0, invalid=0, nonpos_vol=0, nonfinite=0,
++           multi_shell_solids=0)
+ parts = []
+ invalid_names = []
+ rshapes = []
+@@ -199,6 +200,13 @@
+             vol += vv
+             if not (vv > 0):
+                 tot['nonpos_vol'] += 1
++            # info only: a solid with >1 shell from an ifc2step FACETED_BREP = lumps of one CLOSED_SHELL that OCC nested
++            # as voids (volume negative or silently under-counted); 0 for STEPs written with the lump-split writer
++            exs_ = TopExp_Explorer(s, TopAbs_SHELL); nsh_ = 0
++            while exs_.More():
++                nsh_ += 1; exs_.Next()
++            if nsh_ > 1:
++                tot['multi_shell_solids'] += 1
+         tot['checked'] += len(sols); tot['valid'] += val; tot['invalid'] += len(sols) - val
+         rec['valid'] = val; rec['volume'] = round(vol, 3)
+         if val < len(sols) and len(invalid_names) < 50:

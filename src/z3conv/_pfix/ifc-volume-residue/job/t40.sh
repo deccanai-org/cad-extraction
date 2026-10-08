@@ -1,0 +1,1 @@
+cat /work/agentwork/ifc-volume-residue/batch_dev3pc.log; ls /work/agentwork/ifc-volume-residue/w/dev3pc/; cat /work/agentwork/ifc-volume-residue/w/dev3pc/progress.jsonl | cut -c1-120; date; ps -o pid,lstart,args -p 906818 | cut -c1-120

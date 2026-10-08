@@ -1,0 +1,25 @@
+--- coord/build_index.py.orig2	2026-10-01 18:34:26
++++ coord/build_index.py	2026-10-01 18:34:26
+@@ -1296,6 +1296,11 @@
+     pipe, i = row['pipeline'], row['id']
+     if row.get('detail_prefix'):
+         return row['detail_prefix'] + '.src_parts.jsonl.gz', row['detail_prefix'] + '.step_parts.jsonl.gz'
++    base = (row.get('step_key') or '').rsplit('/', 1)[-1]
++    if not row.get('reused') and base.startswith(i) and base.endswith('.step') and len(base) > len(i) + 5:
++        # a converter re-run (ifc2step6: <id>.v6.step, <id>.v61.step) writes its detail with the STEP's suffix
++        suf = base[len(i):-5]
++        return f'{ST}/{pipe}/detail/{i}{suf}.src_parts.jsonl.gz', f'{ST}/{pipe}/detail/{i}{suf}.step_parts.jsonl.gz'
+     if row.get('reused'):
+         return f'{ST}/grade/detail/{pipe}-{i}.src_parts.jsonl.gz', f'{ST}/grade/detail/{pipe}-{i}.step_parts.jsonl.gz'
+     return f'{ST}/{pipe}/detail/{i}.src_parts.jsonl.gz', f'{ST}/{pipe}/detail/{i}.step_parts.jsonl.gz'
+@@ -1330,6 +1335,10 @@
+         fr = finals.get(f'f-{pipe}-{mid[:40]}-{kind}')
+         if not fr or fr.get('status') != 'ok':
+             continue
++        if kind == 'readback' and fr.get('step_key'):
++            cur = (out.get('step') or {}).get('key') or out.get('out_key') or out.get('step_key')
++            if cur and cur != fr['step_key']:
++                continue                          # stale read-back: the model was re-converted (e.g. a .v6.step) since
+         out = dict(out)
+         if fr.get('join'):
+             out['join'] = fr['join']

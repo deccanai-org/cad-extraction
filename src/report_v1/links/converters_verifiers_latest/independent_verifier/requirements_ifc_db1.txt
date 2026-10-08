@@ -1,0 +1,6 @@
+cadquery-ocp==8.0.1.0.0
+ifcopenshell==0.8.5
+numpy>=2.3
+scipy>=1.14
+pillow>=11
+boto3>=1.40

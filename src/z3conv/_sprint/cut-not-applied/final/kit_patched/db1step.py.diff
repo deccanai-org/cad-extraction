@@ -1,0 +1,287 @@
+--- /Users/dhiren/Downloads/Deccan/z3conv/db1/db1step.py	2026-10-01 19:01:22
++++ rebase/kitn2/db1step.py	2026-10-01 20:53:51
+@@ -92,7 +92,10 @@
+     m = P_PLATE2.match(n)
+     if m:  # beam-type plate: thickness first, width second (IFC XDim=t, YDim=b)
+         t, b = float(m.group(1)), float(m.group(2))
+-        return 'RECT', [t, b], 'parametric'
++        # cut-not-applied P15: Tekla takes the smaller dimension as the thickness whatever the order ('PL177.8*9.525' = 'PL9.525*177.8'):
++        # IRON_ORE 7.24 vs its own Tekla IFC: the 14 'PL a*b' parts with a > b stood rotated 90 deg (bbox y/z swapped), the 328 with
++        # a < b matched; the holes and cuts of those plates were cut through the wrong face
++        return 'RECT', [min(t, b), max(t, b)], 'parametric'
+     m = P_ROUND.match(n)
+     if m: return 'CIRC', [float(m.group(1)) / 2], 'parametric'
+     m = P_SQBAR.match(n)
+@@ -156,10 +159,22 @@
+         return 'CHS', [d / 2, tw], 'parametric_hss_round'
+     m = P_RECT.match(n)
+     if m: return 'RECT', [float(m.group(2)), float(m.group(1))], 'parametric_panel'
++    # cut-not-applied P9: 'R.B \xd820' (R.B + Latin-1 O-slash + 20) / 'R.B 20' / 'R.BD20' (Latin-1 names kept by db1prof) is a round bar of the stated diameter (the name
++    # carries the full section). Unresolved before: steel round bars dropped, and the 7.01 operative rung-hole cutters 'R.B \xd820'
++    # (obj_type 11, P4) left cut_body_unbuilt (4fa8f263: 30, cc9bf730: 47).
++    n3 = re.sub('^R\\.\\s*B\\.?\\s*(?:\u00d8|DIA\\.?|D)?\\s*', 'RB', n)
++    if n3 != n:
++        m = P_ROUND.match(n3)
++        if m: return 'CIRC', [float(m.group(1)) / 2], 'parametric'
+     n2 = re.sub(r'^F\.\s*B\.?\s*', 'FB', n)
+     if n2 != n:
+         m = P_PLATE2.match(n2)
+-        if m: return 'RECT', [float(m.group(1)), float(m.group(2))], 'parametric_flat_bar'
++        if m:
++            # cut-not-applied P8: 'F.B 75X10' is width x thickness; the thickness lies across the part (XDim, local z) like 'PL t*b'.
++            # Proof: Tekla's net weight of the e151a8fa ladder stringers F.B 75X10 (48.0 net / 48.7 gross kg) = 29 D21 rung holes
++            # through 10 mm; with [75, 10] the same holes ran through 75 mm (45.3 kg); toe plates F.B 75X6 lay flat.
++            a_, b_ = float(m.group(1)), float(m.group(2))
++            return 'RECT', [min(a_, b_), max(a_, b_)], 'parametric_flat_bar'
+     m = P_CHAN_BR.match(n)
+     if m:
+         h, b, tw, tf = (float(x) for x in m.groups())
+@@ -217,6 +232,21 @@
+         return False
+ 
+ 
++# cut-not-applied P6: cut parts (ANTIMATERIAL / BlOpCl CUTPART) made by polygon cuts can carry their depth as a bare number instead of
++# 'BL<t>' (component-made cuts '111.600', '469.000'; 8.53 '914.4' / '1016' / '1219.2' through 18-20 in pipes). The outline is the
++# part's own contour record and a contour part's profile is its thickness, so they are built exactly like 'BL<t>' cuts.
++P_CUTDEPTH = re.compile(r'^\d+(?:\.\d+)?$')
++PART_CUTS_ON = os.environ.get('DB1_PART_CUTS', '1') == '1'     # cut-not-applied P7, diagnostics only: '0' writes every part uncut
++
++
++def zero_section(prof):
++    """cut-not-applied P10: a cut part whose own profile has a zero dimension ('PL0*177.8' on the 7.24 models) subtracts nothing:
++    counted as cut_body_zero_thickness, not as an unapplied cut"""
++    n = (prof or '').strip().upper()
++    m = P_PLATE2.match(n) or P_PLATE1.match(n) or P_ROUND.match(n)
++    return bool(m) and any(float(g) == 0.0 for g in m.groups() if g is not None)
++
++
+ def section_for(name, cat):
+     """-> (kind, params, source) or (None, reason, None); implausible sizes -> 'implausible_profile'"""
+     kind, v, how = _section_for_raw(name, cat)
+@@ -237,6 +267,59 @@
+ }
+ 
+ 
++def section_radius(kind, v):
++    """cut-not-applied P13: a radius that bounds the section around the member axis (full height / width, so profile offsets are
++    covered too); only sizes the extension of an oblique fitting, the half-space then clips the exact end"""
++    try:
++        if kind in ('CIRC', 'CHS'): return float(v[0])
++        if kind == 'FRUSTUM': return max(float(v[0]), float(v[1])) / 2
++        nums = [abs(float(c)) for c in _nums(v)]
++        return float(math.hypot(*sorted(nums)[-2:])) if len(nums) >= 2 else 1000.0
++    except Exception:
++        return 1000.0
++
++
++def fit_old_plan(m, fits, lcuts, kind, v):
++    """cut-not-applied P13 (old engines) -> (member to write, [(point, n_out)] half-spaces, notes). A Tekla fitting moves the part end
++    to the fitting plane (shortens or lengthens the part); the side away from the part middle is removed. Perpendicular planes: the end
++    is moved exactly (no boolean). Oblique planes: the end is extended past the plane by R tan(angle) + 1 mm and clipped by the plane.
++    Line cuts remove the +normal side, except end cuts (axis crossing in the outer quarters) whose normal points at the part middle:
++    there the end side is removed. Contour plates, polybeams and fitting planes within ~6 deg of the axis: half-spaces only."""
++    O, x, L = m['O'], m['x'], m['L']; mid = O + x * L / 2
++    t0, t1 = 0.0, L; hs = []; notes = collections.Counter(); ends = collections.Counter()
++    ext_ok = kind is not None and len(m.get('old_poly') or []) < 3
++    R = section_radius(kind, v)
++    for P, n in fits:
++        n_out = n if float((mid - P) @ n) < 0 else -n
++        c = float(n_out @ x)
++        if not ext_ok or abs(c) < 0.1:
++            hs.append((P, n_out)); notes['halfspace_only'] += 1; continue
++        tp = float((P - O) @ n_out) / c
++        perp = abs(abs(c) - 1) < 1e-6
++        m_ = 0.0 if perp else R * math.sqrt(max(0.0, 1 - c * c)) / abs(c) + 1.0
++        if c > 0: t1 = tp + m_; ends['end'] += 1; longer = tp > L + 1e-6
++        else: t0 = tp - m_; ends['start'] += 1; longer = tp < -1e-6
++        if not perp: hs.append((P, n_out))
++        notes['perpendicular' if perp else 'oblique'] += 1; notes['lengthened' if longer else 'shortened'] += 1
++    notes['same_end_twice'] += sum(1 for k_, n_ in ends.items() if n_ > 1)
++    for P, n in lcuts:
++        n = np.asarray(n, float); c = float(n @ x)
++        tp = float((P - O) @ n) / c if abs(c) > 0.1 else None
++        if float((mid - P) @ n) > 0 and tp is not None and (tp < 0.25 * L or tp > 0.75 * L):
++            # an END cut whose stored normal points at the part middle: the end side is removed (0762effe L50*50*6 25281 carries the
++            # same end plane twice with opposite normals; '+normal removed' deleted the whole part, Tekla's net weight 2.4 kg).
++            # Cuts along the part or through its middle keep '+normal removed' (GSK 7.24: 8 HSS4X4X5/16 halved lengthwise).
++            n = -n; notes['line_cut_end_normal_flipped'] += 1
++        hs.append((P, n)); notes['line_cut'] += 1
++    uniq = {}
++    for P, n in hs: uniq.setdefault((round(float(P @ n), 2),) + tuple(np.round(n, 5)), (P, n))
++    notes['halfspaces_deduplicated'] += len(hs) - len(uniq); hs = list(uniq.values())
++    if t1 - t0 <= 1.0:
++        notes['degenerate_kept_as_recorded'] += 1; return m, [], notes
++    if abs(t0) < 1e-9 and abs(t1 - L) < 1e-9: return m, hs, notes
++    return dict(m, O=O + x * t0, E=O + x * t1, L=float(t1 - t0)), hs, notes
++
++
+ def approx_name(prof, how):
+     why = APPROX_SOURCES.get(how)
+     return f'{prof} [approx: {why}]' if why else prof
+@@ -685,6 +768,8 @@
+     def body(m):
+         """-> (frame, profile_entity, depth, kind_label) or (None, reason)"""
+         kind, v, how = section_for(m['prof'], cat)
++        if m.get('cut') and P_CUTDEPTH.match((m.get('prof') or '').strip()):
++            kind, v, how = None, 'contour_plate', None          # cut-not-applied P6: polygon cut part named by its bare depth
+         if kind is None and v == 'contour_plate':
+             poly = db.polygon(lay, m)
+             thick = float(re.findall(r'[\d.]+', m['prof'])[0])
+@@ -743,12 +828,28 @@
+         cg_ = getattr(db1bolts, 'catalog_geometry', None)
+         sg_ = cg_(s_, d_, L_) if cg_ else None
+         return sg_ or db1bolts.fallback_geometry(s_, d_)   # c1audit-catalog: no name-keyed tables against the own assdb
++    # cut-not-applied P12: Tekla fittings (relation type 9: planar end trims) and line cuts (type 12: plane cut, +normal side
++    # removed) of the new engines, decoded by the eng fork's fittings.py (handed over to this stream; validated there against
++    # Tekla IFC exports of 7.64 / 8.07 / 8.53 / 8.85 / 9.08 models). Perpendicular fittings on profile extrusions trim the member
++    # (exact, no boolean), oblique ones / fittings on plates / line cuts are subtracted as half-space boxes. DB1_FITTINGS=0: off.
++    FIT, LCUT, fit_info = {}, {}, {}
++    fit_stats = collections.Counter(); FITP = {}
++    if os.environ.get('DB1_FITTINGS', '1') == '1':
++        try:
++            import fittings as _fit
++            FIT, LCUT, fit_info = _fit.decode_all(db, cs, lay, M)
++            for m in M:
++                if m.get('cut') or (m['seq'] not in FIT and m['seq'] not in LCUT): continue
++                mm_, hs_, fn_ = _fit.plan(m, FIT.get(m['seq'], []), LCUT.get(m['seq'], []), extrusion=section_for(m['prof'], cat)[0] is not None)
++                FITP[id(m)] = (mm_, hs_); fit_stats['parts'] += 1; fit_stats['trimmed'] += 'trim' in fn_; fit_stats['halfspaces'] += len(hs_)
++        except Exception as ex_:
++            FITP = {}; fit_info = dict(error=f'{type(ex_).__name__}: {str(ex_)[:200]}')
+     cut_body = {}
+     for m in M:
+         if m.get('cut'):
+             b = body(m)
+             if b[0] is not None: cut_body[m['seq']] = b[:3]
+-            else: why['cut_body_unbuilt'] += 1
++            else: why['cut_body_zero_thickness' if zero_section(m.get('prof')) else 'cut_body_unbuilt'] += 1   # cut-not-applied P10
+     applied = 0
+     plist = []          # z3: one record per decoded part: [seq, profile, category, status, how/reason, GlobalId, n_cuts]
+     # pass 1: bodies of the written parts (frame, depth, section region) for bolt placement and holes
+@@ -757,7 +858,7 @@
+         if m.get('cut'): continue
+         isbolt[id(m)] = BOLTS2 and is_bolt_record(m)
+         if isbolt[id(m)]: continue
+-        bodies[id(m)] = body(m)
++        bodies[id(m)] = body(FITP[id(m)][0] if id(m) in FITP else m)      # cut-not-applied P12: the fitted (trimmed) member
+     BG = {}; HP = {}
+     if BOLTS2 and bgroups:
+         parts = {}; part_seqs = set()
+@@ -784,8 +885,12 @@
+         if b[0] is None:
+             why[b[1]] += 1; unres[m['prof'] or '<none>'] += 1
+             plist.append([m.get('seq'), m.get('prof'), part_cat(m.get('prof'), b[1]), 'skipped', b[1], None, 0]); continue
+-        cuts = [cut_body[c] for c in links.get(m['seq'], []) if c in cut_body]
++        cuts = [cut_body[c] for c in links.get(m['seq'], []) if c in cut_body] if PART_CUTS_ON else []
+         applied += len(cuts)
++        if PART_CUTS_ON and FITP.get(id(m), (None, None))[1]:          # cut-not-applied P12: oblique fittings / line cuts
++            size_ = 2.0 * (FITP[id(m)][0]['L'] + 2000.0)
++            cuts = cuts + [_fit.halfspace_cut(out, P_, n_, size_) for P_, n_ in FITP[id(m)][1]]
++            fit_stats['halfspaces_applied'] += len(FITP[id(m)][1])
+         nh = 0
+         for bb, z0, z1 in HP.get(m['seq'], []):
+             dh, dec_ = db1bolts.hole_diameter(bb)
+@@ -800,7 +905,11 @@
+         cat_ = part_cat(m.get('prof'), b[3])
+         cls = 'IfcPlate' if cat_ in ('connection', 'other') and b[3] not in ('parametric_stud_shank', 'parametric_anchor') else (
+               'IfcMechanicalFastener' if b[3] in ('parametric_stud_shank', 'parametric_anchor') else 'IfcBeam')
+-        e = out.element(cls, approx_name(m['prof'], b[3]), b[0], b[1], b[2], cuts)
++        nm_n = approx_name(m['prof'], b[3])
++        rp_ = [getattr(db, 'repaired', {})[c] for c in links.get(m['seq'], []) if c in cut_body and c in getattr(db, 'repaired', {})] if PART_CUTS_ON else []
++        if rp_:                                                        # cut-not-applied P14
++            nm_n += ' [approx: cut outline self-crossing slivers dropped (%.2f of %.0f mm2)]' % max(rp_); fit_stats['parts_with_repaired_cut_outline'] += 1
++        e = out.element(cls, nm_n, b[0], b[1], b[2], cuts)
+         plist.append([m.get('seq'), m.get('prof'), cat_, 'written', b[3], e.GlobalId, len(cuts)])
+         src[b[3]] += 1
+     # bolt groups: decoded ones written (or holes only); undecoded bolt records listed as skipped bolt groups
+@@ -859,6 +968,12 @@
+         st['bolt_stats'].update(_c1_v2_stats(bgroups, BG, holes_cut, holes_tol, db1bolts))   # c1audit-stats
+     st['parts_list'] = plist
+     st['cuts_applied'] = applied
++    # cut-not-applied P11: every cut part accounted for (the grade flag cuts_not_applied only sees unbuilt bodies)
++    _wr = {p[0] for p in plist if p[3] == 'written'}; _lk = {c for v in links.values() for c in v}
++    st['cut_stats'] = dict(cut_parts=sum(1 for m in M if m.get('cut')), bodies_built=len(cut_body), applied=applied,
++                           unlinked=sum(1 for m in M if m.get('cut') and m['seq'] not in _lk),
++                           links_to_unwritten_parts=sum(1 for p, cs in links.items() if p not in _wr for c in cs if c in cut_body))
++    st['fittings'] = dict(fit_info, **fit_stats)                      # cut-not-applied P12
+     # sanity: in real steel models most horizontal beams stand web-vertical; a wrongly
+     # decoded orientation table would scatter these
+     hz = [m for m in M if not m.get('cut') and abs(m['x'][2]) < 0.1 and m['L'] > 500]
+@@ -965,6 +1080,8 @@
+     def body(m):
+         if m.get('bolt'): return (None, 'bolt_group_excluded')
+         kind, v, how = section_for(m['prof'], cat)
++        if m.get('cut') and P_CUTDEPTH.match((m.get('prof') or '').strip()):
++            kind, v, how = None, 'contour_plate', None          # cut-not-applied P6: polygon cut part named by its bare depth
+         if kind is None and v == 'contour_plate':
+             thick = float(re.findall(r'[\d.]+', m['prof'])[0])
+             if not 0 < thick <= 50000: return (None, 'implausible_profile')
+@@ -1007,12 +1124,24 @@
+     hole_src = collections.Counter(); holes_no_hole = 0; holes_slot_round = 0   # hole-tolerance-residue: diameter source per hole
+     holes_inside = 0; inside_prof = collections.Counter(); inside_why = collections.Counter()
+ 
++    # cut-not-applied P13: Tekla fittings (type 9) / line cuts (type 12) decoded by db1old.read (db1old.FIT). DB1_FITTINGS=0: off.
++    FITP = {}; fit_stats = collections.Counter(); _FIT = getattr(db1old, 'FIT', {}) if os.environ.get('DB1_FITTINGS', '1') == '1' else {}
++    if _FIT:
++        import fittings as _fit
++        for m in M:
++            if m.get('cut') or m.get('bolt'): continue
++            fl_ = _FIT.get(9, {}).get(m['pid'], []); lc_ = _FIT.get(12, {}).get(m['pid'], [])
++            if not fl_ and not lc_: continue
++            k_, v_, _h = section_for(m['prof'], cat)
++            mm_, hs_, nt_ = fit_old_plan(m, fl_, lc_, k_, v_)
++            FITP[id(m)] = (mm_, hs_); fit_stats['parts'] += 1; fit_stats['moved_ends'] += mm_ is not m; fit_stats['halfspaces'] += len(hs_)
++            fit_stats.update(nt_)
+     cut_body = {}
+     for m in M:
+         if m.get('cut'):
+             b = body(m)
+             if b[0] is not None: cut_body[m['pid']] = b[:3]
+-            else: why['cut_body_unbuilt'] += 1
++            else: why['cut_body_zero_thickness' if zero_section(m.get('prof')) else 'cut_body_unbuilt'] += 1   # cut-not-applied P10
+     applied = 0
+     plist = []
+     # pass 1: bodies of every written part (cached) and, with bolts on, which parts each bolt passes through + the plies' extent
+@@ -1020,7 +1149,12 @@
+     for m in M:
+         if m.get('cut') or (BOLTS_ON and m.get('bolt') and db1bolts.bolts_of(m)):
+             continue
+-        bodies[id(m)] = body(m)
++        if FITP.get(id(m), (m,))[0] is not m:                          # cut-not-applied P13: the fitted member; body() keys the section
++            mm_ = FITP[id(m)][0]; bodies[id(m)] = body(mm_)              # region (bolt holes) and polybeam segments by id(member)
++            if id(mm_) in REGION: REGION[id(m)] = REGION.pop(id(mm_))
++            if id(mm_) in POLY: POLY[id(m)] = POLY.pop(id(mm_))
++        else:
++            bodies[id(m)] = body(m)
+     part_bolts = {}; spans = [[] for _ in BL]
+     HOLE_REL = os.environ.get('DB1_HOLE_REL', '1') == '1'; dropped_holes = [0]        # audit P4
+     REL10 = collections.defaultdict(set)
+@@ -1125,8 +1259,12 @@
+         if b[0] is None:
+             why[b[1]] += 1; unres[m['prof'] or '<none>'] += 1
+             plist.append([m.get('pid'), m.get('prof'), part_cat(m.get('prof'), b[1]), 'skipped', b[1], None, 0]); continue
+-        cuts = [cut_body[c] for c in cut_rel.get(m['pid'], []) if c in cut_body]
++        cuts = [cut_body[c] for c in cut_rel.get(m['pid'], []) if c in cut_body] if PART_CUTS_ON else []
+         applied += len(cuts)
++        if PART_CUTS_ON and FITP.get(id(m), (None, None))[1]:          # cut-not-applied P13: oblique fittings / line cuts
++            size_ = 2.0 * (FITP[id(m)][0]['L'] + 2000.0)
++            cuts = cuts + [_fit.halfspace_cut(out, P_, n_, size_) for P_, n_ in FITP[id(m)][1]]
++            fit_stats['halfspaces_applied'] += len(FITP[id(m)][1])
+         hc_ = []; near_ = 0.0
+         for i in part_bolts.get(id(m), []):
+             if (id(m), i) in inside:
+@@ -1171,8 +1309,15 @@
+         plist.append([m.get('pid'), m.get('prof'), cat_, 'written', b[3], e.GlobalId, len(cuts)])
+         src[b[3]] += 1
+     st['parts_list'] = plist
++    # cut-not-applied P11: every cut part accounted for (the grade flag cuts_not_applied only sees unbuilt bodies)
++    _wr = {p[0] for p in plist if p[3] == 'written'}; _lk = {c for v in cut_rel.values() for c in v}
++    st['cut_stats'] = dict(cut_parts=sum(1 for m in M if m.get('cut')), bodies_built=len(cut_body), applied=applied,
++                           unlinked=sum(1 for m in M if m.get('cut') and m['pid'] not in _lk),
++                           links_to_unwritten_parts=sum(1 for p, cs in cut_rel.items() if p not in _wr for c in cs if c in cut_body),
++                           operative_parts=sum(1 for m in M if m.get('cut') and m.get('mat') != 'ANTIMATERIAL'))
+     hz = [m for m in M if not m.get('cut') and abs(m['x'][2]) < 0.1 and m['L'] > 500]
+     yv = sum(1 for m in hz if abs(m['y'][2]) > 0.996) / len(hz) if hz else None
++    st['fittings'] = dict(fit_stats, decoded=st['layout'].get('fittings_decoded'))      # cut-not-applied P13
+     hzI = [m for m in hz if m.get('prof') and section_for(m['prof'], cat)[0] == 'I']
+     yvI = sum(1 for m in hzI if abs(m['y'][2]) > 0.996) / len(hzI) if hzI else None
+     if BOLTS_ON:

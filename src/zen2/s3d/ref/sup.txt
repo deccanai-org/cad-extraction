@@ -1,0 +1,22 @@
+######## 00022303-0000-0000-122C-0173D05A6004
+dir|rel|n|cls|tbl|sample|rname
+---|---|-|---|---|------|-----
+IN|HgrSupport_RSLT|1|140031||000222FF-0000-0000-132C-0173D05A6004|
+IN|NamingParents|3|10001|CMNAPPNameRuleAE|00002711-0000-0000-312C-0173D05A6004|
+IN|SystemHasSupport|1|210007|SHPCONPipelineSystem|00033457-0000-0000-231E-0173D05A6004|
+OUT|AssemblyHierarchy|2|140039|HNGSUPHgrStdComponent|00022307-0000-0000-3A2C-0173D05A6004|
+OUT|AssemblyHierarchy|1|140038|HNGSUPHgrConnComponent|00022306-0000-0000-1A2C-0173D05A6004|
+OUT|ConnHasPorts|1|80037|ROUTEPipeStraightPathFeat|000138A5-0000-0000-E52D-0173D05A6004|
+OUT|OccAssyHasPart|1|8|COREProxy|00000008-0000-0000-FE1A-32481D594304|
+OUT|SupportHasComponents|1|140038|HNGSUPHgrConnComponent|00022306-0000-0000-1A2C-0173D05A6004|T_SECTION
+OUT|SupportHasComponents|2|140039|HNGSUPHgrStdComponent|00022307-0000-0000-3A2C-0173D05A6004|PIPE_CLAMP1
+OUT|SupportHasCS|1|290001|GRDSYSSPGCoordinateSystem|00046CD1-0000-0000-582C-0173D05A6004|CoordinateSystem
+oid|MaxLoad|SupportStatus|AssmSelectionRule|RteConnMaxCycleValue|RouteConnectionValue|BOMdescription|GenericFlags|SupportDirection|ComputeSupportDirection
+---|-------|-------------|-----------------|--------------------|--------------------|--------------|------------|----------------|-----------------------
+00022303-0000-0000-122C-0173D05A6004|0.0|1030|UNKNOWN|0|0|Shoe w/Medium Clamps - WT4X15.5 L = 14|32|6|1
+oid|xmin|ymin|zmin|xmax|ymax|zmax|skey
+---|----|----|----|----|----|----|----
+00022303-0000-0000-122C-0173D05A6004|6115.61376953125|681.1058349609375|12.090420722961426|6115.97802734375|681.31103515625|12.337581634521484|NULL
+strName
+-------
+EXISTING PS

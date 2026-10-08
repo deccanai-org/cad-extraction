@@ -1,0 +1,57 @@
+--- worker.orig.py	2026-10-01 17:02:28
++++ worker.py	2026-10-01 17:02:28
+@@ -56,7 +56,10 @@
+ STALL = 1800
+ THREADS = os.environ.get('IFC_THREADS', '2')
+ FILES = ('worker.py', 'convfleet.py', 'ifc2step5.py', 'ifc2step5_guard.py', 'ifc_concat_fix.py', 'ifc_crash_bisect.py',
+-         'ifc_exclude.py', 'step_check.py', 'ifc_census.py', 'grade_join.py', 'ifc2step6.py', 'ifc2step6_guard.py')
++         'ifc_exclude.py', 'step_check.py', 'ifc_census.py', 'grade_join.py', 'ifc2step6.py', 'ifc2step6_guard.py', 'ifcxml2spf.py')
++XML2SPF = os.path.join(HERE, 'ifcxml2spf.py')          # ifcXML (ISO 10303-28 / IFC4 ifcXML) -> SPF, validated converter
++if os.path.exists(XML2SPF):
++    CODE = CODE + '+x1'
+ import grade_join
+ CRASH = (-11, 139, -6, 134, 124, 125)
+ 
+@@ -143,7 +146,8 @@
+         f.seek(max(0, size - 4096)); tail = f.read()
+     if size < 200 or not head.strip(b'\x00 \r\n\t'):
+         raise Fail('empty_or_stub_file', f'{size} bytes')
+-    if head.lstrip()[:5] == b'<?xml' or b'<ifcXML' in head[:4096] or b'iso_10303_28' in head[:4096]:
++    h0 = head.lstrip(b'\xef\xbb\xbf \r\n\t')
++    if h0[:1] == b'<' or head[:2] in (b'\xff\xfe', b'\xfe\xff') or b'<ifcXML' in head[:4096] or b'iso_10303_28' in head[:4096]:
+         rec['format'] = 'ifcxml'; return 'ifcxml'
+     if b'ISO-10303-21' not in head[:4096]:
+         if not head.replace(b'\x00', b''):
+@@ -268,6 +272,32 @@
+         return dict(rec, status='fail', reason=e.reason, detail=e.detail)
+     except Exception as e:
+         return dict(rec, status='fail', reason='unpack_error', detail=f'{type(e).__name__}: {str(e)[:200]}')
++    if schema == 'ifcxml' and os.path.exists(XML2SPF):
++        # ifcXML -> SPF (every instance / value from the XML; nothing invented), then the normal SPF path
++        spf = os.path.join(d, 'from_ifcxml.ifc'); xrep = os.path.join(d, 'ifcxml2spf.json')
++        rcx = fl.run(jid, [PY, XML2SPF, src, spf, '--report', xrep], os.path.join(d, 'ifcxml2spf.log'), 3 * 3600, mem_frac=0.85)
++        try:
++            xr = json.load(open(xrep))
++        except Exception:
++            xr = {'status': 'error', 'rc': rcx, 'log': tail_of(os.path.join(d, 'ifcxml2spf.log'), 400)}
++        rec['ifcxml'] = {k: xr.get(k) for k in ('version', 'status', 'reason', 'schema', 'container', 'member', 'xml_bytes',
++                                                 'xml_root', 'first_elements', 'instances', 'references',
++                                                 'dangling_references', 'value_errors', 'unknown_xml_names', 'sec')}
++        rec['ifcxml']['rc'] = rcx
++        if rcx == 2:
++            root = (xr.get('xml_root') or '')
++            reason = 'not_ifc_xml_tekla_export_to_revit' if root in ('NewDataSet', 'DocumentElement') else 'not_ifc_xml'
++            return dict(rec, status='fail', reason=reason, detail=(xr.get('reason') or '')[:200])
++        if rcx not in (0, 4) or not os.path.exists(spf):
++            return dict(rec, status='fail', reason={3: 'ifcxml_parse_error', 5: 'ifcxml_unsupported_schema'}.get(rcx, 'ifcxml_convert_error'),
++                        detail=(xr.get('reason') or str(xr.get('value_errors') or '')[:200]), log_tail=tail_of(os.path.join(d, 'ifcxml2spf.log')))
++        rec.setdefault('input_fix', []).append('ifcxml_converted_to_spf' if rcx == 0 else 'ifcxml_converted_to_spf_with_dangling_references')
++        src = spf
++        try:
++            schema = sniff(src, rec)
++        except Fail as e:
++            return dict(rec, status='fail', reason=e.reason, detail=e.detail)
++        rec['format'] = 'ifcxml'
+     if schema == 'ifcxml':
+         x = src if src.lower().endswith('.ifcxml') else src + '.ifcXML'
+         if x != src: os.replace(src, x)

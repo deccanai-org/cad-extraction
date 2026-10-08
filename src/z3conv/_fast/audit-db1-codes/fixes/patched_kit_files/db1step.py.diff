@@ -1,0 +1,195 @@
+--- kits/j/db1step.py	2026-10-01 23:12:18.000000000 +0000
++++ kits/jfix2/db1step.py	2026-10-02 00:48:50.056508629 +0000
+@@ -449,6 +449,24 @@
+         self.elems.append(e)
+         return e
+ 
++    def element_poly(self, cls, name, frame0, segs, prof, cuts=()):
++        """audit P5: polybeam = union of mitred segment extrusions in the frame of the first segment, then the cuts"""
++        f = self.f; solid = None
++        for sg in segs:
++            ex = self.extrusion(prof, sg['depth'], self.relative(frame0, sg['frame']))
++            for pt, nrm, keep_pos in sg['clips']:
++                o_l, n_l, _x = self.relative(frame0, (pt, nrm, _perp(nrm)))
++                ex = f.createIfcBooleanClippingResult('DIFFERENCE', ex, f.createIfcHalfSpaceSolid(f.createIfcPlane(self._p3((o_l, n_l, _perp(n_l)))), bool(keep_pos)))
++            solid = ex if solid is None else f.createIfcBooleanResult('UNION', solid, ex)
++        for cf, cp, cd in cuts:
++            solid = f.createIfcBooleanResult('DIFFERENCE', solid, self.extrusion(cp, cd, self.cut_frame(frame0, cf)))
++        rep = f.createIfcShapeRepresentation(self.ctx, 'Body', 'CSG', [solid])
++        e = getattr(f, 'create' + cls)(ifcopenshell.guid.new(), self.oh, name or 'part', None, None,
++                                         f.createIfcLocalPlacement(self.site_pl, self._p3(frame0)),
++                                         f.createIfcProductDefinitionShape(None, None, [rep]), None)
++        self.elems.append(e)
++        return e
++
+     def bolt_group(self, name, bolts):
+         """z3: one IfcMechanicalFastener per Tekla bolt group, closed outward-oriented IfcFacetedBrep polyhedra (exact, no kernel tessellation).
+         Decoded placement (old-engine f6 / f10): head on the +z face, underside at f6 + f10/2 (+ head washer), shank toward -z for L,
+@@ -661,6 +679,52 @@
+     return st
+ 
+ 
++POLY_TAG = ' [approx: polybeam - straight segments along the stored polyline, mitred corners (bend chamfers not decoded)]'   # audit P5
++
++
++def _perp(v):
++    v = np.asarray(v, float); a = np.array([1.0, 0, 0]) if abs(v[0]) < 0.9 else np.array([0, 1.0, 0])
++    a = a - (a @ v) * v; return a / np.linalg.norm(a)
++
++
++def polybeam_segments(m, outline):
++    """audit P5: old-engine polybeam (form 4, >= 3 points = world offsets from O; the record length L is the first segment)
++    -> ([{frame, depth, clips, hit_frame, hit_depth}], capped corners) | reason string"""
++    P = [np.asarray(p, float) for p in (m.get('old_poly') or [])]
++    Q = [P[0]] if P else []
++    for p in P[1:]:
++        if np.linalg.norm(p - Q[-1]) > 1e-6: Q.append(p)
++    if len(Q) < 3: return 'lt3_points'
++    O = np.asarray(m['O'], float); Wp = [O + q for q in Q]
++    D = [Wp[k + 1] - Wp[k] for k in range(len(Wp) - 1)]; Ls = [float(np.linalg.norm(x)) for x in D]; D = [x / l for x, l in zip(D, Ls)]
++    if abs(float(D[0] @ np.asarray(m['x'], float))) < 0.999 or abs(Ls[0] - m['L']) > 0.6: return 'frame_mismatch'
++    if not outline or not outline[0]: return 'no_outline'
++    R = max(math.hypot(a, b) for a, b in outline[0])
++    y = np.asarray(m['y'], float); y = y - (y @ D[0]) * D[0]; y = y / np.linalg.norm(y); ys = [y]
++    for k in range(1, len(D)):
++        a = np.cross(D[k - 1], D[k]); s = float(np.linalg.norm(a)); c = float(D[k - 1] @ D[k]); yk = ys[-1]
++        if s > 1e-9:
++            a = a / s; th = math.atan2(s, c)
++            yk = yk * math.cos(th) + np.cross(a, yk) * math.sin(th) + a * (a @ yk) * (1 - math.cos(th))
++        yk = yk - (yk @ D[k]) * D[k]; ys.append(yk / np.linalg.norm(yk))
++    sgn = m['sgn']; segs = []; capped = 0
++    for k in range(len(D)):
++        es = ee = 0.0; clips = []
++        for j, end in ((k, 'start'), (k + 1, 'end')):
++            if (end == 'start' and k == 0) or (end == 'end' and k == len(D) - 1): continue
++            d0, d1 = D[j - 1], D[j]
++            th = math.acos(float(np.clip(d0 @ d1, -1, 1)))
++            if th > math.radians(150): capped += 1
++            e = min(R * math.tan(min(th, math.radians(150)) / 2), 5 * R) + 1.0
++            n = d0 + d1; n = n / np.linalg.norm(n) if np.linalg.norm(n) > 1e-9 else d0
++            if end == 'start': es = e; clips.append((Wp[j], n, True))
++            else: ee = e; clips.append((Wp[j], n, False))
++        A = Wp[k] - D[k] * es; B = Wp[k + 1] + D[k] * ee; xr_k = sgn * D[k]; X = np.cross(xr_k, ys[k])
++        segs.append({'frame': (B if sgn == 1 else A, -xr_k, X), 'depth': Ls[k] + es + ee, 'clips': clips,
++                     'hit_frame': (Wp[k + 1] if sgn == 1 else Wp[k], -xr_k, X), 'hit_depth': Ls[k]})
++    return segs, capped
++
++
+ def convert_old(data, out_ifc, cat, engine, t0):
+     import db1old
+     M, info, cut_rel = db1old.read(data, engine)
+@@ -710,9 +774,18 @@
+         if isinstance(prof, db1prof.Frustum): prof = db1prof.oriented(prof, m)  # db1prof-patch
+         if prof is not None and BOLTS_ON:
+             REGION[id(m)] = db1bolts.outline(kind, v)
++        if (POLYBEAM and prof is not None and not m.get('cut') and not isinstance(prof, db1prof.Frustum) and m.get('form') == 4
++                and len(m.get('old_poly') or []) >= 3 and id(m) not in POLY_SEEN):          # audit P5
++            POLY_SEEN.add(id(m)); r_ = polybeam_segments(m, db1bolts.outline(kind, v))
++            if isinstance(r_, tuple):
++                POLY[id(m)] = r_[0]; poly_stats['polybeams'] += 1; poly_stats['segments'] += len(r_[0]); poly_stats['corners_over_150deg'] += r_[1]
++            else:
++                poly_stats['polybeam_kept_straight_' + r_] += 1
+         return (out.member_frame(m), prof, m['L'], how) if prof is not None else (None, 'writer_skip')
+ 
+     REGION = {}
++    POLYBEAM = os.environ.get('DB1_POLYBEAM', '1') == '1'; POLY = {}; POLY_SEEN = set(); poly_stats = collections.Counter()   # audit P5
++    HOLE_DEDUP = os.environ.get('DB1_HOLE_DEDUP', '1') == '1'; holes_merged = [0]; near_merged = [0]                          # audit P6
+     import db1bolts
+     eng_s = '%.2f' % engine
+     BOLTS_ON = os.environ.get('DB1_BOLTS', '1') == '1' and eng_s in db1bolts.BOLT_ENGINES
+@@ -741,6 +814,10 @@
+             continue
+         bodies[id(m)] = body(m)
+     part_bolts = {}; spans = [[] for _ in BL]
++    HOLE_REL = os.environ.get('DB1_HOLE_REL', '1') == '1'; dropped_holes = [0]        # audit P4
++    REL10 = collections.defaultdict(set)
++    for a_, b_ in getattr(db1old, 'REL', {}).get(10, []):
++        REL10[a_].add(b_); REL10[b_].add(a_)
+     if BOLTS_ON and BL:
+         for m in M:
+             b = bodies.get(id(m))
+@@ -749,11 +826,29 @@
+             reg = REGION.get(id(m))
+             if reg is None:
+                 continue
+-            hit = HI.holes_for(b[0], b[2], reg)
++            segs_ = POLY.get(id(m)) or [{'hit_frame': b[0], 'hit_depth': b[2]}]          # audit P5: every polybeam segment
++            hf_ = {}
++            for sg_ in segs_:
++                for i in HI.holes_for(sg_['hit_frame'], sg_['hit_depth'], reg):
++                    if i in hf_: HI.hits[i] -= 1
++                    else: hf_[i] = (sg_['hit_frame'], sg_['hit_depth'])
++            hit = list(hf_)
++            if hit and HOLE_REL:                                   # audit P4: holes only in Tekla's bolted parts, within the grip
++                keep = []
++                for i in hit:
++                    bb_ = BL[i]; g_ = REL10.get(bb_.get('pid'))
++                    ok_ = m.get('pid') in g_ if g_ else True          # Tekla's bolted-part list is authoritative when the group has one
++                    if ok_ and not g_ and bb_.get('axial_decoded') and bb_.get('grip'):   # no list: the part must meet the decoded grip
++                        sp_ = db1bolts.ply_check(hf_[i][0], hf_[i][1], reg, bb_)
++                        off_ = bb_['zh'] - bb_['L'] / 2
++                        ok_ = sp_ is not None and sp_[1] >= bb_['grip'][0] - off_ - 1.0 and sp_[0] <= bb_['grip'][1] - off_ + 1.0
++                    if ok_: keep.append(i)
++                    else: HI.hits[i] -= 1; dropped_holes[0] += 1
++                hit = keep
+             if hit:
+                 part_bolts[id(m)] = hit
+                 for i in hit:
+-                    sp = db1bolts.ply_check(b[0], b[2], reg, BL[i])
++                    sp = db1bolts.ply_check(hf_[i][0], hf_[i][1], reg, BL[i])
+                     if sp:
+                         spans[i].append(sp)
+         # axial fit: shift each bolt along its axis so that its shank covers the plies it passes through (head on -z, as written by
+@@ -808,19 +903,37 @@
+             plist.append([m.get('pid'), m.get('prof'), part_cat(m.get('prof'), b[1]), 'skipped', b[1], None, 0]); continue
+         cuts = [cut_body[c] for c in cut_rel.get(m['pid'], []) if c in cut_body]
+         applied += len(cuts)
++        hc_ = []; near_ = 0.0
+         for i in part_bolts.get(id(m), []):
+             bb = BL[i]; dh, dec_ = db1bolts.hole_diameter(bb)
+             holes_tol_decoded += 1 if dec_ else 0
+-            key = round(dh, 2)
+-            if key not in hole_prof:
+-                hole_prof[key] = out.profile('BOLT_HOLE_D%g' % key, 'CIRC', [dh / 2])
+             ext = bb['L'] / 2 + 2 * bb['d']                      # through the whole grip (hole longer than the shank)
+-            cuts = cuts + [((bb['c'] - bb['ez'] * ext, bb['ez'], bb['ex']), hole_prof[key], 2 * ext)]
++            c_ = np.asarray(bb['c'], float); ez_ = np.asarray(bb['ez'], float); mg_ = False
++            if HOLE_DEDUP:                                       # audit P6: a coaxial (< 1 mm) second hole is the same hole
++                for h_ in hc_:
++                    if abs(float(h_[1] @ ez_)) > 1 - 5e-7 and abs(h_[3] - dh) < 0.6:
++                        w_ = c_ - h_[0]; s_ = float(w_ @ h_[1]); pp_ = float(np.linalg.norm(w_ - s_ * h_[1]))
++                        if pp_ < 1.0:
++                            near_ = max(near_, pp_, abs(h_[3] - dh)); h_[3] = max(h_[3], dh)
++                            h_[4] = min(h_[4], s_ - ext); h_[5] = max(h_[5], s_ + ext); holes_merged[0] += 1; mg_ = True; break
++            if not mg_:
++                hc_.append([c_, ez_, np.asarray(bb['ex'], float), dh, -ext, ext])
+             holes_cut += 1
++        for h_ in hc_:
++            key = round(h_[3], 2)
++            if key not in hole_prof:
++                hole_prof[key] = out.profile('BOLT_HOLE_D%g' % key, 'CIRC', [h_[3] / 2])
++            cuts = cuts + [((h_[0] + h_[1] * h_[4], h_[1], h_[2]), hole_prof[key], h_[5] - h_[4])]
+         cat_ = part_cat(m.get('prof'), b[3])
+         cls = 'IfcPlate' if cat_ in ('connection', 'other') and b[3] not in ('parametric_stud_shank', 'parametric_anchor') else (
+               'IfcMechanicalFastener' if b[3] in ('parametric_stud_shank', 'parametric_anchor') else 'IfcBeam')
+-        e = out.element(cls, approx_name(m['prof'], b[3]), b[0], b[1], b[2], cuts)
++        nm_ = approx_name(m['prof'], b[3])
++        if near_ >= 0.01:
++            nm_ += f' [approx: coincident bolt holes merged ({near_:.2f} mm apart)]'; near_merged[0] += 1
++        if id(m) in POLY:
++            e = out.element_poly(cls, nm_ + POLY_TAG, b[0], POLY[id(m)], b[1], cuts)
++        else:
++            e = out.element(cls, nm_, b[0], b[1], b[2], cuts)
+         plist.append([m.get('pid'), m.get('prof'), cat_, 'written', b[3], e.GlobalId, len(cuts)])
+         src[b[3]] += 1
+     st['parts_list'] = plist
+@@ -846,6 +959,9 @@
+                             'standard_mappings': dict(collections.Counter(f"{bb.get('standard')}: {bb['std']['mapping']} (delta {bb['std']['delta_mm']} mm)" for bb in BL if bb.get('std'))),
+                             'nominal_head_nut_bolts': sum(1 for bb in BL if not bb.get('std')),
+                             'writer': 'db1bolts (port of tekla-step-pipeline BuildBolt, positions identical) + axial fit to plies + clearance holes'}
++    st['audit_patch_stats'] = {'polybeam': dict(poly_stats), 'holes_merged': holes_merged[0], 'parts_with_near_coincident_holes_merged': near_merged[0],
++                               'holes_not_bolted_dropped': dropped_holes[0], 'hole_rule': 'type-10 bolted parts within the grip' if HOLE_REL else 'geometric',
++                               'relations_10': len(getattr(db1old, 'REL', {}).get(10, [])), 'relations_11': len(getattr(db1old, 'REL', {}).get(11, []))}
+     st.update(written=len(out.elems), sources=dict(src), skipped=dict(why), horizontal=len(hz), cuts_applied=applied,
+               y_vertical_frac=round(yv, 3) if yv is not None else None, horizontal_I=len(hzI),
+               y_vertical_frac_I=round(yvI, 3) if yvI is not None else None,

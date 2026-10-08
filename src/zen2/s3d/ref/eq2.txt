@@ -1,0 +1,42 @@
+######## attrs MLNG@1_MDB 0000EB02-0000-0000-B20D-0020F8585E04
+t|iface|prop|v
+-|-----|----|-
+######## 0000EB02-0000-0000-B20D-0020F8585E04
+dir|rel|n|cls|tbl|sample|rname
+---|---|-|---|---|------|-----
+IN|PartClassContainsParts|1|8|COREProxy|00000008-0000-0000-9D1C-1D1BDB583604|
+IN|SOtoSI_R|1|20014|EQUIPSmartEquipment|00004E2E-0000-0000-B30D-0020F8585E04|
+IN|SymbolDefinitionforPartClass|1|8|COREProxy|00000008-0000-0000-9D1C-1D1BDB583604|
+######## attrs MLNG@1_MDB 00004E27-0000-0000-0712-0020F8585E04
+t|iface|prop|v
+-|-----|----|-
+B|IJDeletableMember|CanBeDeleted|1
+D|IJUACylinder|A|0.021
+D|IJUACylinder|B|0.04
+######## 00004E27-0000-0000-0712-0020F8585E04
+dir|rel|n|cls|tbl|sample|rname
+---|---|-|---|---|------|-----
+IN|AssemblyHierarchy|1|20014|EQUIPSmartEquipment|00004E2E-0000-0000-B30D-0020F8585E04|
+IN|HasShapes|1|20014|EQUIPSmartEquipment|00004E2E-0000-0000-B30D-0020F8585E04|S2
+IN|NamedEntity|1|10001|CMNAPPNameRuleAE|00002711-0000-0000-0812-0020F8585E04|chi
+IN|ReferencesCollectionToSymbolRelation|1|21|CORERefColl|00000015-0000-0000-0912-0020F8585E04|
+OUT|FromFMSiteToOcc|1|16|COREFlavorMgr|00000010-0000-0000-471D-5467DC584304|
+OUT|ShapeDefinedFrom|1|8|COREProxy|00000008-0000-0000-441D-5467DC584304|
+oid|RepresentationId|dDir1X|dDir1Y|dDir1Z|dDir2X|dDir2Y|dDir2Z
+---|----------------|------|------|------|------|------|------
+00004E27-0000-0000-0712-0020F8585E04|1|NULL|NULL|NULL|NULL|NULL|NULL
+######## 00004E23-0000-0000-1D07-00422B5E2E04
+dir|rel|n|cls|tbl|sample|rname
+---|---|-|---|---|------|-----
+OUT|FromFMSiteToOcc|1|16|COREFlavorMgr|00000010-0000-0000-7800-4DA4D0582904|
+oid|dLength|dNPD|strNPDUnitType|lEndPrep|lEndStandard|lScheduleThickness|lPressureRating|dFlangeOrHubThickness|dFlangeOrHubOutsideDiameter|dPipingOutsideDiameter|dSeatingOrGrooveOrSocketDepth|dFlangeProjectionOrSocketOffset|bSymbAggregationMap|strLabel|eFlowDirection|eDistribPortStatus|gposPlacePointX|gposPlacePointY|gposPlacePointZ|gvecOrientationX|gvecOrientationY|gvecOrientationZ|gvecRadialOrientationX|gvecRadialOrientationY|gvecRadialOrientationZ|lPortIndex|lTerminationClass|lTerminationSubClass|lSchedulePractice|lPipingPointBasis|lEndPractice|lRatingPractice|dWallThicknessOrGrooveSetback|dRaisedFaceOrSocketDiameter|dFlangeOrMechanicalGrooveWidth|dLinerThicknessAtFaceOfFlange|dLinerThicknessAtInsideDiameter|dReinforcedWallThickness|lRequirement|lType|lPurpose|lMaterial|dInsulationThickness|dOperatingTemperature|dInsulationSurfaceArea|bIsInsulated|lInsulationCriteria|bSuppressGraphics|lGenericFlags
+---|-------|----|--------------|--------|------------|------------------|---------------|---------------------|---------------------------|----------------------|-----------------------------|-------------------------------|-------------------|--------|--------------|------------------|---------------|---------------|---------------|----------------|----------------|----------------|----------------------|----------------------|----------------------|----------|-----------------|--------------------|-----------------|-----------------|------------|---------------|-----------------------------|---------------------------|------------------------------|-----------------------------|-------------------------------|------------------------|------------|-----|--------|---------|--------------------|---------------------|----------------------|------------|-------------------|-----------------|-------------
+00004E23-0000-0000-1D07-00422B5E2E04|3.0225999999999996E-2|100.0|mm|21|5|1|60|3.0225999999999996E-2|0.254|0.1143|0.0|0.001524|1|NULL|3|2|0.0|0.0|0.0|1.0|0.0|0.0|-0.0|1.0|0.0|1|5|5|1|5|5|5|0.0|0.157226|0.0|0.0|0.0|0.0|-1|-1|-1|-1|NULL|NULL|NULL|0|0|0|0
+######## 00004E23-0000-0000-000A-0000675A3204
+dir|rel|n|cls|tbl|sample|rname
+---|---|-|---|---|------|-----
+IN|FromOutputColltoOutputs|1|18|COREOutputCollection|00000012-0000-0000-FF09-0000675A3204|VNoz1
+OUT|FromFMSiteToOcc|1|16|COREFlavorMgr|00000010-0000-0000-7800-4DA4D0582904|
+persistentFlag|oid|dLength|dNPD|strNPDUnitType|lEndPrep|lEndStandard|lScheduleThickness|lPressureRating|dFlangeOrHubThickness|dFlangeOrHubOutsideDiameter|dPipingOutsideDiameter|dSeatingOrGrooveOrSocketDepth|dFlangeProjectionOrSocketOffset|bSymbAggregationMap|strLabel|eFlowDirection|eDistribPortStatus|gposPlacePointX|gposPlacePointY|gposPlacePointZ|gvecOrientationX|gvecOrientationY|gvecOrientationZ|gvecRadialOrientationX|gvecRadialOrientationY|gvecRadialOrientationZ|lPortIndex|lTerminationClass|lTerminationSubClass|lSchedulePractice|lPipingPointBasis|lEndPractice|lRatingPractice|dWallThicknessOrGrooveSetback|dRaisedFaceOrSocketDiameter|dFlangeOrMechanicalGrooveWidth|dLinerThicknessAtFaceOfFlange|dLinerThicknessAtInsideDiameter|dReinforcedWallThickness|lRequirement|lType|lPurpose|lMaterial|dInsulationThickness|dOperatingTemperature|dInsulationSurfaceArea|bIsInsulated|lInsulationCriteria|bSuppressGraphics|lGenericFlags
+--------------|---|-------|----|--------------|--------|------------|------------------|---------------|---------------------|---------------------------|----------------------|-----------------------------|-------------------------------|-------------------|--------|--------------|------------------|---------------|---------------|---------------|----------------|----------------|----------------|----------------------|----------------------|----------------------|----------|-----------------|--------------------|-----------------|-----------------|------------|---------------|-----------------------------|---------------------------|------------------------------|-----------------------------|-------------------------------|------------------------|------------|-----|--------|---------|--------------------|---------------------|----------------------|------------|-------------------|-----------------|-------------
+83008|00004E23-0000-0000-000A-0000675A3204|0.0|40.0|mm|301|5|50|1|0.0|0.0|4.8000000000000001E-2|0.0|0.0|1|NULL|3|2|-9.6000000000000002E-2|0.0|0.0|-1.0|0.0|0.0|0.0|1.0|0.0|1|10|30|5|5|5|1|5.0000000000000001E-3|0.0|0.0|0.0|0.0|0.0|-1|-1|-1|-1|NULL|NULL|NULL|0|0|0|0

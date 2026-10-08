@@ -1,0 +1,12 @@
+dir|rel|n|cls|s
+---|---|-|---|-
+IN|PropertiesHasRevisions|3|110019|0001ADC3-0000-0000-4302-0004265A6304
+OUT|PropertyHasChildren|1|110015|0001ADBF-0000-0000-CB18-0B7EFA595B04
+class_id|Name
+--------|----
+110038|DwgRevisionProperties
+110051|CDocOutputMgr
+110067|CDwgPipingIsoComponent
+g
+-
+16E79AC7-C5B1-44FD-B782-2B0F653BFE66

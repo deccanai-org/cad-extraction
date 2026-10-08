@@ -1,0 +1,1 @@
+mkdir -p /work/agentwork/critic-z3 && cd /work/agentwork/critic-z3 && aws s3 cp --recursive --quiet s3://annotationprod/cad-disk-extract/_control/z3conv/agentjobs/critic-z3/ . && timeout 900 /opt/conv/env/bin/python critic_open.py 2>&1 | tail -20; cd /work/agentwork && rm -rf /work/agentwork/critic-z3

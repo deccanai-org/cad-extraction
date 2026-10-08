@@ -1,0 +1,177 @@
+--- base/convfleet.py	2026-10-01 17:17:05
++++ convfleet.py	2026-10-01 17:17:05
+@@ -101,6 +101,39 @@
+         except Exception:
+             pass
+     return tot
++
++
++def tree_pids(pid):
++    """pids of a process and all its descendants"""
++    stack = [pid]; seen = set()
++    while stack:
++        q = stack.pop()
++        if q in seen: continue
++        seen.add(q)
++        try:
++            for t in os.listdir(f'/proc/{q}/task'):
++                stack += [int(x) for x in open(f'/proc/{q}/task/{t}/children').read().split()]
++        except Exception:
++            pass
++    return seen
++
++
++PAGE = os.sysconf('SC_PAGE_SIZE') if hasattr(os, 'sysconf') else 4096
++
++
++def proc_rss_max(exclude):
++    """largest resident set of a single process on this host outside `exclude` (audit-sds2-v5x): worker generations older than
++    the registry / rss-file runtime publish neither, so their converters (up to ~50 GB each on data-3) are only visible here"""
++    m = 0
++    for d in os.listdir('/proc'):
++        if not d.isdigit() or int(d) in exclude:
++            continue
++        try:
++            with open(f'/proc/{d}/statm') as fh:
++                m = max(m, int(fh.read().split()[1]) * PAGE)
++        except Exception:
++            pass
++    return m
+ 
+ 
+ def dir_size(d):
+@@ -122,8 +155,9 @@
+ 
+ 
+ class Fleet:
+-    def __init__(self, pipe, code, process, need_bytes=None, files=(), need_disk=None, redo=None, redo_ids_key=None, big=None):
++    def __init__(self, pipe, code, process, need_bytes=None, files=(), need_disk=None, redo=None, redo_ids_key=None, big=None, label=None):
+         self.pipe = pipe; self.code = code; self.process = process
++        self.label = label or code                # converter label for alternatives{} (sds2: 'v5.3'); default the code
+         self.CTL = f'{CTLROOT}/{pipe}'; self.ST = f'{ROOT}/_state/conv/{pipe}'
+         self.need_bytes = need_bytes or (lambda job: 2 << 30)
+         self.need_disk = need_disk or (lambda job: max(1 << 30, (job.get('size') or 0) * 10))
+@@ -137,6 +171,12 @@
+         self.work = os.environ.get('CONV_WORK', f'{self.home}/work/{pipe}')
+         os.makedirs(self.work, exist_ok=True)
+         total, _ = mem(); self.total = total
++        # audit-sds2-v5x: a memory kill must be able to relieve the host. A job below kill_min RSS is never the victim unless
++        # MemAvailable is under kill_emergency (kernel OOM range). On 2026-10-01 23:13-23:52Z the 10 % 'largest on host' rule
++        # killed v5.3 jobs at 0-2 GB while 40-50 GB jobs of older worker generations (no rss file) held the memory: 344 kills,
++        # 203 of them < 1 GB, and 8 jobs finalized as out_of_memory (3 of them over finished v5.1 results).
++        self.kill_min = int(float(os.environ.get('CONV_KILL_MIN_GB', '0')) * (1 << 30)) or max(4 << 30, total // 100)
++        self.kill_emergency = int(total * float(os.environ.get('CONV_KILL_EMERGENCY_FRAC', '0.02')))
+         self.slots = int(os.environ.get('CONV_SLOTS', '0')) or max(1, (os.cpu_count() or 4) // 2)
+         self.others = {'running': 0, 'need': 0, 'disk': 0, 'big': 0}
+         # at most big[1] jobs of >= big[0] bytes at once per host (all worker processes together): their outputs are
+@@ -561,6 +601,14 @@
+                                   Body=json.dumps({'host': HOST, 'pid': PID, 'at': now(), 'code': self.code, 'refresh': True}).encode())
+                 except Exception:
+                     pass
++
++    def _spare(self, rss, host_max, avail):
++        """memory is low but this process's largest job cannot be what fills the host: no kill (the claim gate keeps new jobs
++        off the box; the owner of the large job, or the emergency threshold, acts). Logged at most once a minute."""
++        if time.time() - getattr(self, '_spare_t', 0) > 60:
++            self._spare_t = time.time()
++            log(f'WATCHDOG spared: avail={avail >> 30}GB, largest job here {rss >> 30}GB < kill_min {self.kill_min >> 30}GB '
++                f'(largest elsewhere on host {host_max >> 30}GB)')
+ 
+     def _watchdog(self):
+         n = 0
+@@ -615,6 +663,8 @@
+                             over = min(big_, key=lambda j: max(1.0, time.time() - (j.get('t0') or 0)) / max(j.get('rss') or 1, 1))
+                         if over is not None and over.get('pid') == PID:
+                             r, jid, ps = next(((c[0], c[1], c[2]) for c in cand if c[1] == over['id']), (0, None, None))
++                            if jid and r < self.kill_min and a >= self.kill_emergency:
++                                self._spare(r, 0, a); jid = None          # killing it cannot relieve the host
+                             if jid:
+                                 with self.lock:
+                                     pk = (self.running.get(jid) or {}).get('peak_rss', 0)
+@@ -635,7 +685,20 @@
+                                     host_max = max(host_max, x.get('max_rss', 0))
+                             except Exception:
+                                 pass
+-                    if big >= host_max:
++                    # audit-sds2-v5x: worker generations without rss file / registry (data-3 v4 / v5 / v5.1 processes still finishing
++                    # 40-50 GB jobs) are invisible to the files above: count their heartbeat RSS and the largest foreign process in /proc
++                    host_max = max([host_max] + [(j.get('rss') or 0) for j in H['jobs'] if j.get('legacy')])
++                    try:
++                        own = {PID}
++                        for _, _, ps in cand:
++                            for p in ps:
++                                own |= tree_pids(p.pid)
++                        host_max = max(host_max, proc_rss_max(own))
++                    except Exception:
++                        pass
++                    if big >= host_max and big < self.kill_min and a >= self.kill_emergency:
++                        self._spare(big, host_max, a)
++                    elif big >= host_max:
+                         r, jid, ps = max(cand, key=lambda x: x[0])
+                         with self.lock:
+                             pk = (self.running.get(jid) or {}).get('peak_rss', 0)
+@@ -773,14 +836,25 @@
+             with self.lock:
+                 pk_run = (self.running.get(jid) or {}).get('peak_rss', 0)
+             peak = max(self.killed.get(jid, 0), pk_run, int((res.get('peak_rss_gb') or 0) * (1 << 30)))
++            # audit-sds2-v5x: only a kill at a meaningful RSS counts toward the out_of_memory verdict, and only kills of this code
++            # (deferred records are never cleared: kills of earlier converter versions and of runs that later finished used to add
++            # up - IKEA_JOB 49fbcdf5: 1 v5.1 kill + 4 v5.3 kills at 0-7 GB -> out_of_memory). A kill that cannot be the job's own
++            # doing (peak < kill_min) neither counts nor inflates the next reservation.
++            counted = peak >= self.kill_min
++            if not counted:
++                pm = 0
+             # retry reserves 1.6 x the measured peak (never less than an earlier kill asked for, nor the normal reservation)
+             need = min(int(self.total * 0.8), max(int(peak * 1.6), pm, self.mem_need(job)))
+             self.killed.pop(jid, None)
+             kills = prev.get('kills', 0) + 1
+-            if kills >= 5:                          # killed even with most of a box reserved
+-                res.update(status='fail', reason='out_of_memory', kills=kills, min_mem_gb=need >> 30)
++            kbc = dict(prev.get('kills_by_code') or {})
++            if counted:
++                kbc[self.code] = kbc.get(self.code, 0) + 1
++            if kbc.get(self.code, 0) >= 5:          # killed even with most of a box reserved
++                res.update(status='fail', reason='out_of_memory', kills=kills, kills_by_code=kbc, min_mem_gb=need >> 30)
+             else:
+-                self.put(f'{self.ST}/deferred/{jid}.json', {'id': jid, 'host': HOST, 'at': now(), 'kills': kills, 'size': job.get('size'),
++                self.put(f'{self.ST}/deferred/{jid}.json', {'id': jid, 'host': HOST, 'at': now(), 'kills': kills, 'kills_by_code': kbc,
++                                                           'preempted': prev.get('preempted', 0) + (0 if counted else 1), 'size': job.get('size'),
+                                                            'model_bytes': job.get('model_bytes'), 'peak_rss_gb': round(peak / 2 ** 30, 2),
+                                                            'min_mem_bytes': need, 'min_mem_gb': need >> 30, 'runtime': RUNTIME})
+                 self.release(jid); return
+@@ -791,9 +865,35 @@
+                 self.put(f'{self.ST}/retry/{jid}.json', {'id': jid, 'attempts': n, 'last': res})
+                 self.release(jid); return
+             res['attempts'] = n
++        if res.get('status') not in ('ok', 'ok_stage1') and (res.get('reason') == 'out_of_memory' or res.get('transient')):
++            res = self._keep_finished(jid, res)
+         self.put(f'{self.ST}/results/{jid}.json', res)
+         self.release(jid)
+ 
++    def _keep_finished(self, jid, res):
++        """audit-sds2-v5x: a failure made by the fleet itself (out_of_memory verdict, transient error after its retries) never
++        replaces a finished result. On 2026-10-01 MELBOURNE ff442ef1, P-01 bee88c67 and l-arch 556b8979 lost their v5.1 STEP
++        (index class 2 -> 3) to v5.3 out_of_memory records written straight to results/ (the worker's best-of never ran).
++        The earlier result stays published; this attempt is recorded under alternatives[label]."""
++        try:
++            prev = self.getj(f'{self.ST}/results/{jid}.json')
++        except Exception:
++            prev = None
++        if not prev or prev.get('status') not in ('ok', 'ok_stage1'):
++            return res
++        keep = dict(prev)
++        alts = dict(keep.get('alternatives') or {})
++        alts[self.label] = {k: res.get(k) for k in ('status', 'reason', 'kills', 'kills_by_code', 'attempts', 'error', 'peak_rss_gb',
++                                                    'host', 'finished') if res.get(k) is not None}
++        alts[self.label]['code'] = self.code
++        keep['alternatives'] = alts
++        keep['chosen'] = (prev.get('converter') or {}).get('label') or prev.get('chosen')
++        keep['best_of_note'] = f"{self.label} attempt ended {res.get('status')}/{res.get('reason')}: earlier result kept"
++        keep['code'] = self.code                    # attempted by this code: reconvert rules (code_ge) do not re-target it in a loop
++        keep['kept_over_fleet_failure'] = {'at': now(), 'runtime': RUNTIME}
++        log(f"kept finished result {jid[:16]} over {res.get('status')}/{res.get('reason')} of {self.label}")
++        return keep
++
+     def _singleton(self):
+         """one live process per code version per host: a second start of the same code (e.g. the boot loop restarting
+         after the old code's process handed off) waits until the first one exits"""

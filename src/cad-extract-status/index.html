@@ -1,0 +1,3196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AWS CAD Extraction Status · Disk 1, Disk 2 &amp; Combined</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f4f7fb;
+      --bg-accent: #e7f0ff;
+      --surface: rgba(255, 255, 255, .88);
+      --surface-solid: #ffffff;
+      --surface-soft: #f7f9fc;
+      --surface-raised: #ffffff;
+      --text: #142033;
+      --text-soft: #526078;
+      --text-faint: #758198;
+      --border: #dce3ee;
+      --border-strong: #cbd5e3;
+      --brand: #2563eb;
+      --brand-2: #0f8f83;
+      --brand-soft: #e7efff;
+      --good: #087f5b;
+      --good-soft: #dff7ed;
+      --warn: #a45c00;
+      --warn-soft: #fff0cf;
+      --danger: #be3046;
+      --danger-soft: #ffe5ea;
+      --shadow: 0 16px 45px rgba(34, 51, 84, .09);
+      --shadow-soft: 0 7px 24px rgba(34, 51, 84, .07);
+      --radius: 20px;
+      --radius-sm: 12px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #08111f;
+        --bg-accent: #0d2038;
+        --surface: rgba(16, 28, 45, .9);
+        --surface-solid: #101c2d;
+        --surface-soft: #0c1727;
+        --surface-raised: #142238;
+        --text: #e8eef8;
+        --text-soft: #a9b6c9;
+        --text-faint: #8391a6;
+        --border: #263750;
+        --border-strong: #344761;
+        --brand: #78a7ff;
+        --brand-2: #52d4c5;
+        --brand-soft: #172d50;
+        --good: #54d3a3;
+        --good-soft: #123c33;
+        --warn: #ffc86b;
+        --warn-soft: #493516;
+        --danger: #ff899a;
+        --danger-soft: #4c202b;
+        --shadow: 0 18px 50px rgba(0, 0, 0, .28);
+        --shadow-soft: 0 8px 25px rgba(0, 0, 0, .2);
+      }
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      background:
+        radial-gradient(circle at 9% -8%, var(--bg-accent), transparent 31rem),
+        radial-gradient(circle at 86% 2%, color-mix(in srgb, var(--brand-2) 11%, transparent), transparent 26rem),
+        var(--bg);
+      color: var(--text);
+      font: 15px/1.55 Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input, select { font: inherit; }
+    button { color: inherit; }
+    a { color: var(--brand); }
+    .skip-link {
+      position: fixed;
+      z-index: 100;
+      left: 1rem;
+      top: -5rem;
+      padding: .65rem 1rem;
+      border-radius: .6rem;
+      background: var(--surface-solid);
+      box-shadow: var(--shadow);
+    }
+    .skip-link:focus { top: 1rem; }
+
+    .shell {
+      width: min(1540px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 54px;
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: clamp(22px, 4vw, 42px);
+      border: 1px solid var(--border);
+      border-radius: 26px;
+      background:
+        linear-gradient(135deg, color-mix(in srgb, var(--surface-solid) 94%, var(--brand) 6%), var(--surface) 62%),
+        var(--surface-solid);
+      box-shadow: var(--shadow);
+    }
+    .hero::after {
+      content: "";
+      position: absolute;
+      width: 290px;
+      height: 290px;
+      right: -100px;
+      top: -130px;
+      border: 48px solid color-mix(in srgb, var(--brand) 7%, transparent);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+    .hero-top, .section-heading, .cost-heading, .scope-heading {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+    }
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--brand);
+      font-size: .74rem;
+      font-weight: 800;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 {
+      max-width: 850px;
+      margin-bottom: 10px;
+      font-size: clamp(1.75rem, 3.5vw, 3.15rem);
+      line-height: 1.06;
+      letter-spacing: -.04em;
+    }
+    h2 {
+      margin-bottom: 4px;
+      font-size: clamp(1.25rem, 2vw, 1.65rem);
+      line-height: 1.2;
+      letter-spacing: -.025em;
+    }
+    h3 {
+      margin-bottom: 3px;
+      font-size: 1rem;
+      letter-spacing: -.01em;
+    }
+    .lede {
+      max-width: 800px;
+      margin: 0;
+      color: var(--text-soft);
+      font-size: 1rem;
+    }
+    .status-badge {
+      position: relative;
+      z-index: 1;
+      display: inline-flex;
+      flex: 0 0 auto;
+      align-items: center;
+      gap: 8px;
+      min-width: 112px;
+      justify-content: center;
+      padding: 9px 13px;
+      border: 1px solid currentColor;
+      border-radius: 999px;
+      font-size: .75rem;
+      font-weight: 850;
+      letter-spacing: .08em;
+    }
+    .status-badge::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 17%, transparent);
+    }
+    .status-badge.alive { color: var(--good); background: var(--good-soft); }
+    .status-badge.stalled { color: var(--danger); background: var(--danger-soft); }
+    .status-badge.waiting { color: var(--warn); background: var(--warn-soft); }
+
+    .freshness-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 18px;
+      margin: 22px 0 13px;
+      color: var(--text-soft);
+      font-size: .82rem;
+    }
+    .freshness-line strong { color: var(--text); font-weight: 720; }
+    .freshness-line span { display: inline-flex; align-items: center; gap: 7px; }
+    .freshness-line span::before {
+      content: "";
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--border-strong);
+    }
+    .progress-track {
+      position: relative;
+      height: 11px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--surface-soft);
+    }
+    .progress-track > span {
+      display: block;
+      height: 100%;
+      width: 0;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--brand), var(--brand-2));
+      box-shadow: 0 0 20px color-mix(in srgb, var(--brand) 35%, transparent);
+      transition: width .45s ease;
+    }
+    .progress-caption {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 7px;
+      color: var(--text-soft);
+      font-size: .78rem;
+    }
+    .progress-caption strong { color: var(--text); }
+
+    .hero-stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 11px;
+      margin-top: 21px;
+    }
+    .hero-stat {
+      min-height: 82px;
+      padding: 14px 15px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: color-mix(in srgb, var(--surface-solid) 83%, transparent);
+    }
+    .hero-stat span {
+      display: block;
+      color: var(--text-faint);
+      font-size: .71rem;
+      font-weight: 760;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .hero-stat strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 1.25rem;
+      line-height: 1.2;
+      font-variant-numeric: tabular-nums;
+    }
+    .hero-stat small { color: var(--text-soft); }
+    .infra-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 15px;
+    }
+    .chip, .metric-source {
+      display: inline-flex;
+      align-items: center;
+      padding: 5px 9px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--surface-soft);
+      color: var(--text-soft);
+      font-size: .73rem;
+      font-weight: 650;
+    }
+
+    .page-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 345px;
+      align-items: start;
+      gap: 20px;
+      margin-top: 20px;
+    }
+    .main-column { min-width: 0; }
+    .panel {
+      margin-bottom: 18px;
+      padding: clamp(18px, 3vw, 27px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow-soft);
+      backdrop-filter: blur(14px);
+    }
+    .section-heading { margin-bottom: 17px; }
+    .section-heading p, .scope-heading p {
+      margin: 4px 0 0;
+      color: var(--text-soft);
+      font-size: .86rem;
+    }
+    .section-kicker {
+      flex: 0 0 auto;
+      color: var(--text-faint);
+      font-size: .72rem;
+      font-weight: 750;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+    }
+
+    .worker-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .worker-card {
+      min-width: 0;
+      padding: 15px;
+      border: 1px solid var(--border);
+      border-radius: 15px;
+      background: var(--surface-soft);
+    }
+    .worker-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .worker-id {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 780;
+    }
+    .worker-id::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--good);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--good) 14%, transparent);
+    }
+    .worker-card.idle .worker-id::before { background: var(--text-faint); box-shadow: none; }
+    .stage {
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: var(--brand-soft);
+      color: var(--brand);
+      font-size: .69rem;
+      font-weight: 800;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .archive-name {
+      min-height: 2.7em;
+      margin-bottom: 11px;
+      overflow-wrap: anywhere;
+      font-family: var(--mono);
+      font-size: .8rem;
+      font-weight: 650;
+    }
+    .worker-details {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px 12px;
+      margin: 0;
+    }
+    .worker-details div { min-width: 0; }
+    .worker-details dt {
+      color: var(--text-faint);
+      font-size: .66rem;
+      font-weight: 730;
+      letter-spacing: .045em;
+      text-transform: uppercase;
+    }
+    .worker-details dd {
+      margin: 1px 0 0;
+      overflow-wrap: anywhere;
+      font-size: .79rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .tabs {
+      position: sticky;
+      z-index: 5;
+      top: 8px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin: -7px -7px 18px;
+      padding: 7px;
+      border: 1px solid var(--border);
+      border-radius: 15px;
+      background: color-mix(in srgb, var(--surface-solid) 90%, transparent);
+      box-shadow: var(--shadow-soft);
+      backdrop-filter: blur(16px);
+    }
+    .tab {
+      min-height: 46px;
+      padding: 9px 12px;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      background: transparent;
+      cursor: pointer;
+      font-weight: 760;
+      transition: background .16s ease, border-color .16s ease, transform .16s ease;
+    }
+    .tab:hover { background: var(--surface-soft); }
+    .tab:focus-visible { outline: 3px solid color-mix(in srgb, var(--brand) 32%, transparent); outline-offset: 2px; }
+    .tab[aria-selected="true"] {
+      border-color: color-mix(in srgb, var(--brand) 35%, var(--border));
+      background: var(--brand-soft);
+      color: var(--brand);
+      box-shadow: 0 3px 12px color-mix(in srgb, var(--brand) 10%, transparent);
+    }
+    .tab-panel[hidden] { display: none; }
+    .scope-heading {
+      align-items: center;
+      margin-bottom: 15px;
+      padding: 2px 2px 0;
+    }
+    .scope-mark {
+      display: grid;
+      width: 45px;
+      height: 45px;
+      flex: 0 0 auto;
+      place-items: center;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--brand), var(--brand-2));
+      color: #fff;
+      font-weight: 850;
+      letter-spacing: -.04em;
+    }
+    .scope-title-wrap { display: flex; align-items: center; gap: 12px; }
+    .scope-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 9px;
+      margin-bottom: 16px;
+    }
+    .scope-stat {
+      padding: 12px 13px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface-soft);
+    }
+    .scope-stat span {
+      display: block;
+      color: var(--text-faint);
+      font-size: .68rem;
+      font-weight: 740;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+    }
+    .scope-stat strong {
+      display: block;
+      margin-top: 2px;
+      font-size: 1.04rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .availability-note, .callout, .empty-state {
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface-soft);
+      color: var(--text-soft);
+      font-size: .82rem;
+    }
+    .availability-note {
+      margin-bottom: 15px;
+      border-color: color-mix(in srgb, var(--warn) 35%, var(--border));
+      background: var(--warn-soft);
+      color: var(--warn);
+    }
+
+    .data-section {
+      padding: 19px 0 4px;
+      border-top: 1px solid var(--border);
+    }
+    .data-section:first-of-type { border-top: 0; }
+    .data-heading {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 15px;
+      margin-bottom: 9px;
+    }
+    .data-heading p {
+      margin: 0;
+      color: var(--text-faint);
+      font-size: .76rem;
+    }
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      background: var(--surface-solid);
+      scrollbar-width: thin;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .79rem;
+      font-variant-numeric: tabular-nums;
+    }
+    th, td {
+      padding: 9px 11px;
+      border-bottom: 1px solid var(--border);
+      text-align: right;
+      white-space: nowrap;
+    }
+    th:first-child, td:first-child { text-align: left; }
+    tr:last-child td { border-bottom: 0; }
+    thead th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: var(--surface-soft);
+      color: var(--text-soft);
+      font-size: .67rem;
+      font-weight: 780;
+      letter-spacing: .045em;
+      text-transform: uppercase;
+    }
+    tbody tr:hover { background: color-mix(in srgb, var(--brand) 3.5%, transparent); }
+    .group-row td {
+      background: color-mix(in srgb, var(--brand) 4%, var(--surface-solid));
+      font-weight: 770;
+    }
+    .sub-row td:first-child { padding-left: 28px; color: var(--text-soft); }
+    .missing { color: var(--text-faint); font-style: italic; font-weight: 450; }
+    .sha-partial .cov-hint { color: var(--text-faint); font-weight: 450; font-style: normal; white-space: normal; }
+    .raw-value { display: inline-block; }
+    .raw-provenance {
+      display: block;
+      max-width: 230px;
+      margin-top: 2px;
+      margin-left: auto;
+      color: var(--text-faint);
+      font-size: .62rem;
+      font-style: normal;
+      font-weight: 450;
+      line-height: 1.25;
+      white-space: normal;
+    }
+    .number-strong { color: var(--text); font-weight: 750; }
+    .mono { font-family: var(--mono); }
+
+    .binary-grid, .throughput-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .binary-card, .throughput-card {
+      padding: 13px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface-soft);
+    }
+    .binary-top, .throughput-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 7px;
+    }
+    .binary-top strong, .throughput-card strong { font-variant-numeric: tabular-nums; }
+    .binary-top span, .throughput-card span {
+      color: var(--text-faint);
+      font-size: .72rem;
+    }
+    .meter {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: var(--border);
+    }
+    .meter > span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--brand), var(--brand-2));
+    }
+    .binary-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 6px;
+      color: var(--text-soft);
+      font-size: .69rem;
+    }
+
+    .depth-summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .depth-summary div {
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface-soft);
+    }
+    .depth-summary span {
+      display: block;
+      color: var(--text-faint);
+      font-size: .65rem;
+      font-weight: 730;
+      text-transform: uppercase;
+    }
+    .depth-summary strong { display: block; margin-top: 2px; font-size: .9rem; }
+    .mini-bar-track {
+      width: 110px;
+      height: 6px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: var(--border);
+    }
+    .mini-bar-track span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--brand);
+    }
+    .caption {
+      margin: 9px 1px 0;
+      color: var(--text-faint);
+      font-size: .73rem;
+    }
+
+    .throughput-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .scheduler-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .throughput-card { min-width: 0; }
+    .throughput-card strong {
+      display: block;
+      margin: 3px 0 5px;
+      overflow-wrap: anywhere;
+      font-size: 1.1rem;
+    }
+    .metric-source { padding: 3px 7px; font-size: .62rem; }
+    .callout { margin-top: 11px; }
+
+    .recent-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .recent-card {
+      min-width: 0;
+      padding: 13px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface-soft);
+    }
+    .recent-card.error { border-color: color-mix(in srgb, var(--danger) 35%, var(--border)); }
+    .recent-card .archive-name { min-height: auto; margin: 6px 0; }
+    .recent-meta { color: var(--text-faint); font-size: .71rem; }
+    .error-summary {
+      margin: 7px 0 0;
+      color: var(--danger);
+      font-size: .76rem;
+      overflow-wrap: anywhere;
+    }
+
+    .cost-card {
+      position: sticky;
+      top: 12px;
+      overflow: hidden;
+      border: 1px solid color-mix(in srgb, var(--brand) 24%, var(--border));
+      border-radius: var(--radius);
+      background:
+        linear-gradient(155deg, color-mix(in srgb, var(--surface-raised) 93%, var(--brand) 7%), var(--surface-solid));
+      box-shadow: var(--shadow);
+    }
+    .cost-inner { padding: 21px; }
+    .cost-total {
+      padding: 16px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #1d4ed8, #0f8f83);
+      color: #fff;
+    }
+    .cost-total span {
+      display: block;
+      font-size: .69rem;
+      font-weight: 760;
+      letter-spacing: .07em;
+      opacity: .82;
+      text-transform: uppercase;
+    }
+    .cost-total strong {
+      display: block;
+      margin-top: 3px;
+      font-size: 1.75rem;
+      line-height: 1.15;
+      font-variant-numeric: tabular-nums;
+    }
+    .cost-group {
+      padding: 15px 0 2px;
+      border-bottom: 1px solid var(--border);
+    }
+    .cost-group:last-of-type { border-bottom: 0; }
+    .cost-group h3 {
+      margin-bottom: 8px;
+      color: var(--brand);
+      font-size: .77rem;
+      letter-spacing: .055em;
+      text-transform: uppercase;
+    }
+    .kv {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 6px 0;
+      color: var(--text-soft);
+      font-size: .76rem;
+    }
+    .kv strong {
+      max-width: 62%;
+      color: var(--text);
+      text-align: right;
+      overflow-wrap: anywhere;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* several label/value pairs in one block: two aligned columns instead of one squeezed row */
+    .kv.kv-grid {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 6px 12px;
+    }
+    .kv.kv-grid strong { max-width: none; }
+
+    .vm-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+    .vm-card {
+      padding: 14px 15px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface-soft);
+    }
+    .vm-card h3 {
+      margin: 0 0 6px;
+      font-size: .95rem;
+      font-family: var(--mono);
+    }
+    .vm-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 12px;
+      margin: 0 0 10px;
+      color: var(--text-soft);
+      font-size: .74rem;
+    }
+    .vm-workers {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .vm-worker-row {
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface-raised);
+      font-size: .78rem;
+    }
+    .vm-worker-row strong { font-family: var(--mono); }
+
+    .estimate-note {
+      margin: 14px 0 0;
+      padding: 10px 11px;
+      border-radius: 10px;
+      background: var(--warn-soft);
+      color: var(--warn);
+      font-size: .7rem;
+    }
+
+    .poll-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 15px;
+      color: var(--text-faint);
+      font-size: .72rem;
+    }
+    .poll-state { display: inline-flex; align-items: center; gap: 6px; }
+    .poll-state::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--good);
+    }
+    .poll-state.retrying::before, .poll-state.fallback::before { background: var(--warn); }
+    footer {
+      padding: 7px 2px 0;
+      color: var(--text-faint);
+      font-size: .73rem;
+      text-align: center;
+    }
+    .loading {
+      display: grid;
+      min-height: 420px;
+      place-items: center;
+      color: var(--text-soft);
+    }
+    .loading-box {
+      padding: 22px 26px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow-soft);
+      text-align: center;
+    }
+    .spinner {
+      width: 28px;
+      height: 28px;
+      margin: 0 auto 10px;
+      border: 3px solid var(--border);
+      border-top-color: var(--brand);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 1160px) {
+      .page-grid { grid-template-columns: minmax(0, 1fr) 310px; }
+      .throughput-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .scheduler-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .hero-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 900px) {
+      .page-grid { display: flex; flex-direction: column; }
+      .main-column { width: 100%; order: 2; }
+      .cost-card { position: static; width: 100%; order: 1; }
+      .cost-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
+      .cost-heading, .cost-total, .estimate-note { grid-column: 1 / -1; }
+      .worker-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 650px) {
+      .shell { width: min(100% - 20px, 1540px); padding-top: 10px; }
+      .hero, .panel { border-radius: 17px; }
+      .hero-top { display: block; }
+      .status-badge { margin-top: 17px; }
+      .hero-stats, .scope-grid, .binary-grid, .depth-summary, .throughput-grid, .scheduler-grid, .recent-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+      .cost-inner { display: block; }
+      .tabs { top: 4px; margin-left: -4px; margin-right: -4px; }
+      .tab { padding: 8px 5px; font-size: .8rem; }
+      .scope-heading { align-items: flex-start; }
+      .section-heading, .data-heading { display: block; }
+      .section-kicker, .data-heading p { margin-top: 4px; }
+      .mini-bar-track { width: 70px; }
+    }
+    @media (max-width: 420px) {
+      .hero-stats, .scope-grid, .binary-grid, .depth-summary, .throughput-grid, .scheduler-grid, .recent-grid {
+        grid-template-columns: 1fr;
+      }
+      .worker-details { grid-template-columns: 1fr; }
+      .progress-caption { display: block; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to extraction metrics</a>
+  <div id="app" aria-live="polite">
+    <div class="loading">
+      <div class="loading-box">
+        <div class="spinner" aria-hidden="true"></div>
+        <strong>Loading AWS extraction status</strong>
+        <div>Reading the latest cloud snapshot…</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    "use strict";
+
+    // Only status.json is anonymously readable on the public bucket (status-full is private).
+    // GitHub mirrors sticky weak/SHA/extension identity for when thin aggregators race-overwrite S3.
+    const LIVE_STATUS_URL = "https://cad-extract-status-874846752452.s3.ap-south-1.amazonaws.com/status.json";
+    const FALLBACK_GITHUB_STATUS_URL = "https://raw.githubusercontent.com/dhigdec/cad-extract-status/main/status.json";
+    const FALLBACK_GCS_STATUS_URL = "https://storage.googleapis.com/cad-extract-public-status-mlproject-501205/status.json";
+    const FALLBACK_STATUS_URL = FALLBACK_GITHUB_STATUS_URL;
+    const POLL_MS = 20000;
+    const STALL_AFTER_SECONDS = 120;
+    const SCOPE_DEFS = [
+      { id: "disk1", label: "Disk 1", short: "D1", diskKey: "Disk-1", aliases: ["Disk-1", "Disk 1", "disk1", "disk_1", "d1"] },
+      { id: "disk2", label: "Disk 2", short: "D2", diskKey: "Disk-2", aliases: ["Disk-2", "Disk 2", "disk2", "disk_2", "d2"] },
+      { id: "combined", label: "Combined", short: "Σ", diskKey: "combined", aliases: ["combined", "all", "overall", "total", "totals"] }
+    ];
+    const CATEGORY_ALIASES = {
+      pdf: ["pdf", "pdfs", "all_pdf", "all_pdfs"],
+      cad_pdf: ["cad_pdf", "cad_pdfs", "cadpdf", "drawing_pdf", "drawing_pdfs"],
+      other_pdf: ["other_pdf", "other_pdfs", "non_cad_pdf", "noncad_pdf", "non_cad_pdfs"],
+      "2d": ["2d", "cad_2d", "two_d", "drawings_2d"],
+      "3d": ["3d", "cad_3d", "three_d", "models_3d"],
+      nc1: ["nc1", ".nc1", "nc_1"]
+    };
+    const VARIANT_ALIASES = {
+      raw: ["raw", "total", "observations", "files", "count"],
+      weak: ["weak", "weak_distinct", "weak_unique", "name_size_distinct", "distinct_name_size"],
+      sha256: ["sha256", "sha", "sha_distinct", "sha256_distinct", "distinct_sha"]
+    };
+    const PDF_CLASSES = [
+      ["shop", "Shop"],
+      ["detail", "Detail"],
+      ["gather", "Gather"],
+      ["erection", "Erection"],
+      ["construction", "Construction"],
+      ["abm", "ABM"],
+      ["approval", "Approval"],
+      ["inputs", "Inputs"],
+      ["other", "Other"]
+    ];
+    const EXTENSIONS_2D = [".dxf", ".dwg", ".dg", ".dpm"];
+    const EXTENSIONS_3D = [".stp", ".step", ".ifc", ".db1", ".sat", ".obj", ".stl", ".gltf", ".glb"];
+
+    let latestStatus = null;
+    let selectedScope = "combined";
+    let lastPayload = "";
+    let lastFetchAt = null;
+    let pollError = null;
+    let statusSource = null;
+
+    const app = document.getElementById("app");
+    const isObject = value => value !== null && typeof value === "object" && !Array.isArray(value);
+    const present = value => value !== null && value !== undefined && value !== "";
+    const number = value => {
+      if (!present(value)) return null;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, char => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    })[char]);
+    const normalize = value => String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+    function aliasValue(object, aliases) {
+      if (!isObject(object)) return undefined;
+      for (const key of aliases) {
+        if (Object.prototype.hasOwnProperty.call(object, key) && present(object[key])) return object[key];
+      }
+      const normalized = new Map(Object.keys(object).map(key => [normalize(key), key]));
+      for (const key of aliases) {
+        const actual = normalized.get(normalize(key));
+        if (actual !== undefined && present(object[actual])) return object[actual];
+      }
+      return undefined;
+    }
+
+    function valueAt(object, path) {
+      const parts = Array.isArray(path) ? path : String(path).split(".");
+      let value = object;
+      for (const part of parts) {
+        if (!isObject(value) || !Object.prototype.hasOwnProperty.call(value, part)) return undefined;
+        value = value[part];
+      }
+      return value;
+    }
+
+    function pickPath(object, paths) {
+      for (const path of paths) {
+        const value = valueAt(object, path);
+        if (present(value)) return value;
+      }
+      return undefined;
+    }
+
+    function uniqueObjects(values) {
+      return [...new Set(values.filter(isObject))];
+    }
+
+    function scopeDef(scopeId) {
+      return SCOPE_DEFS.find(scope => scope.id === scopeId) || SCOPE_DEFS[2];
+    }
+
+    function scopedValue(container, scopeId) {
+      const definition = scopeDef(scopeId);
+      if (Array.isArray(container)) {
+        return container.find(row => {
+          const label = isObject(row) ? aliasValue(row, ["disk", "scope", "name", "id"]) : null;
+          return definition.aliases.some(candidate => normalize(candidate) === normalize(label));
+        });
+      }
+      if (!isObject(container)) return undefined;
+      return aliasValue(container, definition.aliases);
+    }
+
+    function flatCountsToNodes(flat) {
+      if (!isObject(flat)) return null;
+      const counts = {};
+      for (const [key, value] of Object.entries(flat)) {
+        if (key === "note" || key === "label") continue;
+        if (number(value) !== null) counts[key] = { raw: number(value) };
+        else if (isObject(value) && (present(value.raw) || present(value.sha256) || present(value.weak))) {
+          counts[key] = value;
+        }
+      }
+      if (!Object.keys(counts).length) return null;
+      if (counts.cad_pdf || counts.other_pdf) {
+        counts.pdf_cad_binary = {
+          cad_pdf: counts.cad_pdf || { raw: null },
+          other_pdf: counts.other_pdf || { raw: null }
+        };
+      }
+      return counts;
+    }
+
+    function sumFlatCounts(parts) {
+      const out = {};
+      for (const part of parts) {
+        if (!isObject(part)) continue;
+        for (const [key, value] of Object.entries(part)) {
+          if (key === "note" || key === "label") continue;
+          const n = number(value);
+          if (n === null) continue;
+          out[key] = (out[key] || 0) + n;
+        }
+      }
+      return out;
+    }
+
+    // Project AWS fleet payloads (ec2_counts_delta / archives) into disks.* so existing
+    // Disk 1 / Disk 2 / Combined count tables bind without ambiguous placeholders.
+    function statusHasAssetExtensions(status) {
+      const counts = (((status || {}).disks || {}).combined || {}).counts
+        || (((status || {}).counts || {}).combined)
+        || (status || {}).cloud_counts
+        || {};
+      const byExt = (((counts["2d"] || {}).by_ext) || {});
+      return isObject(byExt) && Object.keys(byExt).length > 0;
+    }
+
+    // Premature / 1956-only floors — never overlay these onto live S3 identity.
+    // Do NOT include proven sealed-union CAD/non-CAD cells (e.g. 26492/20301) here.
+    const FORBIDDEN_SHA_FLOORS = new Set([5242914, 125514, 46274, 216, 112347, 13167, 15067, 31207, 774, 542, 8258, 9470, 87164, 20622, 16, 133112]);
+    const FORBIDDEN_WEAK_FLOORS = new Set([133112, 46703, 21592, 18417, 771, 18249, 7674, 9317, 89053, 27068]);
+
+    function identityStatusOf(node) {
+      return String((node && (node.sha256_status || node.weak_status)) || "");
+    }
+
+    function isComputingIdentity(node) {
+      // Only the explicit in-progress marker blanks SHA/weak. A completed
+      // global_distinct_* status with a numeric sha256 must render the number.
+      const st = identityStatusOf(node);
+      return st.includes("computing_full_population_union");
+    }
+
+    function countsNodeIsRich(node) {
+      if (!isObject(node)) return false;
+      // Intentional null SHA/weak while full-population union runs is valid identity.
+      if (isComputingIdentity(node)) return true;
+      if (present(node.weak) || present(node.sha256)) return true;
+      if (isObject(node.by_ext)) {
+        for (const child of Object.values(node.by_ext)) {
+          if (isObject(child) && (isComputingIdentity(child) || present(child.weak) || present(child.sha256))) return true;
+        }
+      }
+      return false;
+    }
+
+    function statusHasIdentityMetrics(status) {
+      const counts = (((status || {}).disks || {}).combined || {}).counts
+        || (((status || {}).counts || {}).combined)
+        || (status || {}).cloud_counts
+        || {};
+      return countsNodeIsRich(counts["2d"]) || countsNodeIsRich(counts.pdf);
+    }
+
+    function overlayIdentityNode(liveNode, stickyNode) {
+      if (!isObject(stickyNode)) return liveNode;
+      if (!isObject(liveNode)) return stickyNode;
+      const out = { ...liveNode };
+      // Never clobber a live computing_full_population_union cell with GitHub 1956 floors.
+      if (isComputingIdentity(out)) {
+        out.sha256 = null;
+        out.weak = null;
+        out.sha256_status = out.sha256_status || "computing_full_population_union";
+        out.weak_status = out.weak_status || "computing_full_population_union";
+      } else {
+        for (const key of ["weak", "sha256", "weak_status", "sha256_status", "label"]) {
+          if (!present(out[key]) && present(stickyNode[key])) {
+            if (key === "sha256" && FORBIDDEN_SHA_FLOORS.has(Number(stickyNode[key]))) continue;
+            if (key === "weak" && FORBIDDEN_WEAK_FLOORS.has(Number(stickyNode[key]))) continue;
+            if (key === "sha256_status" && String(stickyNode[key] || "").includes("exact_reconciliation_1956")) continue;
+            if (key === "weak_status" && String(stickyNode[key] || "").includes("exact_reconciliation_1956")) continue;
+            out[key] = stickyNode[key];
+          }
+        }
+      }
+      // Exact 0 must render as 0 only when not in computing mode.
+      if (!isComputingIdentity(out)) {
+        if (!present(out.weak) && stickyNode.weak === 0) out.weak = 0;
+        if (!present(out.sha256) && stickyNode.sha256 === 0) out.sha256 = 0;
+      }
+      if (isObject(stickyNode.by_ext)) {
+        const liveExt = isObject(out.by_ext) ? out.by_ext : {};
+        const merged = { ...liveExt };
+        for (const [ext, stickyExt] of Object.entries(stickyNode.by_ext)) {
+          merged[ext] = overlayIdentityNode(liveExt[ext], stickyExt);
+        }
+        out.by_ext = merged;
+      }
+      return out;
+    }
+
+    function overlayIdentityCounts(liveCounts, stickyCounts) {
+      if (!isObject(stickyCounts)) return liveCounts;
+      if (!isObject(liveCounts)) return stickyCounts;
+      const out = { ...liveCounts };
+      for (const [key, stickyNode] of Object.entries(stickyCounts)) {
+        if (key === "pdf_by_drawing_type" || key === "pdf_cad_binary" || key === "block") {
+          if (!isObject(out[key])) out[key] = stickyNode;
+          continue;
+        }
+        out[key] = overlayIdentityNode(out[key], stickyNode);
+      }
+      return out;
+    }
+
+    function mergeIdentityCounts(live, sticky) {
+      if (!isObject(live) || !isObject(sticky)) return live;
+      const next = live;
+      if (isObject(sticky.disks)) {
+        if (!isObject(next.disks)) next.disks = {};
+        for (const disk of Object.keys(sticky.disks)) {
+          const src = sticky.disks[disk];
+          if (!isObject(src) || !isObject(src.counts)) continue;
+          if (!isObject(next.disks[disk])) next.disks[disk] = {};
+          next.disks[disk].counts = overlayIdentityCounts(next.disks[disk].counts, src.counts);
+        }
+      }
+      if (isObject(sticky.counts)) {
+        if (!isObject(next.counts)) next.counts = {};
+        for (const disk of Object.keys(sticky.counts)) {
+          next.counts[disk] = overlayIdentityCounts(next.counts[disk], sticky.counts[disk]);
+        }
+      }
+      if (isObject(sticky.cloud_counts)) {
+        next.cloud_counts = overlayIdentityCounts(next.cloud_counts, sticky.cloud_counts);
+      }
+      if (isObject(sticky.dedup)) next.dedup = sticky.dedup;
+      if (isObject(sticky.pending_reasons)) next.pending_reasons = sticky.pending_reasons;
+      return next;
+    }
+
+    function normalizeStatus(status) {
+      if (!isObject(status)) return status;
+      const next = status;
+      if (!isObject(next.disks)) next.disks = {};
+
+      const delta = next.ec2_counts_delta;
+      if (isObject(delta)) {
+        for (const diskName of ["Disk-1", "Disk-2"]) {
+          const flat = delta[diskName];
+          const nodes = flatCountsToNodes(flat);
+          if (!nodes) continue;
+          if (!isObject(next.disks[diskName])) next.disks[diskName] = {};
+          // Prefer richer disks.*.counts if already present; otherwise use delta.
+          // Thin writers may leave counts with raw-only / sha256:null — treat as missing.
+          const existing = next.disks[diskName].counts;
+          if (!isObject(existing) || !countsNodeIsRich(existing["2d"] || existing.pdf)) {
+            next.disks[diskName].counts = nodes;
+          }
+        }
+        if (!isObject(next.disks.combined)) next.disks.combined = {};
+        if (!isObject(next.disks.combined.counts) || !countsNodeIsRich((next.disks.combined.counts || {})["2d"])) {
+          const combinedFlat = isObject(delta.combined)
+            ? delta.combined
+            : sumFlatCounts([delta["Disk-1"], delta["Disk-2"]]);
+          const nodes = flatCountsToNodes(combinedFlat);
+          if (nodes && !countsNodeIsRich((next.disks.combined.counts || {})["2d"])) {
+            next.disks.combined.counts = nodes;
+          }
+        }
+        if (!isObject(next.counts)) {
+          const combinedFlat = isObject(delta.combined)
+            ? delta.combined
+            : sumFlatCounts([delta["Disk-1"], delta["Disk-2"]]);
+          next.counts = flatCountsToNodes(combinedFlat) || next.counts;
+        }
+      }
+
+      if (isObject(next.archives)) {
+        for (const diskName of ["Disk-1", "Disk-2", "combined"]) {
+          const arch = next.archives[diskName];
+          if (!isObject(arch)) continue;
+          if (!isObject(next.disks[diskName])) next.disks[diskName] = {};
+          if (!isObject(next.disks[diskName].archives)) next.disks[diskName].archives = arch;
+        }
+      }
+
+      // Promote fleet.workers_alive for older header helpers.
+      if (!present(next.workers_alive) && isObject(next.fleet) && present(next.fleet.workers_alive)) {
+        next.workers_alive = next.fleet.workers_alive;
+        next.cloud_workers_alive = next.fleet.workers_alive;
+      }
+      if (!present(next.workers_configured) && isObject(next.fleet) && present(next.fleet.workers_configured)) {
+        next.workers_configured = next.fleet.workers_configured;
+      }
+      return next;
+    }
+
+    function collectScopeRoots(status, scopeId) {
+      const roots = [];
+      const containers = [
+        status.disks, status.by_disk, status.byDisk, status.per_disk, status.perDisk,
+        status.disk_stats, status.diskStats, status.scopes, status.datasets,
+        status.ec2_counts_delta
+      ];
+      for (const container of containers) {
+        const scoped = scopedValue(container, scopeId);
+        if (isObject(scoped)) roots.push(scoped);
+      }
+      const direct = scopedValue(status, scopeId);
+      if (isObject(direct)) roots.push(direct);
+      if (scopeId === "combined") {
+        for (const key of ["combined", "overall", "summary"]) {
+          if (isObject(status[key])) roots.push(status[key]);
+        }
+        roots.push(status);
+      }
+      return uniqueObjects(roots);
+    }
+
+    function addObject(target, value) {
+      if (isObject(value)) target.push(value);
+    }
+
+    function addScopedObject(target, container, scopeId) {
+      const scoped = scopedValue(container, scopeId);
+      if (isObject(scoped)) target.push(scoped);
+    }
+
+    function addArray(target, value) {
+      if (Array.isArray(value)) target.push(value);
+    }
+
+    function addScopedArray(target, container, scopeId) {
+      const scoped = scopedValue(container, scopeId);
+      if (Array.isArray(scoped)) target.push(scoped);
+    }
+
+    function diskKeyForScope(scopeId) {
+      const definition = scopeDef(scopeId);
+      return definition.diskKey || (scopeId === "disk1" ? "Disk-1" : scopeId === "disk2" ? "Disk-2" : "combined");
+    }
+
+    function explicitDiskNode(status, scopeId) {
+      const key = diskKeyForScope(scopeId);
+      const disks = isObject(status.disks) ? status.disks : {};
+      if (isObject(disks[key])) return disks[key];
+      return undefined;
+    }
+
+    function buildBundle(status, scopeId) {
+      const roots = collectScopeRoots(status, scopeId);
+      const archiveRoots = [];
+      const countRoots = [];
+      const depthRoots = [];
+      const storageRoots = [];
+      const backlogArrays = [];
+
+      // Prefer explicit disks.<Disk-N|combined>.{archives,counts} so every tab
+      // binds the same schema the AWS publisher writes.
+      const explicit = explicitDiskNode(status, scopeId);
+      if (isObject(explicit)) {
+        addObject(archiveRoots, explicit.archives);
+        addObject(countRoots, explicit.counts);
+        addObject(roots, explicit);
+      }
+      const scopedCounts = isObject(status.counts) ? scopedValue(status.counts, scopeId) : undefined;
+      addObject(countRoots, scopedCounts);
+      if (scopeId === "combined") {
+        addObject(countRoots, status.cloud_counts);
+      }
+
+      for (const root of roots) {
+        archiveRoots.push(root);
+        countRoots.push(root);
+        storageRoots.push(root);
+        for (const key of ["archives", "archive", "archive_counts", "archiveCounts", "progress"]) {
+          addObject(archiveRoots, root[key]);
+        }
+        for (const key of ["counts", "assets", "file_counts", "fileCounts", "totals"]) {
+          addObject(countRoots, root[key]);
+        }
+        for (const key of ["nested_depth", "nestedDepth", "depth", "depths"]) {
+          addObject(depthRoots, root[key]);
+        }
+        for (const key of ["storage", "transfer", "bytes", "gcs"]) {
+          addObject(storageRoots, root[key]);
+        }
+        for (const key of ["remaining_by_size", "remainingBySize", "backlog_by_size", "backlogBySize"]) {
+          addArray(backlogArrays, root[key]);
+        }
+      }
+
+      for (const container of [status.archives, status.archive, status.archive_counts, status.progress]) {
+        addScopedObject(archiveRoots, container, scopeId);
+      }
+      for (const container of [status.counts, status.cloud_counts, status.file_counts, status.assets, status.ec2_counts_delta]) {
+        addScopedObject(countRoots, container, scopeId);
+      }
+      for (const container of [status.nested_depth, status.cloud_depth, status.depth, status.depths]) {
+        addScopedObject(depthRoots, container, scopeId);
+      }
+      for (const container of [status.storage, status.transfers, status.gcs, status.aws_source]) {
+        addScopedObject(storageRoots, container, scopeId);
+      }
+      for (const container of [status.remaining_by_size, status.backlog_by_size, status.backlog]) {
+        addScopedArray(backlogArrays, container, scopeId);
+      }
+
+      if (scopeId === "combined") {
+        addObject(archiveRoots, status.archives_combined);
+        addObject(archiveRoots, status.progress);
+        addObject(countRoots, status.cloud_counts);
+        addObject(countRoots, status.counts);
+        // Only project flat EC2 deltas when richer disks/cloud counts are absent.
+        const hasRichCombined = countRootRichness(status.cloud_counts) > 0
+          || countRootRichness((status.disks && status.disks.combined && status.disks.combined.counts) || null) > 0
+          || countRootRichness((status.counts && status.counts.combined) || null) > 0;
+        if (!hasRichCombined && isObject(status.ec2_counts_delta)) {
+          const combinedFlat = isObject(status.ec2_counts_delta.combined)
+            ? status.ec2_counts_delta.combined
+            : sumFlatCounts([status.ec2_counts_delta["Disk-1"], status.ec2_counts_delta["Disk-2"]]);
+          const nodes = flatCountsToNodes(combinedFlat);
+          if (nodes) addObject(countRoots, nodes);
+        }
+        addObject(depthRoots, status.cloud_depth);
+        addObject(depthRoots, status.nested_depth);
+        addObject(storageRoots, status.gcs);
+        addObject(storageRoots, status.aws_source);
+        addArray(backlogArrays, status.remaining_by_size);
+      }
+
+      return {
+        id: scopeId,
+        roots,
+        globalDedupCoverage: isObject(status.dedup_coverage) ? status.dedup_coverage : null,
+        archiveRoots: uniqueObjects(archiveRoots),
+        countRoots: uniqueObjects(countRoots),
+        depthRoots: uniqueObjects(depthRoots),
+        storageRoots: uniqueObjects(storageRoots),
+        backlogArrays
+      };
+    }
+
+    function metricFromRoots(roots, aliases) {
+      for (const root of roots) {
+        const value = aliasValue(root, aliases);
+        if (present(value) && !isObject(value) && !Array.isArray(value)) return value;
+      }
+      return undefined;
+    }
+
+    function archiveMetric(bundle, metric) {
+      const aliases = {
+        total: ["total", "archives_total", "archive_total", "manifest_total", "total_archives"],
+        done: ["done", "completed_ok", "archives_done", "archive_done", "finished", "successful"],
+        remaining: ["remaining", "archives_remaining", "archive_remaining", "left"],
+        failed: ["failed", "failures", "error", "errors", "failed_active_checkpoints"],
+        retried: ["retried", "retries", "retry_count", "archives_retried"],
+        skipped: ["skipped", "skipped_too_large", "skip_count", "archives_skipped"],
+        doneOnGcp: ["done_on_gcp", "completed_on_gcp", "gcp_done"],
+        doneBeforeGcp: [
+          "done_local_before_cutover", "done_before_gcp", "pre_gcp_done", "baseline_completed_ok"
+        ]
+      };
+      return metricFromRoots(bundle.archiveRoots, aliases[metric] || [metric]);
+    }
+
+    function categoryNodes(root, category) {
+      const aliases = CATEGORY_ALIASES[category] || [category];
+      const bases = [root];
+      for (const key of ["categories", "assets", "files", "file_counts", "fileCounts", "totals"]) {
+        const child = aliasValue(root, [key]);
+        if (isObject(child)) bases.push(child);
+      }
+      const nodes = [];
+      for (const base of bases) {
+        const direct = aliasValue(base, aliases);
+        if (present(direct)) nodes.push(direct);
+        if (category === "cad_pdf" || category === "other_pdf") {
+          const binary = aliasValue(base, ["pdf_cad_binary", "pdf_binary", "cad_binary", "pdf_classification"]);
+          const nested = aliasValue(binary, aliases);
+          if (present(nested)) nodes.push(nested);
+        }
+      }
+      return nodes;
+    }
+
+    function countRootRichness(root) {
+      if (!isObject(root)) return 0;
+      let score = 0;
+      for (const key of ["2d", "3d", "nc1", "pdf"]) {
+        const node = root[key];
+        if (!isObject(node)) continue;
+        if (present(node.weak) || present(node.sha256)) score += 4;
+        if (isObject(node.by_ext) && Object.keys(node.by_ext).length) score += 8;
+        if (present(node.raw)) score += 1;
+      }
+      if (isObject(root.by_ext) && Object.keys(root.by_ext).length) score += 8;
+      return score;
+    }
+
+    function orderedCountRoots(bundle) {
+      return [...bundle.countRoots].sort((a, b) => countRootRichness(b) - countRootRichness(a));
+    }
+
+    function countValue(bundle, category, variant) {
+      const categoryAliases = CATEGORY_ALIASES[category] || [category];
+      const variantAliases = VARIANT_ALIASES[variant] || [variant];
+      let fallback;
+      for (const root of orderedCountRoots(bundle)) {
+        for (const node of categoryNodes(root, category)) {
+          if (!isObject(node) && variant === "raw" && number(node) !== null) {
+            if (fallback === undefined) fallback = node;
+            continue;
+          }
+          const value = aliasValue(node, variantAliases);
+          if (present(value) && !isObject(value)) {
+            // Prefer category nodes that also carry identity metrics / extensions.
+            if (variant === "raw" && isObject(node) && !(present(node.weak) || present(node.sha256) || isObject(node.by_ext))) {
+              if (fallback === undefined) fallback = value;
+              continue;
+            }
+            return value;
+          }
+        }
+        const bases = [root];
+        for (const key of ["categories", "assets", "files", "file_counts", "fileCounts", "totals"]) {
+          const child = aliasValue(root, [key]);
+          if (isObject(child)) bases.push(child);
+        }
+        for (const base of bases) {
+          const variantNode = aliasValue(base, variantAliases);
+          if (isObject(variantNode)) {
+            const value = aliasValue(variantNode, categoryAliases);
+            if (present(value) && !isObject(value)) return value;
+          }
+        }
+      }
+      return fallback;
+    }
+
+    function extensionValue(bundle, family, extension, variant) {
+      const variantAliases = VARIANT_ALIASES[variant] || [variant];
+      const extensionAliases = [extension, extension.replace(".", "")];
+      for (const root of orderedCountRoots(bundle)) {
+        const bases = [root];
+        for (const key of ["categories", "assets", "files", "file_counts", "fileCounts", "counts"]) {
+          const child = aliasValue(root, [key]);
+          if (isObject(child)) bases.push(child);
+        }
+        for (const base of bases) {
+          const familyNode = aliasValue(base, CATEGORY_ALIASES[family]);
+          if (isObject(familyNode)) {
+            const extensions = aliasValue(familyNode, ["by_ext", "by_extension", "extensions", "extension_breakdown"]);
+            const extensionNode = aliasValue(extensions, extensionAliases);
+            const value = aliasValue(extensionNode, variantAliases);
+            if (present(value) && !isObject(value)) return value;
+          }
+          const extensions = aliasValue(base, ["by_ext", "by_extension", "extensions", "extension_breakdown"]);
+          const extensionNode = aliasValue(extensions, extensionAliases);
+          if (isObject(extensionNode)) {
+            const familyNode = aliasValue(extensionNode, CATEGORY_ALIASES[family]);
+            const value = aliasValue(isObject(familyNode) ? familyNode : extensionNode, variantAliases);
+            if (present(value) && !isObject(value)) return value;
+          }
+        }
+      }
+      return undefined;
+    }
+
+    function blockRoot(bundle) {
+      const roots = [];
+      for (const root of bundle.countRoots) {
+        roots.push(root);
+        addObject(roots, aliasValue(root, ["block", "blocks", "block_level", "block_dedup"]));
+      }
+      return uniqueObjects(roots);
+    }
+
+    function blockMetrics(bundle) {
+      const roots = blockRoot(bundle);
+      const distinctBlocks = metricFromRoots(roots, ["distinct_blocks", "distinct", "block_sha256", "sha256", "unique_blocks", "block_hashes"]);
+      const totalBytes = metricFromRoots(roots, ["total_block_bytes", "block_bytes_total", "total_bytes"]);
+      let uniqueBytes = metricFromRoots(roots, ["unique_block_bytes", "block_bytes_unique", "unique_bytes"]);
+      const duplicateBytes = metricFromRoots(roots, ["duplicate_block_bytes", "block_bytes_duplicate", "duplicate_bytes"]);
+      if (number(uniqueBytes) === null && number(totalBytes) !== null && number(duplicateBytes) !== null) {
+        uniqueBytes = Math.max(0, number(totalBytes) - number(duplicateBytes));
+      }
+      let ratio = metricFromRoots(roots, ["dedup_ratio", "deduplication_ratio", "block_dedup_ratio"]);
+      if (number(ratio) === null && number(totalBytes) !== null && number(uniqueBytes) > 0) {
+        ratio = number(totalBytes) / number(uniqueBytes);
+      }
+      let blockNode = null;
+      for (const root of bundle.countRoots) {
+        const nested = aliasValue(root, ["block", "blocks", "block_level", "block_dedup"]);
+        if (isObject(nested)) {
+          blockNode = nested;
+          break;
+        }
+      }
+      return { distinctBlocks, totalBytes, uniqueBytes, duplicateBytes, ratio, blockNode };
+    }
+
+    function blockMetricCell(value, blockNode, statusKey, formatter) {
+      if (number(value) !== null) return formatter(value);
+      const status = blockNode && String(blockNode[statusKey] || "");
+      if (status.includes("not_measured")) {
+        return `<span class="missing" title="Historical results lack per-occurrence block lengths">not measured</span>`;
+      }
+      if (status.includes("not_published")) {
+        return `<span class="missing" title="Finished-archive population coverage is not verified">not published — coverage unverified</span>`;
+      }
+      return missing(value, formatter);
+    }
+
+    function blockDistinctCell(value, blockNode) {
+      if (number(value) === null) return missing(value, formatCount);
+      const status = blockNode && String(blockNode.distinct_status || "");
+      // The publisher now states how many archives the block union covers;
+      // show that instead of claiming the coverage is unpublished.
+      const cov = blockNode && number(blockNode.block_coverage_archives);
+      if (cov !== null && cov !== undefined && cov > 0) {
+        return `<span class="raw-value">${formatCount(value)}<small class="raw-provenance">exact union over ${formatCount(cov)} archives carrying block lists</small></span>`;
+      }
+      if (status.includes("1956") || status.includes("reconciliation")) {
+        return `<span class="raw-value">${formatCount(value)}<small class="raw-provenance">exact for the 1,956-archive reconciliation baseline only</small></span>`;
+      }
+      return `<span class="raw-value">${formatCount(value)}<small class="raw-provenance">coverage not published</small></span>`;
+    }
+
+    function classificationMetricNode(bundle, className) {
+      const classAliases = [className, `${className}_pdf`, `${className}_drawings`];
+      for (const root of bundle.countRoots) {
+        const classification = aliasValue(root, [
+          "pdf_by_drawing_type", "pdf_by_type", "pdf_classes", "pdf_classification", "pdf_categories"
+        ]);
+        const classNode = aliasValue(classification, classAliases);
+        if (isObject(classNode)) return classNode;
+      }
+      return null;
+    }
+
+    function formatClassificationShaCell(bundle, className) {
+      return `<span class="missing" title="Drawing-class SHA union has not been independently verified for publication">not published — class union unverified</span>`;
+    }
+
+    function formatClassificationRawCell(bundle, className) {
+      const node = classificationMetricNode(bundle, className);
+      const value = classificationValue(bundle, className, "raw");
+      const status = node && String(node.raw_status || "");
+      if (number(value) === null) {
+        const detail = rawStatusLabel(status);
+        return `<span class="missing" title="${escapeHtml(detail)}">${status === "not_published_unverified_population" ? "not published — coverage unverified" : "not available"}</span>`;
+      }
+      const covered = number(node && node.raw_archives);
+      const live = number(archiveMetric(bundle, "done"));
+      const coverage = status === "partial_exact_snapshot" && covered !== null && live !== null
+        ? ` · covered ${formatCount(covered)}/${formatCount(live)} archives`
+        : "";
+      return `<span class="raw-value">${formatCount(value)}<small class="raw-provenance">${escapeHtml(rawStatusLabel(status))}${escapeHtml(coverage)}</small></span>`;
+    }
+
+    function classificationValue(bundle, className, variant) {
+      const variantAliases = VARIANT_ALIASES[variant] || [variant];
+      const classAliases = [className, `${className}_pdf`, `${className}_drawings`];
+      for (const root of bundle.countRoots) {
+        const classification = aliasValue(root, [
+          "pdf_by_drawing_type", "pdf_by_type", "pdf_classes", "pdf_classification", "pdf_categories"
+        ]);
+        const classNode = aliasValue(classification, classAliases);
+        const value = aliasValue(classNode, variantAliases);
+        if (present(value) && !isObject(value)) return value;
+      }
+      return undefined;
+    }
+
+    function distributionObject(bundle, aliases) {
+      for (const root of bundle.depthRoots) {
+        const value = aliasValue(root, aliases);
+        if (isObject(value)) return value;
+      }
+      return null;
+    }
+
+    function depthMetric(bundle, aliases) {
+      return metricFromRoots(bundle.depthRoots, aliases);
+    }
+
+    function mapMetric(container, mapAliases, scopeId) {
+      if (!isObject(container)) return undefined;
+      const map = aliasValue(container, mapAliases);
+      if (!isObject(map)) return undefined;
+      return scopedValue(map, scopeId);
+    }
+
+    function storageMetric(status, bundle, metric) {
+      const aliases = {
+        extractedBytes: ["extracted_bytes", "bytes_extracted", "uncompressed_bytes", "output_bytes"],
+        transferredBytes: ["compressed_source_bytes_transferred", "source_bytes_transferred", "bytes_transferred", "compressed_bytes"],
+        storedObjects: ["stored_object_count", "object_count", "objects", "uploaded_files", "stored_files"],
+        storedBytes: ["stored_bytes", "bytes_stored", "uploaded_bytes", "gcs_bytes"]
+      };
+      const direct = metricFromRoots(bundle.storageRoots, aliases[metric]);
+      if (present(direct)) return direct;
+
+      const mapAliases = {
+        extractedBytes: ["extracted_bytes_by_disk", "bytes_extracted_by_disk"],
+        transferredBytes: ["bytes_transferred_by_disk", "source_bytes_by_disk", "compressed_bytes_by_disk"],
+        storedObjects: ["object_count_by_disk", "stored_objects_by_disk", "uploaded_files_by_disk"],
+        storedBytes: ["stored_bytes_by_disk", "bytes_stored_by_disk", "uploaded_bytes_by_disk"]
+      };
+      for (const container of [status.gcs, status.aws_source, status.storage, status.s3, status.transfers]) {
+        const mapped = mapMetric(container, mapAliases[metric], bundle.id);
+        if (present(mapped)) return mapped;
+      }
+      return undefined;
+    }
+
+    function heartbeatValue(status) {
+      return pickPath(status, [
+        "last_update_iso", "status_last_updated", "heartbeat_at", "updated_at_iso",
+        ["heartbeat", "at"], ["status", "updated_at"]
+      ]);
+    }
+
+    function heartbeatAgeSeconds(status) {
+      const value = heartbeatValue(status);
+      if (!present(value)) return null;
+      const millis = typeof value === "number" ? value * 1000 : Date.parse(value);
+      return Number.isFinite(millis) ? Math.max(0, (Date.now() - millis) / 1000) : null;
+    }
+
+    function ageTextFromSeconds(seconds) {
+      if (number(seconds) === null) return "not available";
+      if (seconds < 60) return `${Math.round(seconds)}s`;
+      if (seconds < 7200) return `${(seconds / 60).toFixed(seconds < 600 ? 1 : 0)}m`;
+      if (seconds < 172800) return `${(seconds / 3600).toFixed(1)}h`;
+      return `${(seconds / 86400).toFixed(1)}d`;
+    }
+
+    function healthInfo(status) {
+      const age = heartbeatAgeSeconds(status);
+      // a finished extraction is not "stalled" when its publisher heartbeat ages
+      if (extractionDone(status)) return { key: "alive", label: "COMPLETE", age };
+      const workerCount = number(pickPath(status, [
+        "cloud_workers_alive", "workers_alive", ["fleet", "workers_alive"], ["workers", "alive_count"]
+      ]));
+      const declared = normalize(pickPath(status, ["health", "state"]));
+      if (age !== null && age > STALL_AFTER_SECONDS) {
+        return { key: "stalled", label: "STALLED", age };
+      }
+      if (age === null) {
+        return { key: "waiting", label: "WAITING", age };
+      }
+      if (workerCount === 0 || ["stopped", "failed", "error", "stale"].includes(declared)) {
+        return { key: "stalled", label: "STALLED", age };
+      }
+      return { key: "alive", label: "ALIVE", age };
+    }
+
+    const integerFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
+    const decimalFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
+    const rateFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
+
+    function formatCount(value, missing = "not available") {
+      const parsed = number(value);
+      return parsed === null ? missing : integerFormat.format(parsed);
+    }
+
+    function formatDecimal(value, digits = 2, missing = "not available") {
+      const parsed = number(value);
+      if (parsed === null) return missing;
+      return new Intl.NumberFormat(undefined, { maximumFractionDigits: digits }).format(parsed);
+    }
+
+    function formatBytes(value, missing = "not available") {
+      const parsed = number(value);
+      if (parsed === null) return missing;
+      if (parsed === 0) return "0 B";
+      const units = ["B", "KB", "MB", "GB", "TB", "PB"];
+      const index = Math.min(units.length - 1, Math.max(0, Math.floor(Math.log(Math.abs(parsed)) / Math.log(1000))));
+      const scaled = parsed / (1000 ** index);
+      return `${scaled.toLocaleString(undefined, { maximumFractionDigits: scaled >= 100 ? 0 : scaled >= 10 ? 1 : 2 })} ${units[index]}`;
+    }
+
+    function formatMoney(value, missing = "not available") {
+      const parsed = number(value);
+      if (parsed === null) return missing;
+      const digits = Math.abs(parsed) < .01 ? 4 : 2;
+      return `$${parsed.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+    }
+
+    function formatPercent(value, missing = "not available") {
+      const parsed = number(value);
+      return parsed === null ? missing : `${parsed.toFixed(1)}%`;
+    }
+
+    function formatRatio(value, missing = "not available") {
+      const parsed = number(value);
+      return parsed === null ? missing : `${parsed.toFixed(2)}×`;
+    }
+
+    function formatDurationSeconds(value, missing = "not available") {
+      const seconds = number(value);
+      if (seconds === null) return missing;
+      if (seconds < 60) return `${Math.round(seconds)}s`;
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      if (!hours) return `${minutes}m ${Math.round(seconds % 60)}s`;
+      return `${hours}h ${minutes}m`;
+    }
+
+    function formatTimestamp(value, missing = "not available") {
+      if (!present(value)) return missing;
+      const date = new Date(value);
+      if (!Number.isFinite(date.getTime())) return escapeHtml(value);
+      return escapeHtml(new Intl.DateTimeFormat(undefined, {
+        month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+        second: "2-digit", timeZoneName: "short"
+      }).format(date));
+    }
+
+    function missing(value, formatter, fallback = "not available") {
+      return number(value) === null
+        ? `<span class="missing">${escapeHtml(fallback)}</span>`
+        : formatter(value);
+    }
+
+    function categoryMetricNode(bundle, category) {
+      for (const root of orderedCountRoots(bundle)) {
+        for (const node of categoryNodes(root, category)) {
+          if (isObject(node)) return node;
+        }
+      }
+      return null;
+    }
+
+    function extensionMetricNode(bundle, family, extension) {
+      const extensionAliases = [extension, extension.replace(".", "")];
+      for (const root of orderedCountRoots(bundle)) {
+        const familyNode = aliasValue(root, CATEGORY_ALIASES[family]);
+        if (isObject(familyNode)) {
+          const extensions = aliasValue(familyNode, ["by_ext", "by_extension", "extensions"]);
+          const extensionNode = aliasValue(extensions, extensionAliases);
+          if (isObject(extensionNode)) return extensionNode;
+        }
+      }
+      return null;
+    }
+
+    function shaCoverageFromContext(node, bundle) {
+      if (isObject(node) && isObject(node.sha256_coverage)) return node.sha256_coverage;
+      const coverage = dedupCoverage(bundle);
+      const entry = coverage && coverage.sha256;
+      if (!isObject(entry)) return null;
+      const archivesInSha = number(entry.archives_with_hashes ?? entry.archives_in_sha ?? entry.completed_archives);
+      const archivesDone = number(entry.archives_in_raw ?? entry.completed_archives);
+      if (archivesInSha === null || archivesDone === null) return null;
+      const exact = entry.exact_vs_live === true || entry.status === "exact";
+      return { archives_in_sha: archivesInSha, archives_done: archivesDone, exact };
+    }
+
+    function formatWeakDistinctCell(bundle, category, extension = null) {
+      // Render a published weak identity count when one exists; fall back to
+      // the explanation only while the value is genuinely absent.
+      const wVal = extension
+        ? extensionValue(bundle, category, extension, "weak")
+        : countValue(bundle, category, "weak");
+      if (present(wVal)) {
+        const node = extension ? extensionMetricNode(bundle, category, extension) : categoryMetricNode(bundle, category);
+        const nArch = node && number(node.weak_archives);
+        const hint = node && typeof node.weak_note === "string"
+          ? node.weak_note
+          : (nArch !== null && nArch !== undefined ? `covered ${formatCount(nArch)}` : "");
+        return `<span class="raw-value">${formatCount(wVal)}${hint ? `<small class="raw-provenance">${escapeHtml(hint)}</small>` : ""}</span>`;
+      }
+      return `<span class="missing" title="The EC2 result schema omits weak name+size identity lists">not measured — EC2 results omit weak lists</span>`;
+    }
+
+    function formatShaDistinctCell(bundle, category, extension = null) {
+      if (!extension && (category === "cad_pdf" || category === "other_pdf")) {
+        // The subtype union IS published now, with its overlap measured. Render
+        // it when present; only refuse when the publisher supplies nothing.
+        const sNode = categoryMetricNode(bundle, category);
+        const sVal = countValue(bundle, category, "sha256");
+        if (present(sVal)) {
+          const note = sNode && typeof sNode.sha256_note === "string" ? sNode.sha256_note : "";
+          const nArch = sNode && number(sNode.sha256_archives);
+          const hint = note || (nArch !== null && nArch !== undefined ? `covered ${formatCount(nArch)}` : "");
+          return `<span class="raw-value">${formatCount(sVal)}${hint ? `<small class="raw-provenance">${escapeHtml(hint)}</small>` : ""}</span>`;
+        }
+        return `<span class="missing" title="No verified cross-disk SHA set-union exists for the PDF subtype split">not published — subtype union unverified</span>`;
+      }
+      const node = extension ? extensionMetricNode(bundle, category, extension) : categoryMetricNode(bundle, category);
+      const sha = extension
+        ? extensionValue(bundle, category, extension, "sha256")
+        : countValue(bundle, category, "sha256");
+      if (!present(sha)) {
+        return `<span class="missing" title="No verified cross-disk SHA set-union is currently published">not published — verified union unavailable</span>`;
+      }
+      const status = node && String(node.sha256_status || "");
+      if (status === "computing_full_population_union") {
+        return `<span class="missing">union running</span>`;
+      }
+      const cov = shaCoverageFromContext(node, bundle);
+      if (!cov) {
+        return `<span class="sha-partial">${formatCount(sha)} <small class="cov-hint">(coverage not published)</small></span>`;
+      }
+      const covered = number(cov.archives_in_sha);
+      const done = number(cov.archives_done);
+      const lag = covered === null || done === null ? null : Math.max(0, done - covered);
+      const exact = cov.exact === true && lag === 0;
+      const coverageScope = bundle.id === "combined" ? "" : "global reducer ";
+      const coverageText = covered === null || done === null
+        ? "coverage not published"
+        : `${coverageScope}covered ${formatCount(covered)}/${formatCount(done)} · lag ${formatCount(lag)}`;
+      return `<span class="sha-partial">${formatCount(sha)} <small class="cov-hint">(${exact ? "exact" : "partial"} · ${coverageText})</small></span>`;
+    }
+
+    function rawStatusLabel(status) {
+      const value = String(status || "");
+      const labels = {
+        exact_finished_archive_occurrence_sum: "exact · finished-archive occurrence sum",
+        exact_disk_sum_finished_archives: "exact · Disk 1 + Disk 2 occurrence sum",
+        exact_union_snapshot: "exact · verified reducer snapshot",
+        partial_exact_snapshot: "partial · exact for the published snapshot",
+        not_published_unverified_population: "not published · population unverified",
+        latest_published_per_disk_sum: "latest published Disk 1 + Disk 2 sum · exactness not certified"
+      };
+      if (labels[value]) return labels[value];
+      return value ? `publisher status · ${value.replace(/_/g, " ")}` : "provenance not published · exactness not certified";
+    }
+
+    function formatRawCell(bundle, category, extension = null) {
+      const node = extension ? extensionMetricNode(bundle, category, extension) : categoryMetricNode(bundle, category);
+      const value = extension
+        ? extensionValue(bundle, category, extension, "raw")
+        : countValue(bundle, category, "raw");
+      const status = node && node.raw_status;
+      if (number(value) === null) {
+        const detail = rawStatusLabel(status);
+        return `<span class="missing" title="${escapeHtml(detail)}">${status === "not_published_unverified_population" ? "not published — coverage unverified" : "not available"}</span>`;
+      }
+      const covered = number(node && node.raw_archives);
+      const live = number(archiveMetric(bundle, "done"));
+      const coverage = status === "partial_exact_snapshot" && covered !== null && live !== null
+        ? ` · covered ${formatCount(covered)}/${formatCount(live)} archives`
+        : "";
+      return `<span class="raw-value">${formatCount(value)}<small class="raw-provenance" title="raw_status: ${escapeHtml(status || "not published")}">${escapeHtml(rawStatusLabel(status))}${escapeHtml(coverage)}</small></span>`;
+    }
+
+    function basename(value) {
+      if (!present(value)) return null;
+      const clean = String(value).split(/[?#]/)[0].replace(/\\/g, "/");
+      return clean.split("/").filter(Boolean).pop() || null;
+    }
+
+    function diskFromValue(value) {
+      const match = String(value ?? "").match(/(?:^|[\\/])(disk[\s_-]*[12])(?:[\\/]|$)/i);
+      if (!match) return null;
+      return normalize(match[1]).endsWith("1") ? "Disk 1" : "Disk 2";
+    }
+
+    function safeError(value) {
+      if (!present(value)) return null;
+      let output = String(value).split(/\r?\n/)[0];
+      output = output.replace(/\b(?:gs|s3):\/\/\S+/gi, "[object redacted]");
+      output = output.replace(/(?:[A-Za-z]:)?(?:[\\/][^\\/\s:]+){2,}/g, "[path redacted]");
+      output = output.replace(/\b(token|secret|password|api[_-]?key)\s*[:=]\s*\S+/gi, "$1=[redacted]");
+      return output.slice(0, 220);
+    }
+
+    function workerArray(status) {
+      for (const value of [status.current, status.workers, status.worker_activity, status.workerActivity]) {
+        if (Array.isArray(value)) return value.filter(isObject);
+      }
+      return [];
+    }
+
+    function normalizedStage(value) {
+      if (!present(value)) return "not published";
+      const normalized = normalize(value);
+      for (const stage of ["download", "extract", "hash", "upload", "checkpoint"]) {
+        if (normalized.includes(stage)) return stage;
+      }
+      return String(value);
+    }
+
+    function workerElapsed(worker) {
+      const explicit = aliasValue(worker, ["elapsed_seconds", "elapsed_s", "stage_elapsed_seconds", "elapsed"]);
+      if (number(explicit) !== null) return explicit;
+      const started = aliasValue(worker, ["started_at", "stage_started_at", "archive_started_at"]);
+      const millis = Date.parse(started);
+      return Number.isFinite(millis) ? Math.max(0, (Date.now() - millis) / 1000) : undefined;
+    }
+
+    function fleetCostEstimates(status) {
+      const costEstimate = isObject(status.cost_estimate) ? status.cost_estimate : {};
+      const costs = isObject(status.costs) ? status.costs : {};
+      const compute = isObject(status.compute) ? status.compute : {};
+      let hourly = number(aliasValue(costEstimate, ["hourly_ec2_plus_ebs_usd"]))
+        ?? number(aliasValue(costs, ["combined_hourly_compute_disk_usd", "hourly_compute_disk_usd"]));
+      let accrued = number(aliasValue(costEstimate, ["accrued_ec2_plus_ebs_usd"]))
+        ?? number(aliasValue(costs, ["combined_accrued_estimate_usd", "accrued_estimate_usd"]));
+      let uptimeHours = number(aliasValue(costEstimate, ["uptime_hours"]))
+        ?? number(aliasValue(compute, ["uptime_hours"]));
+      const fleetStart = Date.parse(
+        aliasValue(costEstimate, ["fleet_start_utc"]) || aliasValue(compute, ["fleet_start_utc"]) || "2026-09-22T06:49:33Z"
+      );
+      if (!Number.isFinite(uptimeHours) && Number.isFinite(fleetStart)) {
+        uptimeHours = Math.max(0, (Date.now() - fleetStart) / 3600000);
+      }
+      if (hourly === null) {
+        const fleet = isObject(status.fleet) ? status.fleet : {};
+        if (Array.isArray(fleet.instances)) {
+          hourly = fleet.instances.reduce((sum, inst) => {
+            if (!isObject(inst)) return sum;
+            return sum + (number(inst.compute_hourly_estimate_usd) || 0) + (number(inst.ebs_hourly_estimate_usd) || 0);
+          }, 0);
+        }
+      }
+      if (accrued === null && hourly !== null && uptimeHours !== null) {
+        accrued = hourly * uptimeHours;
+      }
+      return { hourly, accrued, uptimeHours };
+    }
+
+    function statusSourceLabel() {
+      if (statusSource && String(statusSource).startsWith("aws-s3")) return "Live AWS S3";
+      if (statusSource === "gcs-fallback") return "GCS fallback";
+      if (statusSource === "github-fallback" || statusSource === "fallback") return "GitHub fallback";
+      return "Live status";
+    }
+
+    // ---- completion mode: every archive is done AND the EC2 inventory check published with conversions.json
+    // confirms no extraction VM is running, so the publisher's last worker snapshot is not live any more.
+    function extractionDone(status) {
+      const bundle = buildBundle(status, "combined");
+      const total = number(archiveMetric(bundle, "total"));
+      let done = number(archiveMetric(bundle, "done"));
+      const base = number(pickPath(status, [["archives", "combined", "baseline_completed_ok"], ["disks", "combined", "archives", "baseline_completed_ok"]]));
+      const ec2 = number(pickPath(status, [["archives", "combined", "ec2_new_ok"], ["disks", "combined", "archives", "ec2_new_ok"]]));
+      if (base !== null && ec2 !== null) done = Math.max(done ?? 0, base + ec2);
+      return total !== null && total > 0 && done !== null && done >= total;
+    }
+
+    function fleetReleased(status) {
+      const f = isObject(conversionsData) && isObject(conversionsData.fleet) ? conversionsData.fleet : null;
+      return extractionDone(status) && f !== null && number(f.extraction_vms_running) === 0 ? f : null;
+    }
+
+    function operationalWorkerCounts(status) {
+      if (fleetReleased(status)) return { alive: 0, configured: 0, active: 0, idle: 0 };
+      const fleet = isObject(status.fleet) ? status.fleet : {};
+      let alive = number(pickPath(status, ["workers_alive", "cloud_workers_alive", ["fleet", "workers_alive"]]));
+      let configured = number(pickPath(status, ["workers_configured", ["fleet", "workers_configured"]]));
+      let active = number(pickPath(status, ["workers_active", ["fleet", "workers_active"]]));
+      let idle = number(pickPath(status, ["workers_idle", ["fleet", "workers_idle"]]));
+
+      if ((active === null || idle === null) && Array.isArray(fleet.instances)) {
+        let observedAlive = 0;
+        let observedActive = 0;
+        let observedConfigured = 0;
+        let observedRows = 0;
+        for (const inst of fleet.instances.filter(isObject)) {
+          const rows = isObject(inst.workers) ? Object.values(inst.workers).filter(isObject) : [];
+          observedRows += rows.length;
+          observedAlive += rows.filter(row => row.alive !== false).length;
+          observedActive += rows.filter(row => row.alive !== false && present(row.current || row.current_archive)).length;
+          observedConfigured += number(inst.workers_configured) ?? rows.length;
+        }
+        if (observedRows) {
+          if (alive === null) alive = observedAlive;
+          if (configured === null) configured = observedConfigured;
+          if (active === null) active = observedActive;
+          if (idle === null) idle = Math.max(0, observedAlive - observedActive);
+        }
+      }
+      return { alive, configured, active, idle };
+    }
+
+    function renderScheduler(status) {
+      const scheduler = isObject(status.scheduler_assignments) ? status.scheduler_assignments : {};
+      const workers = operationalWorkerCounts(status);
+      const claims = number(aliasValue(scheduler, ["claim_objects_total"]))
+        ?? number(aliasValue(status, ["claims_count"]));
+      const resultObjects = number(aliasValue(scheduler, ["result_objects_total"]))
+        ?? number(aliasValue(status, ["result_objects_total"]));
+      const unfinished = number(aliasValue(scheduler, ["unfinished_claims"]))
+        ?? number(aliasValue(status, ["unfinished_claims"]));
+      const unclaimed = number(aliasValue(scheduler, ["unclaimed_remaining"]))
+        ?? number(aliasValue(status, ["unclaimed_remaining"]));
+      const validatedOk = number(aliasValue(status, ["results_count"]));
+
+      const card = (label, value, source) => `<div class="throughput-card"><span>${escapeHtml(label)}</span>
+        <strong>${number(value) === null ? '<span class="missing">not available</span>' : formatCount(value)}</strong>
+        <span class="metric-source">${escapeHtml(source)}</span></div>`;
+      return `<section class="panel" aria-labelledby="scheduler-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">Operational truth</p><h2 id="scheduler-title">Workers and scheduler identity sets</h2>
+            <p>Process liveness, active assignments, historical claims, and unassigned remaining work are separate counters.</p></div>
+        </div>
+        <div class="scheduler-grid">
+          ${card("Workers active", workers.active, fleetReleased(status) ? "extraction complete" : "alive + current archive")}
+          ${card("Idle / capacity-wait", workers.idle, fleetReleased(status) ? "fleet released" : "alive + no current archive")}
+          ${card("Unfinished claims", unfinished, "claim identities without results")}
+          ${card("Unclaimed remaining", unclaimed, "remaining without unfinished claim")}
+          ${card("Claim objects", claims, "historical; includes completed")}
+          ${card("Result objects", resultObjects, "terminal result identities")}
+        </div>
+        <div class="callout">Claim objects are historical unique assignment records, not active workers. Unfinished claims are claim identities without a result object. Validated EC2 OK results exclude skip-ledger overlap: <strong>${number(validatedOk) === null ? '<span class="missing">not available</span>' : formatCount(validatedOk)}</strong>.</div>
+      </section>`;
+    }
+
+    function renderHeader(status) {
+      const bundle = buildBundle(status, "combined");
+      const total = archiveMetric(bundle, "total") ?? 3620;
+      const baselineDone = archiveMetric(bundle, "doneBeforeGcp") ?? pickPath(status, [
+        ["archives", "combined", "baseline_completed_ok"],
+        ["disks", "combined", "archives", "baseline_completed_ok"]
+      ]);
+      const ec2New = pickPath(status, [
+        ["archives", "combined", "ec2_new_ok"],
+        ["disks", "combined", "archives", "ec2_new_ok"]
+      ]);
+      // Hero done MUST be full baseline + ec2_new (subtitle components), never the
+      // partial per-disk sum (~987+ec2 ≈ 1933) that some publishers still emit.
+      let done = archiveMetric(bundle, "done");
+      let remaining = archiveMetric(bundle, "remaining");
+      if (number(baselineDone) !== null && number(ec2New) !== null) {
+        const ledgerDone = number(baselineDone) + number(ec2New);
+        if (number(done) === null || number(done) < ledgerDone) {
+          done = ledgerDone;
+        }
+        if (number(total) > 0) {
+          remaining = Math.max(0, number(total) - number(done));
+        }
+      }
+      const progress = number(total) > 0 && number(done) !== null
+        ? Math.max(0, Math.min(100, number(done) / number(total) * 100))
+        : null;
+      const health = healthInfo(status);
+      const gce = isObject(status.gce) ? status.gce : {};
+      const workerCounts = operationalWorkerCounts(status);
+      const state = (number(total) > 0 && number(done) !== null && number(done) >= number(total)) ? "complete" : pickPath(status, [["gce", "state"], "state"]);
+      const fleet = isObject(status.fleet) ? status.fleet : {};
+      const instanceCount = number(fleet.instance_count) ?? (Array.isArray(fleet.instances) ? fleet.instances.length : null);
+      const costHints = fleetCostEstimates(status);
+      const hourly = costHints.hourly;
+      const accrued = costHints.accrued;
+
+      return `<header class="hero">
+        <div class="hero-top">
+          <div>
+            <p class="eyebrow">${extractionDone(status) ? "Public extraction &amp; conversion status" : "Live public extraction status"}</p>
+            <h1>Deep CAD extraction across Disk 1 &amp; Disk 2</h1>
+            <p class="lede">${extractionDone(status)
+              ? "Extraction is complete. The page now also reports the STEP conversions (native, IFC → STEP, Tekla DB1 → STEP) and the packaged dataset."
+              : "A read-only view of the live AWS EC2 extraction fleet, archive progress, and estimated compute costs."}</p>
+            <p class="lede"><a href="sources.html"><b>New source disks (Z2, Z4) — live extraction status →</b></a></p>
+          </div>
+          <span id="status-badge" class="status-badge ${health.key}">${health.label}</span>
+        </div>
+        <div class="freshness-line">
+          <span>Heartbeat <strong id="heartbeat-age">${escapeHtml(ageTextFromSeconds(health.age))} ago</strong></span>
+          <span>Last update <strong>${formatTimestamp(heartbeatValue(status))}</strong></span>
+          <span>Source <strong>${statusSourceLabel()}</strong></span>
+          <span>Data pushed every ~20 seconds; page polls every 20 seconds</span>
+        </div>
+        <div class="progress-track" role="progressbar" aria-label="Archive completion"
+          aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress === null ? 0 : progress.toFixed(1)}">
+          <span style="width:${progress === null ? 0 : progress.toFixed(2)}%"></span>
+        </div>
+        <div class="progress-caption">
+          <span><strong>${progress === null ? "Progress not available" : `${progress.toFixed(1)}% complete`}</strong></span>
+          <span>${missing(done, formatCount)} of ${missing(total, formatCount)} archives</span>
+        </div>
+        <div class="hero-stats">
+          <div class="hero-stat"><span>Archives done</span><strong>${missing(done, formatCount)}</strong>
+            <small>${number(baselineDone) === null ? "baseline not available" : `${formatCount(baselineDone)} baseline + ${formatCount(ec2New)} EC2`}</small></div>
+          <div class="hero-stat"><span>Total archives</span><strong>${missing(total, formatCount)}</strong>
+            <small>${number(instanceCount) === null ? "fleet size not available" : `${formatCount(instanceCount)} EC2 instances`}</small></div>
+          <div class="hero-stat"><span>Remaining</span><strong>${missing(remaining, formatCount)}</strong>
+            <small>source archives</small></div>
+          <div class="hero-stat"><span>Workers active</span><strong>${missing(workerCounts.active, formatCount)}</strong>
+            <small>${fleetReleased(status) ? "extraction complete · fleet released" : `${number(workerCounts.idle) === null ? "idle count not available" : `${formatCount(workerCounts.idle)} idle / capacity-wait`} · ${number(workerCounts.alive) === null ? "alive count not available" : `${formatCount(workerCounts.alive)} alive`}${number(workerCounts.configured) === null ? (present(state) ? ` · ${escapeHtml(state)}` : "") : ` / ${formatCount(workerCounts.configured)} configured`}`}</small></div>
+        </div>
+        <div class="infra-line">
+          <span class="chip">Platform · AWS EC2</span>
+          <span class="chip">Region · ${escapeHtml(status.region || aliasValue(gce, ["region"]) || "ap-south-1")}</span>
+          <span class="chip">${fleetReleased(status) ? `Est. · fleet released · accrued ${formatMoney(accrued)}` : `Est. · ${formatMoney(hourly)}/hr · accrued ${formatMoney(accrued)}`}</span>
+          <span class="chip">Feed · ${statusSourceLabel()}</span>
+        </div>
+      </header>`;
+    }
+
+    function vmEntries(status) {
+      const vms = isObject(status.vms) ? status.vms : {};
+      const entries = Object.entries(vms)
+        .filter(([, value]) => isObject(value))
+        .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }));
+      if (entries.length) return entries;
+
+      const fleet = isObject(status.fleet) ? status.fleet : {};
+      if (Array.isArray(fleet.instances)) {
+        return fleet.instances
+          .filter(isObject)
+          .map(inst => {
+            const name = aliasValue(inst, ["name", "instance_name", "id"]) || "instance";
+            const workersObj = isObject(inst.workers) ? inst.workers : {};
+            const workers = Object.entries(workersObj).map(([wid, meta]) => {
+              const row = isObject(meta) ? { ...meta } : {};
+              row.worker_id = row.worker_id || wid;
+              row.instance_name = name;
+              if (!present(row.current_archive) && present(row.current)) row.current_archive = row.current;
+              if (!present(row.state)) row.state = row.alive === false ? "down" : "running";
+              return row;
+            });
+            const hourly = (number(inst.compute_hourly_estimate_usd) || 0) + (number(inst.ebs_hourly_estimate_usd) || 0);
+            const compute = isObject(status.compute) ? status.compute : {};
+            const uptimeHours = number(compute.uptime_hours);
+            const accrued = uptimeHours === null ? null : hourly * uptimeHours;
+            return [name, {
+              instance_name: name,
+              machine_type: aliasValue(inst, ["type", "machine_type"]),
+              type: aliasValue(inst, ["type", "machine_type"]),
+              zone: aliasValue(inst, ["az", "zone"]),
+              state: aliasValue(inst, ["state", "status"]) || "running",
+              workers_alive: inst.workers_alive,
+              workers_expected: inst.workers_configured,
+              worker_count: inst.workers_configured,
+              workers_active: inst.workers_active,
+              workers_idle: inst.workers_idle,
+              workers,
+              costs: {
+                hourly_compute_disk_estimate_usd: hourly || null,
+                accrued_compute_disk_estimate_usd: accrued
+              }
+            }];
+          })
+          .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }));
+      }
+
+      const workers = workerArray(status);
+      if (!workers.length) return [];
+      const byVm = new Map();
+      for (const worker of workers) {
+        const name = aliasValue(worker, ["instance_name", "vm", "host"]) || "workers";
+        if (!byVm.has(name)) byVm.set(name, []);
+        byVm.get(name).push(worker);
+      }
+      return [...byVm.entries()].map(([name, list]) => [name, {
+        instance_name: name,
+        workers: list,
+        workers_alive: list.filter(w => aliasValue(w, ["alive"]) !== false).length,
+        workers_expected: list.length,
+        worker_count: list.length
+      }]);
+    }
+
+    function renderWorkerRow(worker, index) {
+      const archiveRaw = aliasValue(worker, [
+        "archive_basename", "current_archive", "archive_label", "archive", "archive_path", "last_archive", "source"
+      ]);
+      const archiveName = basename(archiveRaw) || (present(archiveRaw) ? String(archiveRaw) : null);
+      const disk = aliasValue(worker, ["disk", "source_disk", "dataset"]) || diskFromValue(archiveRaw);
+      const workerId = aliasValue(worker, ["worker_id", "id", "shard", "worker", "index"]);
+      const stage = normalizedStage(aliasValue(worker, ["stage", "state", "phase", "status"]));
+      const sourceBytes = aliasValue(worker, [
+        "compressed_bytes", "archive_bytes", "source_compressed_bytes", "compressed_size", "source_bytes"
+      ]);
+      const processed = aliasValue(worker, ["bytes_processed", "processed_bytes", "source_bytes_downloaded", "hashed_bytes", "uploaded_bytes"]);
+      const elapsed = workerElapsed(worker);
+      const alive = aliasValue(worker, ["alive"]) !== false;
+      return `
+            <article class="vm-worker-row${alive ? "" : " stalled"}">
+              <div><strong>${present(workerId) ? escapeHtml(workerId) : `worker-${index + 1}`}</strong> · ${escapeHtml(stage)}${alive ? "" : " · down"}</div>
+              <div>${archiveName ? escapeHtml(archiveName) : "<em>between archives</em>"}</div>
+              <div class="kv">
+                <span>Disk</span><strong>${present(disk) ? escapeHtml(disk) : "n/a"}</strong>
+                <span>Compressed</span><strong>${missing(sourceBytes, formatBytes)}</strong>
+                <span>Elapsed</span><strong>${missing(elapsed, formatDurationSeconds)}</strong>
+                <span>Processed</span><strong>${missing(processed, formatBytes)}</strong>
+              </div>
+            </article>`;
+    }
+
+    function renderWorkers(status) {
+      const released = fleetReleased(status);
+      if (released) {
+        return `
+        <section class="panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Fleet</p>
+              <h2>Extraction complete · fleet released</h2>
+              <p class="lede">All archives are extracted. No extraction VM is running (EC2 inventory checked ${formatTimestamp(released.checked_at)}).</p>
+            </div>
+          </div>
+          <div class="table-wrap"><table><thead><tr><th>Role</th><th>VMs running</th></tr></thead><tbody>
+            <tr><td>Extraction workers</td><td>${formatCount(released.extraction_vms_running, "0")}</td></tr>
+            <tr><td>STEP conversion hosts</td><td>${formatCount(released.conversion_vms_running, "0")}</td></tr>
+            <tr><td>Packaging hosts</td><td>${formatCount(released.packaging_vms_running, "0")}</td></tr>
+            <tr><td>Status publisher and utility boxes</td><td>${formatCount(released.support_vms_running, "0")}</td></tr>
+          </tbody></table></div>
+        </section>`;
+      }
+      const entries = vmEntries(status);
+      const flatWorkers = workerArray(status);
+      let cards = "";
+      let reporting = 0;
+      for (const [name, vm] of entries) {
+        const workers = Array.isArray(vm.workers) ? vm.workers.filter(isObject) : flatWorkers.filter(w =>
+          (aliasValue(w, ["instance_name", "vm", "host"]) || name) === name
+        );
+        reporting += workers.length;
+        const alive = number(aliasValue(vm, ["workers_alive", "alive"])) ?? workers.filter(w => aliasValue(w, ["alive"]) !== false).length;
+        const expected = number(aliasValue(vm, ["workers_expected", "worker_count", "expected"])) ?? workers.length;
+        const active = number(aliasValue(vm, ["workers_active", "active"]))
+          ?? workers.filter(w => aliasValue(w, ["alive"]) !== false && present(aliasValue(w, ["current_archive", "current"]))).length;
+        const idle = number(aliasValue(vm, ["workers_idle", "idle"])) ?? Math.max(0, alive - active);
+        const costs = isObject(vm.costs) ? vm.costs : {};
+        const hourly = aliasValue(costs, ["hourly_compute_disk_estimate_usd", "hourly_estimate_usd"]);
+        const accrued = aliasValue(costs, ["accrued_compute_disk_estimate_usd", "accrued_estimate_usd"]);
+        cards += `
+          <section class="vm-card">
+            <h3>${escapeHtml(aliasValue(vm, ["instance_name", "name"]) || name)}</h3>
+            <div class="vm-meta">
+              <span>${escapeHtml(aliasValue(vm, ["machine_type", "type"]) || "type n/a")}</span>
+              <span>${escapeHtml(aliasValue(vm, ["zone"]) || "zone n/a")}</span>
+              <span>${escapeHtml(aliasValue(vm, ["state", "status"]) || "state n/a")}</span>
+              <span>active ${formatCount(active)} · idle/capacity-wait ${formatCount(idle)}</span>
+              <span>alive ${formatCount(alive)} / ${formatCount(expected)} configured</span>
+              <span>est. ${formatMoney(hourly)}/hr · accrued ${formatMoney(accrued)}</span>
+            </div>
+            <div class="vm-workers">
+              ${workers.length ? workers.map((worker, index) => renderWorkerRow(worker, index)).join("") : "<em>No worker rows in feed yet</em>"}
+            </div>
+          </section>`;
+      }
+      if (!entries.length) {
+        cards = `<p class="lede">Worker activity is not available in the current status schema.</p>`;
+      }
+      return `
+        <section class="panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Active fleet</p>
+              <h2>VMs, workers & per-VM cost estimates</h2>
+              <p class="lede">Every running VM with live worker rows. Archive names are basenames or safe hashes; paths are never published. Dollar figures are estimates only.</p>
+            </div>
+            <div class="freshness-line"><span>${formatCount(entries.length, "0")} VMs</span><span>${formatCount(reporting, "0")} worker rows</span></div>
+          </div>
+          <div class="vm-grid">${cards}</div>
+        </section>`;
+    }
+
+    function archiveTable(bundle) {
+      const rows = [
+        ["Archives total", archiveMetric(bundle, "total")],
+        ["Done", archiveMetric(bundle, "done")],
+        ["Remaining", archiveMetric(bundle, "remaining")],
+        ["Failed", archiveMetric(bundle, "failed")],
+        ["Retried", archiveMetric(bundle, "retried")],
+        ["Skip-list (done earlier by the baseline pipeline, not re-extracted)", archiveMetric(bundle, "skipped")]
+      ];
+      return `<div class="table-wrap"><table>
+        <thead><tr><th>Archive lifecycle</th><th>Count</th></tr></thead>
+        <tbody>${rows.map(([label, value]) =>
+          `<tr><td>${label}</td><td>${missing(value, formatCount)}</td></tr>`).join("")}</tbody>
+      </table></div>`;
+    }
+
+    function shaCoverageCaption(bundle) {
+      const cov = dedupCoverage(bundle);
+      const shaCov = cov && cov.sha256;
+      const withH = shaCov && number(shaCov.archives_with_hashes);
+      const inRaw = shaCov && number(shaCov.archives_in_raw);
+      if (withH === null || inRaw === null) return "";
+      const lag = Math.max(0, inRaw - withH);
+      const exact = withH === inRaw && (shaCov.exact_vs_live === true || shaCov.status === "exact");
+      const prefix = bundle.id === "combined" ? "SHA coverage" : "Global SHA reducer coverage";
+      return `${prefix} ${exact ? "exact" : "partial"} · covered ${integerFormat.format(withH)}/${integerFormat.format(inRaw)} finished archives · lag ${integerFormat.format(lag)}${exact ? "" : " · distinct counts apply only to covered archives"}`;
+    }
+
+    function assetRow(bundle, category, label, className = "") {
+      return `<tr class="${className}"><td>${label}</td>
+        <td>${formatRawCell(bundle, category)}</td>
+        <td>${formatWeakDistinctCell(bundle, category)}</td>
+        <td>${formatShaDistinctCell(bundle, category)}</td></tr>`;
+    }
+
+    function extensionRow(bundle, family, extension) {
+      return `<tr class="sub-row"><td>${extension}</td>
+        <td>${formatRawCell(bundle, family, extension)}</td>
+        <td>${formatWeakDistinctCell(bundle, family, extension)}</td>
+        <td>${formatShaDistinctCell(bundle, family, extension)}</td></tr>`;
+    }
+
+    function assetTable(bundle) {
+      const covNote = shaCoverageCaption(bundle);
+      return `<div class="table-wrap"><table>
+        <thead><tr><th>Extracted asset</th><th>Raw observations + provenance</th><th>Weak name + size</th><th>SHA-256 distinct</th></tr></thead>
+        <tbody>
+          ${assetRow(bundle, "pdf", "All PDFs")}
+          ${assetRow(bundle, "cad_pdf", "CAD PDFs")}
+          ${assetRow(bundle, "other_pdf", "Non-CAD PDFs")}
+          ${assetRow(bundle, "2d", "2D total", "group-row")}
+          ${EXTENSIONS_2D.map(extension => extensionRow(bundle, "2d", extension)).join("")}
+          ${assetRow(bundle, "3d", "3D total", "group-row")}
+          ${EXTENSIONS_3D.map(extension => extensionRow(bundle, "3d", extension)).join("")}
+          ${assetRow(bundle, "nc1", "NC1")}
+        </tbody>
+      </table></div>${covNote ? `<p class="caption">${covNote}</p>` : ""}`;
+    }
+
+    function blockTable(bundle) {
+      const block = blockMetrics(bundle);
+      const node = block.blockNode;
+      const ratioCell = number(block.ratio) !== null
+        ? formatRatio(block.ratio)
+        : blockMetricCell(block.ratio, node, "unique_status", formatRatio);
+      return `<div class="table-wrap"><table>
+        <thead><tr><th>Block-level deduplication</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td>Distinct block hashes</td><td>${blockDistinctCell(block.distinctBlocks, node)}</td></tr>
+          <tr><td>Total block bytes</td><td>${blockMetricCell(block.totalBytes, node, "total_bytes_status", formatBytes)}</td></tr>
+          <tr><td>Unique block bytes</td><td>${blockMetricCell(block.uniqueBytes, node, "unique_status", formatBytes)}</td></tr>
+          <tr><td>Duplicate block bytes</td><td>${blockMetricCell(block.duplicateBytes, node, "duplicate_status", formatBytes)}</td></tr>
+          <tr><td>Dedup ratio (total ÷ unique)</td><td>${ratioCell}</td></tr>
+        </tbody>
+      </table></div>`;
+    }
+
+    function transferTable(status, bundle) {
+      // Storage totals are exact sums, but only over archives that have a
+      // result document. Render the publisher's coverage note with the value
+      // so a partial-population figure is never read as a full-corpus total.
+      const node = isObject(status.storage) ? scopedValue(status.storage, bundle.id) : undefined;
+      const note = isObject(node) && typeof node.coverage_note === "string" ? node.coverage_note : "";
+      const cov = note ? `<small class="raw-provenance">${escapeHtml(note)}</small>` : "";
+      const extractedUnmeasured = isObject(node) && node.extracted_bytes_status === "not_measured";
+      const extractedWhy = extractedUnmeasured && typeof node.extracted_bytes_reason === "string"
+        ? node.extracted_bytes_reason : "";
+      const rows = [
+        ["Extracted bytes", storageMetric(status, bundle, "extractedBytes"), null, extractedUnmeasured],
+        ["Compressed source bytes transferred", storageMetric(status, bundle, "transferredBytes")],
+        ["Stored object count", storageMetric(status, bundle, "storedObjects"), "count"],
+        ["Stored object bytes", storageMetric(status, bundle, "storedBytes")]
+      ];
+      return `<div class="table-wrap"><table>
+        <thead><tr><th>Transfer &amp; storage</th><th>Value</th></tr></thead>
+        <tbody>${rows.map(([label, value, kind, unmeasured]) => {
+          if (unmeasured && !present(value)) {
+            return `<tr><td>${label}</td><td><span class="missing" title="${escapeHtml(extractedWhy)}">not measured</span></td></tr>`;
+          }
+          const fmt = kind === "count" ? formatCount : formatBytes;
+          const cell = present(value)
+            ? `<span class="raw-value">${fmt(value)}${cov}</span>`
+            : missing(value, fmt, "not published");
+          return `<tr><td>${label}</td><td>${cell}</td></tr>`;
+        }).join("")}</tbody>
+      </table></div>`;
+    }
+
+    function percentage(part, other) {
+      const a = number(part);
+      const b = number(other);
+      return a === null || b === null || a + b === 0 ? null : a / (a + b) * 100;
+    }
+
+    function binaryCard(label, raw, rawOther, shaDisplay, shaForPercent = null, shaOtherForPercent = null) {
+      const rawPercent = percentage(raw, rawOther);
+      const shaPercent = percentage(shaForPercent, shaOtherForPercent);
+      const shaPercentSuffix = number(shaPercent) === null ? "" : ` · ${formatPercent(shaPercent)}`;
+      return `<div class="binary-card">
+        <div class="binary-top"><strong>${label}</strong><span>${formatPercent(rawPercent)}</span></div>
+        <div class="meter" aria-hidden="true"><span style="width:${number(rawPercent) === null ? 0 : rawPercent.toFixed(2)}%"></span></div>
+        <div class="binary-meta"><span>Raw ${missing(raw, formatCount)}</span><span>SHA ${shaDisplay}${shaPercentSuffix}</span></div>
+      </div>`;
+    }
+
+    function pdfSection(bundle) {
+      const cadRaw = countValue(bundle, "cad_pdf", "raw");
+      const otherRaw = countValue(bundle, "other_pdf", "raw");
+      const cadSha = countValue(bundle, "cad_pdf", "sha256");
+      const otherSha = countValue(bundle, "other_pdf", "sha256");
+      const classRows = PDF_CLASSES.map(([key, label]) => `<tr><td>${label}</td>
+        <td>${formatClassificationRawCell(bundle, key)}</td>
+        <td>${formatClassificationShaCell(bundle, key)}</td></tr>`).join("");
+
+      return `<section class="data-section">
+        <div class="data-heading"><div><h3>PDF classification</h3></div>
+          <p>Raw observations vs byte-distinct SHA-256 files</p></div>
+        <div class="binary-grid">
+          ${binaryCard("CAD PDFs", cadRaw, otherRaw, formatShaDistinctCell(bundle, "cad_pdf"))}
+          ${binaryCard("Non-CAD PDFs", otherRaw, cadRaw, formatShaDistinctCell(bundle, "other_pdf"))}
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Drawing class</th><th>Raw</th><th>SHA-256 distinct</th></tr></thead>
+          <tbody>${classRows}</tbody>
+        </table></div>
+        <p class="caption">Percentages use only the published CAD/non-CAD binary counts. Missing drawing classes are not inferred.</p>
+      </section>`;
+    }
+
+    function depthValue(distribution, depth, supplied) {
+      if (!supplied) return undefined;
+      const value = aliasValue(distribution, [String(depth), depth]);
+      return present(value) ? value : 0;
+    }
+
+    function bundleComplete(bundle) {
+      const total = number(archiveMetric(bundle, "total")), done = number(archiveMetric(bundle, "done"));
+      return total !== null && total > 0 && done !== null && done >= total && (number(archiveMetric(bundle, "remaining")) ?? 0) === 0;
+    }
+
+    function depthSection(bundle) {
+      const complete = bundleComplete(bundle);
+      const finished = distributionObject(bundle, [
+        "finished_archive_max_depth_distribution", "finished_by_depth", "max_depth_distribution",
+        "finished_depth_distribution", "depth_counts"
+      ]);
+      const nodes = distributionObject(bundle, ["archive_nodes_by_depth", "nodes_by_depth", "nested_nodes_by_depth"]);
+      const finishedSupplied = isObject(finished) && Object.keys(finished).length > 0;
+      const nodesSupplied = isObject(nodes) && Object.keys(nodes).length > 0;
+      const measured = depthMetric(bundle, ["measured_finished_archives", "finished_archives_measured", "measured_archives"]);
+      const unopened = depthMetric(bundle, ["unopened_archives_not_measured", "unopened_not_measured", "unmeasured_unopened"]);
+      const cap = depthMetric(bundle, ["depth_cap", "max_depth_cap", "nesting_depth_cap"]);
+      const capHits = depthMetric(bundle, ["depth_cap_hits", "cap_hits", "archives_hitting_depth_cap"]);
+      let maximum = depthMetric(bundle, ["max_measured_depth", "maximum_measured_depth", "deepest"]);
+      if (number(maximum) === null && finishedSupplied) {
+        const observed = Object.entries(finished)
+          .filter(([, value]) => number(value) > 0)
+          .map(([key]) => number(key))
+          .filter(value => value !== null);
+        if (observed.length) maximum = Math.max(...observed);
+      }
+      const maxBucket = finishedSupplied
+        ? Math.max(0, ...Array.from({ length: 16 }, (_, depth) => number(depthValue(finished, depth, true)) || 0))
+        : 0;
+      const rows = Array.from({ length: 16 }, (_, depth) => {
+        const finishedCount = depthValue(finished, depth, finishedSupplied);
+        const nodeCount = depthValue(nodes, depth, nodesSupplied);
+        const width = maxBucket > 0 && number(finishedCount) !== null ? number(finishedCount) / maxBucket * 100 : 0;
+        return `<tr><td>Depth ${depth}</td>
+          <td>${missing(finishedCount, formatCount)}</td>
+          <td>${missing(nodeCount, formatCount)}</td>
+          <td><div class="mini-bar-track" aria-hidden="true"><span style="width:${width.toFixed(2)}%"></span></div></td></tr>`;
+      }).join("");
+
+      return `<section class="data-section">
+        <div class="data-heading"><div><h3>Exact measured nesting depth</h3></div>
+          <p>Finished archives only · exact depths 0–15</p></div>
+        <div class="depth-summary">
+          <div><span>Finished measured</span><strong>${missing(measured, formatCount)}</strong></div>
+          <div><span>${complete ? "Depth not recorded" : "Unopened / unmeasured"}</span><strong>${missing(unopened, formatCount)}</strong></div>
+          <div><span>Max measured depth</span><strong>${missing(maximum, formatCount)}</strong></div>
+          <div><span>Depth-cap hits</span><strong>${missing(capHits, formatCount)}</strong></div>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Exact measured depth</th><th>Finished archive maximum</th><th>Archive nodes opened</th><th>Distribution</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>
+        <p class="caption">${complete ? "Every archive is extracted; archives whose extraction record carries no depth measurement are not included." : "Unopened archives have no measured nesting depth and are not included."} The configured safety cap is
+          ${number(cap) === null ? '<span class="missing">not available</span>' : formatCount(cap)}; a depth-cap hit is not inferred from a bucket count.</p>
+      </section>`;
+    }
+
+    function backlogSection(bundle) {
+      if (bundleComplete(bundle)) return "";
+      const supplied = bundle.backlogArrays.length > 0;
+      const rows = supplied ? bundle.backlogArrays[0] : [];
+      let content;
+      if (!supplied) {
+        content = `<div class="empty-state">Size-bucket backlog is not available in the current status schema.</div>`;
+      } else if (!rows.length) {
+        content = `<div class="empty-state">No remaining size-bucket rows were reported.</div>`;
+      } else {
+        const body = rows.map(row => {
+          const label = aliasValue(row, ["label", "bucket", "range", "size_bucket", "name"]);
+          const remaining = aliasValue(row, ["remaining", "left", "count", "archives"]);
+          const bytes = aliasValue(row, ["bytes", "source_bytes", "compressed_bytes", "remaining_bytes"]);
+          const tb = aliasValue(row, ["tb", "source_tb", "terabytes"]);
+          const sourceSize = number(bytes) !== null
+            ? formatBytes(bytes)
+            : number(tb) !== null ? `${formatDecimal(tb, 3)} TB` : '<span class="missing">not available</span>';
+          return `<tr><td>${escapeHtml(label || "not available")}</td><td>${missing(remaining, formatCount)}</td>
+            <td>${sourceSize}</td><td><span class="missing">not measured</span></td></tr>`;
+        }).join("");
+        content = `<div class="table-wrap"><table>
+          <thead><tr><th>Archive size bucket</th><th>Remaining</th><th>Compressed source size</th><th>Exact depth</th></tr></thead>
+          <tbody>${body}</tbody>
+        </table></div>`;
+      }
+      return `<section class="data-section">
+        <div class="data-heading"><div><h3>Remaining backlog by archive size</h3></div>
+          <p>Unopened rows have no depth measurement</p></div>
+        ${content}
+      </section>`;
+    }
+
+    function scopeHasData(bundle) {
+      return [
+        archiveMetric(bundle, "total"),
+        countValue(bundle, "pdf", "raw"),
+        countValue(bundle, "2d", "raw"),
+        depthMetric(bundle, ["measured_finished_archives"])
+      ].some(value => number(value) !== null);
+    }
+
+
+    function dedupCoverage(bundle) {
+      if (isObject(bundle.globalDedupCoverage)) return bundle.globalDedupCoverage;
+      for (const root of bundle.roots) {
+        const value = root && root.dedup_coverage;
+        if (isObject(value)) return value;
+      }
+      return null;
+    }
+
+    function renderDedupCoverage(bundle) {
+      const coverage = dedupCoverage(bundle);
+      if (!coverage) {
+        return `<div class="data-card"><div class="data-heading"><div><h3>Dedup coverage</h3></div><p>Reducer coverage block not published</p></div><p class="missing">not available</p></div>`;
+      }
+      const rows = [
+        ["SHA-256 identities", coverage.sha256],
+        ["Weak name+size", coverage.weak_name_size],
+        ["Weak CAD/non-CAD PDF subtype", coverage.weak_pdf_subtype],
+        ["Distinct block hashes", coverage.block_distinct_hashes],
+        ["Duplicate block bytes", coverage.block_duplicate_bytes]
+      ];
+      const body = rows.map(([label, entry]) => {
+        if (label.includes("Weak")) {
+          return `<tr><td>${escapeHtml(label)}</td><td class="missing">not measured — EC2 results omit weak lists</td></tr>`;
+        }
+        if (!isObject(entry)) {
+          return `<tr><td>${escapeHtml(label)}</td><td class="missing">not measured</td></tr>`;
+        }
+        const covered = number(entry.covered_archives ?? entry.archives_with_hashes);
+        const completed = number(entry.completed_archives ?? entry.archives_in_raw);
+        const lag = covered === null || completed === null ? null : Math.max(0, completed - covered);
+        const exact = covered !== null && completed !== null && lag === 0
+          && (entry.exact_vs_live === true || entry.status === "exact");
+        const status = covered !== null && completed !== null
+          ? (exact ? "exact" : "partial")
+          : (entry.status ? String(entry.status) : "not available");
+        const reason = entry.reason ? String(entry.reason) : "";
+        let detail = escapeHtml(status);
+        if (covered !== null && completed !== null) {
+          detail += ` · covered ${formatCount(covered)}/${formatCount(completed)} archives · lag ${formatCount(lag)}`;
+        }
+        if (reason) detail += ` · ${escapeHtml(reason)}`;
+        const cls = exact ? "ok" : (status === "partial" ? "warn" : "missing");
+        return `<tr><td>${escapeHtml(label)}</td><td class="${cls}">${detail}</td></tr>`;
+      }).join("");
+      const scopeNote = bundle.id === "combined"
+        ? "Covered finished archives ÷ live done; lag is shown explicitly"
+        : "Global reducer coverage (not a per-disk coverage proof); lag is shown explicitly";
+      return `<div class="data-card"><div class="data-heading"><div><h3>Dedup coverage</h3></div><p>${scopeNote}</p></div><table><thead><tr><th>Metric</th><th>Status and live coverage</th></tr></thead><tbody>${body}</tbody></table></div>`;
+    }
+
+    function renderScopePanel(status, definition) {
+      const bundle = buildBundle(status, definition.id);
+      const done = archiveMetric(bundle, "done");
+      const remaining = archiveMetric(bundle, "remaining");
+      const pdf = countValue(bundle, "pdf", "raw");
+      const hasData = scopeHasData(bundle);
+      const unavailableNote = hasData ? "" : `<div class="availability-note">
+        Per-disk metrics are not available in the current status schema. Combined values are not split or inferred.
+      </div>`;
+
+      return `<section id="panel-${definition.id}" class="tab-panel" role="tabpanel"
+        aria-labelledby="tab-${definition.id}" data-scope-panel="${definition.id}"
+        ${definition.id === selectedScope ? "" : "hidden"}>
+        <div class="scope-heading">
+          <div class="scope-title-wrap"><span class="scope-mark" aria-hidden="true">${definition.short}</span>
+            <div><h2>${definition.label}</h2><p>Truthful published counts; missing fields are labeled not available.</p></div></div>
+          <span class="chip">${hasData ? "status fields available" : "awaiting segmented fields"}</span>
+        </div>
+        ${unavailableNote}
+        <div class="scope-grid">
+          <div class="scope-stat"><span>Archives done</span><strong>${missing(done, formatCount)}</strong></div>
+          <div class="scope-stat"><span>Archives remaining</span><strong>${missing(remaining, formatCount)}</strong></div>
+          <div class="scope-stat"><span>PDF observations</span><strong>${missing(pdf, formatCount)}</strong></div>
+        </div>
+        <section class="data-section">
+          <div class="data-heading"><div><h3>Archive lifecycle</h3></div><p>Retries and skips are explicit only</p></div>
+          ${archiveTable(bundle)}
+        </section>
+        <section class="data-section">
+          <div class="data-heading"><div><h3>Extracted asset inventory</h3></div>
+            <p>${(() => {
+              const shaStatus = (((bundle.counts || {})["2d"] || {}).sha256_status) || (((bundle.root || {}).dedup || {}).sha256 || {}).status || "";
+              const covNote = shaCoverageCaption(bundle);
+              if (covNote) return covNote;
+              if (String(shaStatus).includes("global_distinct") || String(shaStatus).includes("set_union")) {
+                return "Raw is the finished-archive occurrence sum; SHA-256 is the verified distinct set, with Combined as the cross-disk set-union";
+              }
+              return "Raw totals include baseline + new EC2; SHA shows proven distinct counts with coverage when available";
+            })()}</p></div>
+          ${assetTable(bundle)}
+        </section>
+        <section class="data-section">
+          <div class="data-heading"><div><h3>Block-level deduplication</h3></div><p>1 MiB blocks when supplied</p></div>
+          ${blockTable(bundle)}
+        </section>
+        <section class="data-section">
+          <div class="data-heading"><div><h3>Transfer &amp; storage footprint</h3></div><p>Per-disk values only when published</p></div>
+          ${transferTable(status, bundle)}
+        </section>
+        ${pdfSection(bundle)}
+        ${depthSection(bundle)}
+        ${backlogSection(bundle)}
+        ${renderDedupCoverage(bundle)}
+      </section>
+`;
+    }
+
+    function renderDatasetTabs(status) {
+      const tabs = SCOPE_DEFS.map(definition => `<button id="tab-${definition.id}" class="tab" type="button"
+        role="tab" aria-controls="panel-${definition.id}" aria-selected="${definition.id === selectedScope}"
+        tabindex="${definition.id === selectedScope ? 0 : -1}" data-scope-tab="${definition.id}">${definition.label}</button>`).join("");
+      const panels = SCOPE_DEFS.map(definition => renderScopePanel(status, definition)).join("");
+      return `<section id="main-content" class="panel" aria-labelledby="datasets-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">Segmented inventory</p><h2 id="datasets-title">Disk-level extraction detail</h2>
+            <p>Use the tabs to inspect Disk 1, Disk 2, or the cross-disk combined view.</p></div>
+        </div>
+        <div class="tabs" role="tablist" aria-label="Dataset scope">${tabs}</div>
+        ${panels}
+      </section>`;
+    }
+
+    function throughputValues(status) {
+      const roots = uniqueObjects([
+        status.throughput, status.rates, status.performance,
+        isObject(status.progress) ? status.progress.throughput : null
+      ]);
+      let archivesPerHour = metricFromRoots(roots, ["archives_per_hour", "archive_rate_per_hour", "archives_hour"]);
+      let compressedGbPerHour = metricFromRoots(roots, [
+        "compressed_gb_per_hour", "source_gb_per_hour", "source_archive_gb_per_hour", "download_gb_per_hour"
+      ]);
+      const uploadGbPerHour = metricFromRoots(roots, [
+        "gcs_upload_gb_per_hour", "upload_gb_per_hour", "stored_gb_per_hour", "stored_extracted_gb_per_hour"
+      ]);
+      const bytesRemaining = metricFromRoots(roots, ["bytes_remaining", "compressed_bytes_remaining", "source_bytes_remaining"]);
+      let etaSeconds = metricFromRoots(roots, ["eta_seconds", "remaining_seconds"]);
+      const etaHours = metricFromRoots(roots, ["eta_hours_at_observed_archive_rate"]);
+      if (number(etaSeconds) === null && number(etaHours) !== null) etaSeconds = number(etaHours) * 3600;
+      const etaAt = metricFromRoots(roots, ["eta_at", "estimated_completion_at"]);
+      const ordering = metricFromRoots(roots.concat([status]), ["ordering", "archive_order", "processing_order"]);
+      let archiveSource = number(archivesPerHour) === null ? "unavailable" : "reported";
+      let compressedSource = number(compressedGbPerHour) === null ? "unavailable" : "reported";
+
+      const uptimeHours = number(pickPath(status, [["compute", "uptime_hours"]]));
+      const combined = buildBundle(status, "combined");
+      const doneOnGcp = number(archiveMetric(combined, "doneOnGcp"));
+      const transferred = number(pickPath(status, [["aws_source", "bytes_transferred"]]));
+      if (number(archivesPerHour) === null && uptimeHours > 0 && doneOnGcp !== null) {
+        archivesPerHour = doneOnGcp / uptimeHours;
+        archiveSource = "cumulative";
+      }
+      if (number(compressedGbPerHour) === null && uptimeHours > 0 && transferred !== null) {
+        compressedGbPerHour = transferred / 1e9 / uptimeHours;
+        compressedSource = "cumulative";
+      }
+      return {
+        archivesPerHour, compressedGbPerHour, uploadGbPerHour, bytesRemaining,
+        etaSeconds, etaAt, ordering, archiveSource, compressedSource,
+        uploadSource: number(uploadGbPerHour) === null ? "unavailable" : "reported"
+      };
+    }
+
+    function throughputCard(label, value, formatter, source) {
+      return `<div class="throughput-card"><span>${label}</span>
+        <strong>${number(value) === null ? '<span class="missing">not available</span>' : formatter(value)}</strong>
+        <span class="metric-source">${source}</span></div>`;
+    }
+
+    function renderThroughput(status) {
+      if (extractionDone(status)) {
+        const bundle = buildBundle(status, "combined");
+        return `<section class="panel" aria-labelledby="throughput-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">Pace &amp; projection</p><h2 id="throughput-title">Extraction complete</h2>
+            <p>${formatCount(archiveMetric(bundle, "total"))} of ${formatCount(archiveMetric(bundle, "total"))} archives processed. Nothing remains, so no rate or ETA applies.</p></div>
+        </div>
+      </section>`;
+      }
+      const rates = throughputValues(status);
+      let eta = '<span class="missing">not available</span>';
+      let etaSource = "withheld";
+      if (number(rates.etaSeconds) !== null) {
+        eta = formatDurationSeconds(rates.etaSeconds);
+        etaSource = "publisher-reported";
+      } else if (present(rates.etaAt)) {
+        eta = formatTimestamp(rates.etaAt);
+        etaSource = "publisher-reported";
+      }
+      const orderNote = present(rates.ordering)
+        ? ` Reported processing order: ${escapeHtml(rates.ordering)}.`
+        : "";
+      return `<section class="panel" aria-labelledby="throughput-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">Pace &amp; projection</p><h2 id="throughput-title">Throughput and ETA</h2>
+            <p>Cumulative rates are derived only from matching AWS counters and EC2 uptime.</p></div>
+        </div>
+        <div class="throughput-grid">
+          ${throughputCard("Archives / hour", rates.archivesPerHour, value => `${rateFormat.format(value)} /h`, rates.archiveSource)}
+          ${throughputCard("Compressed GB / hour", rates.compressedGbPerHour, value => `${rateFormat.format(value)} GB/h`, rates.compressedSource)}
+          ${throughputCard("Output upload GB / hour", rates.uploadGbPerHour, value => `${rateFormat.format(value)} GB/h`, rates.uploadSource)}
+          ${throughputCard("Bytes remaining", rates.bytesRemaining, formatBytes, number(rates.bytesRemaining) === null ? "unavailable" : "reported")}
+          <div class="throughput-card"><span>ETA</span><strong>${eta}</strong><span class="metric-source">${etaSource}</span></div>
+        </div>
+        <div class="callout">No ETA is inferred by this page. ETA appears only when the publisher supplies one; otherwise it remains unavailable. Early or smallest-first processing can make cumulative averages optimistic.${orderNote}</div>
+      </section>`;
+    }
+
+    function recentArrays(status) {
+      const results = [];
+      const errors = [];
+      for (const value of [
+        status.recent_results, status.latest_results, pickPath(status, [["results", "recent"]]),
+        pickPath(status, [["archives", "recent_results"]])
+      ]) {
+        if (Array.isArray(value)) results.push(...value.filter(isObject));
+      }
+      for (const value of [
+        status.recent_errors, status.recent_failures, status.retries,
+        pickPath(status, [["errors", "recent"]]), pickPath(status, [["failures", "recent"]])
+      ]) {
+        if (Array.isArray(value)) errors.push(...value.filter(isObject));
+      }
+      return { results, errors };
+    }
+
+    function recentCard(row, forceError = false) {
+      const rawArchive = aliasValue(row, [
+        "archive_basename", "archive", "current_archive", "name", "key", "path", "result_object"
+      ]);
+      const name = basename(rawArchive);
+      const disk = aliasValue(row, ["disk", "source_disk"]) || diskFromValue(rawArchive);
+      const status = aliasValue(row, ["status", "state", "result"]) || (forceError ? "failure" : "finished");
+      const finished = aliasValue(row, ["finished_at", "updated_at", "timestamp", "at"]);
+      const error = safeError(aliasValue(row, ["error_summary", "error", "message", "reason"]));
+      return `<article class="recent-card${forceError || error ? " error" : ""}">
+        <div class="recent-meta">${escapeHtml(disk || "Disk not available")} · ${escapeHtml(status)}</div>
+        <div class="archive-name">${escapeHtml(name || "Archive basename not available")}</div>
+        <div class="recent-meta">${formatTimestamp(finished, "time not available")}</div>
+        ${error ? `<p class="error-summary">${escapeHtml(error)}</p>` : ""}
+      </article>`;
+    }
+
+    function renderRecent(status) {
+      const { results, errors } = recentArrays(status);
+      const cards = [];
+      for (const row of results.slice(0, 6)) cards.push(recentCard(row, false));
+      for (const row of errors.slice(0, 6)) cards.push(recentCard(row, true));
+
+      const lastResult = pickPath(status, ["last_result", ["results", "last_result"]]);
+      const proofObject = pickPath(status, ["proof_object", ["results", "proof_object"]]);
+      if (!cards.length && (present(lastResult) || present(proofObject))) {
+        cards.push(`<article class="recent-card">
+          <div class="recent-meta">Latest published checkpoint · finished</div>
+          <div class="archive-name">${escapeHtml(basename(lastResult) || "Result marker not available")}</div>
+          <div class="recent-meta">Latest extracted object: ${escapeHtml(basename(proofObject) || "not available")} ·
+            ${formatTimestamp(status.last_finished_at, "time not available")}</div>
+        </article>`);
+      }
+      if (!cards.length) return "";
+      return `<section class="panel" aria-labelledby="recent-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">Latest outcomes</p><h2 id="recent-title">Recent results &amp; errors</h2>
+            <p>Public entries are reduced to disk, basename, status and a sanitized one-line summary.</p></div>
+        </div>
+        <div class="recent-grid">${cards.join("")}</div>
+      </section>`;
+    }
+
+    function renderCostCard(status) {
+      const gce = isObject(status.gce) ? status.gce : {};
+      const compute = isObject(status.compute) ? status.compute : {};
+      const disk = isObject(status.persistent_disk) ? status.persistent_disk : {};
+      const gcs = isObject(status.gcs) ? status.gcs : {};
+      const aws = isObject(status.aws_source) ? status.aws_source : {};
+      const costs = isObject(status.costs) ? status.costs : {};
+      const costEstimate = isObject(status.cost_estimate) ? status.cost_estimate : {};
+      const costHints = fleetCostEstimates(status);
+      const storedBytes = aliasValue(gcs, ["stored_bytes", "bytes"]);
+      const transferredBytes = aliasValue(aws, ["bytes_transferred", "transferred_bytes"]);
+      const combined = costHints.accrued;
+      const poolHourly = costHints.hourly;
+      const entries = vmEntries(status);
+      const vmRows = entries.map(([name, vm]) => {
+        const c = isObject(vm.costs) ? vm.costs : {};
+        return `<div class="kv"><span>${escapeHtml(aliasValue(vm, ["instance_name"]) || name)}</span><strong>${formatMoney(aliasValue(c, ["hourly_compute_disk_estimate_usd"]))}/hr · ${formatMoney(aliasValue(c, ["accrued_compute_disk_estimate_usd"]))}</strong></div>`;
+      }).join("");
+      return `
+        <aside class="cost-card">
+          <div class="cost-inner">
+            <div class="cost-heading">
+              <div>
+                <p class="eyebrow">Cloud footprint</p>
+                <h2>${fleetReleased(status) ? "Cost estimates (fleet released)" : "Running cost estimates"}</h2>
+              </div>
+            </div>
+            ${fleetReleased(status)
+              ? `<p class="cost-total">Running cost <strong>none · fleet released</strong></p>
+            <p class="estimate-note">Figures below are the publisher's partial estimates from the run (inputs incomplete), not an AWS bill. Actual spend is in AWS billing.</p>`
+              : `<p class="cost-total">Combined accrued estimate <strong>${formatMoney(combined)}</strong></p>`}
+            <div class="kv"><span>Pool compute+disk</span><strong>${fleetReleased(status) ? "none running" : `${formatMoney(poolHourly)} / hr <em>(estimate)</em>`}</strong></div>
+            <h3>EC2 compute</h3>
+            <div class="kv kv-grid">
+              <span>VMs</span><strong>${fleetReleased(status) ? "0 running" : escapeHtml(aliasValue(gce, ["instance_count"]) || entries.length || "n/a")}</strong>
+              <span>Rate</span><strong>${fleetReleased(status) ? "none running" : `${formatMoney(aliasValue(compute, ["hourly_estimate_usd", "hourly_usd"]) ?? aliasValue(costEstimate, ["ec2_hourly_estimate_usd"]))} / hr`}</strong>
+              <span>Accrued</span><strong>${formatMoney(aliasValue(compute, ["accrued_estimate_usd", "accrued_usd"]))}</strong>
+              <span>Uptime</span><strong>${number(compute.uptime_hours ?? costEstimate.uptime_hours ?? costHints.uptimeHours) === null ? "not published" : `${formatDecimal(compute.uptime_hours ?? costEstimate.uptime_hours ?? costHints.uptimeHours)} hr`}</strong>
+            </div>
+            <h3>Per-VM compute+disk</h3>
+            ${fleetReleased(status) ? "<em>No VM running</em>" : (vmRows || "<em>Per-VM estimates not published</em>")}
+            <h3>EBS gp3</h3>
+            <div class="kv kv-grid">
+              <span>Type / size</span><strong>${escapeHtml(aliasValue(disk, ["type"]) || "gp3")} · ${number(aliasValue(disk, ["size_gb"])) === null ? "fleet volumes" : `${formatCount(disk.size_gb)} GB`}</strong>
+              <span>Hourly</span><strong>${fleetReleased(status) ? "none running" : formatMoney(aliasValue(disk, ["hourly_estimate_usd"]) ?? aliasValue(costEstimate, ["gp3_hourly_estimate_usd"]))}</strong>
+              <span>Accrued</span><strong>${formatMoney(aliasValue(disk, ["accrued_estimate_usd", "accrued_usd"]))}</strong>
+            </div>
+            <h3>GCS storage estimate</h3>
+            <div class="kv kv-grid">
+              <span>Objects</span><strong>${formatCount(aliasValue(gcs, ["object_count", "objects"]))}</strong>
+              <span>Stored</span><strong>${formatBytes(storedBytes)}</strong>
+              <span>Monthly</span><strong>${formatMoney(aliasValue(gcs, ["estimated_monthly_usd", "monthly_estimate_usd"]))}</strong>
+            </div>
+            <h3>AWS egress estimate</h3>
+            <div class="kv kv-grid">
+              <span>Transferred</span><strong>${formatBytes(transferredBytes)}</strong>
+              <span>Rate</span><strong>${formatMoney(aliasValue(aws, ["egress_rate_usd_per_gb", "rate_usd_per_gb"]))} / GB</strong>
+              <span>Estimate</span><strong>${formatMoney(aliasValue(aws, ["running_egress_estimate_usd", "egress_estimate_usd"]))}</strong>
+            </div>
+            <p class="estimate-note">${escapeHtml(aliasValue(costs, ["estimate_label", "label"]) || aliasValue(costEstimate, ["label"]) || "Estimates only — not a cloud invoice. Missing billing inputs are not available.")}</p>
+            <div class="poll-line">
+              <span>Live feed</span>
+              <span id="poll-state" class="poll-state">20s poll · ~20s publish</span>
+            </div>
+          </div>
+        </aside>`;
+    }
+
+
+    // ---- STEP conversions & packaged dataset (companion file conversions.json, published with this page)
+    let conversionsData = null;
+    async function loadConversions() {
+      for (const url of ["conversions.json", "https://raw.githubusercontent.com/dhigdec/cad-extract-status/main/conversions.json"]) {
+        try {
+          const response = await fetch(`${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`, { cache: "no-store" });
+          if (!response.ok) continue;
+          conversionsData = await response.json();
+          return;
+        } catch (error) { /* try the next source */ }
+      }
+    }
+
+    function convTile(label, value, note) {
+      return `<div class="throughput-card"><span>${escapeHtml(label)}</span><strong>${formatCount(value)}</strong>` +
+        (note ? `<span class="metric-source">${escapeHtml(note)}</span>` : "") + `</div>`;
+    }
+
+    function convRows(obj, labels) {
+      return Object.entries(obj || {}).map(([key, value]) =>
+        `<tr><td>${escapeHtml(labels[key] || key.replace(/_/g, " "))}</td><td>${formatCount(value)}</td></tr>`).join("");
+    }
+
+    function renderConversions() {
+      const c = conversionsData;
+      if (!isObject(c)) return "";
+      const step = c.step_in_dataset || {}, pkg = c.packaging || {}, ifc = c.ifc_to_step || {}, db1 = c.db1_to_step || {};
+      const distinct = step.distinct_converted || {}, checks = pkg.checks || {};
+      const ext = (c.leftovers || {}).extraction || {};
+      const db1Reasons = {
+        layout_not_decodable: "Part-table layout not identified (large models); nothing guessed",
+        empty_model: "Empty / template / environment models (no parts)",
+        no_part_table: "No part table (old-format files, templates, profile libraries)",
+        held_back_orientation: "Held back: member orientation check failed",
+        held_back_attribute_link: "Held back: column orientation check failed",
+        no_buildable_profiles: "Parts found, but no profile the writer can build",
+        corrupt_source: "Corrupt source file (compressed stream fails its CRC)",
+        no_body_geometry: "Converted, but no solid body geometry",
+        step_writer_failed: "STEP stage failed",
+        not_a_tekla_model: "Not a Tekla model (no version banner)",
+        pending: "Still converting"
+      };
+      const ifcReasons = {
+        grid_only_or_no_geometry: "Complete file without product geometry (mostly grid-only exports)",
+        truncated_source: "Truncated source file (an intact copy is converted where one exists)",
+        zero_filled_source: "Source file is all zero bytes",
+        corrupt_source: "Source file is corrupt (garbled content)",
+        not_ifc_ole2: "Not IFC: binary document with an .ifc name",
+        not_ifc_cis2: "Not IFC: CIS/2 file with an .ifc name",
+        kernel_crash: "Geometry kernel crashes on the model",
+        no_geometry: "IFC holds no product geometry",
+        converter_failed: "Converter failed (every repair and mode tried)",
+        converter_timeout: "Converter did not finish within 6 h",
+        not_ifc: "Not an IFC model (CIS/2 file with an .ifc name)",
+        too_large_for_memory: "Needs more memory than a 512 GB host",
+        bad_output: "Output failed the STEP flavour check",
+        not_run: "No conversion result",
+        worker_error: "Worker error"
+      };
+      const checkLabels = {
+        step_in_2d: "STEP files in a 2d project", "3d_without_step": "3d projects without STEP",
+        project_in_both_routes: "Projects in both 2d and 3d", duplicate_relpath_rows: "Duplicate manifest rows",
+        rows_without_object: "Manifest rows without their file", objects_without_row: "Files without a manifest row",
+        projects_with_content_duplicates: "Projects storing the same content twice (dedup)",
+        projects_with_conversion_placed_twice: "Projects holding one conversion twice (dedup)",
+        slots_model_step_mismatch: "STEP count ≠ project.json slot", step_row_without_source: "STEP rows without a source tag",
+        converted_from_missing: "Converted STEP whose source is missing", bytes_mismatch: "Size mismatches",
+        project_json_route_mismatch: "project.json route mismatches", manifest_unreadable: "Unreadable manifests (packages with files)",
+        project_json_unreadable: "Unreadable project.json"
+      };
+      const checkTotal = Object.values(checks).reduce((sum, v) => sum + (number(v) || 0), 0);
+      const versionRows = Object.entries(db1.by_version || {})
+        .sort((a, b) => (parseFloat(a[0]) || 99) - (parseFloat(b[0]) || 99))
+        .map(([v, r]) => `<tr><td>${v === "None" ? "No version banner" : `Tekla ${escapeHtml(v)}`}</td><td>${formatCount(r.files)}</td><td>${formatCount(r.converted || 0)}</td><td>${formatCount(r.not_converted || 0)}</td></tr>`).join("");
+      const reasonRows = (obj, labels) => Object.entries(obj || {}).sort((a, b) => b[1] - a[1])
+        .map(([k, v]) => `<tr><td>${escapeHtml(labels[k] || k.replace(/_/g, " "))}</td><td>${formatCount(v)}</td></tr>`).join("");
+      const pct = (a, b) => (number(a) !== null && number(b) > 0) ? ` · ${(100 * a / b).toFixed(1)}%` : "";
+      return `<section class="panel" aria-labelledby="conversions-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">3D models · STEP</p><h2 id="conversions-title">STEP conversions &amp; packaged dataset</h2>
+            <p>Every STEP file in the packaged dataset, by origin. ${c.final ? "<strong>Final numbers.</strong>" : "Updating while the last conversions finish."}
+              Generated ${formatTimestamp(c.generated_at)}.</p></div>
+        </div>
+        <div class="throughput-grid">
+          ${convTile("STEP files in dataset", step.total, "all 3d projects")}
+          ${convTile("Native STEP", step.native, "as extracted from archives")}
+          ${convTile("Converted from IFC", step.from_ifc, `${formatCount(distinct.from_ifc)} distinct conversions`)}
+          ${convTile("Converted from Tekla DB1", step.from_db1, `${formatCount(distinct.from_db1)} distinct conversions`)}
+          ${convTile("3D projects", pkg.projects_3d, `of ${formatCount(pkg.projects_total)} projects`)}
+        </div>
+        <section class="data-section">
+          <div class="data-heading"><div><h3>IFC → STEP</h3></div><p>${formatCount(ifc.distinct_sources)} byte-distinct IFC files</p></div>
+          <div class="table-wrap"><table><thead><tr><th>Outcome</th><th>Files</th></tr></thead>
+            <tbody><tr><td><strong>Converted to STEP</strong></td><td><strong>${formatCount(ifc.converted)}</strong>${pct(ifc.converted, ifc.distinct_sources)}</td></tr>
+            ${reasonRows(ifc.not_converted, ifcReasons)}</tbody></table></div>
+          ${number(ifc.recovered_by_input_fix) ? `<p class="caption">${formatCount(ifc.recovered_by_input_fix)} of the converted files needed a repair first: legacy schema header, zipped IFC saved as .ifc, two exports joined in one file, corrupt source coordinates${number(ifc.elements_excluded_total) ? `, or ${formatCount(ifc.elements_excluded_total)} element(s) the geometry kernel crashes on, left out and listed` : ""}.</p>` : ""}
+        </section>
+        <section class="data-section">
+          <div class="data-heading"><div><h3>Tekla DB1 → STEP</h3></div>
+            <p>${formatCount(db1.distinct_sources)} byte-distinct DB1 files in scope (every file the original converter could not handle, plus model files it never attempted) · ${formatCount(db1.parts_written)} parts written</p></div>
+          ${isObject(c.db1_coverage) && number(c.db1_coverage.packaged_db1_files) ? `<div class="table-wrap"><table><thead><tr><th>Coverage across all archives</th><th>Files</th></tr></thead><tbody>
+            <tr><td>DB1 files in the packaged dataset (every copy)</td><td>${formatCount(c.db1_coverage.packaged_db1_files)}</td></tr>
+            <tr><td>Byte-distinct</td><td>${formatCount(c.db1_coverage.packaged_db1_distinct)}</td></tr>
+            <tr><td>… Tekla model databases (all attempted)</td><td>${formatCount(c.db1_coverage.model_db1_distinct_in_dataset)}</td></tr>
+            <tr><td>… xslib.db1 component libraries (not a model, not converted)</td><td>${formatCount(c.db1_coverage.xslib_library_distinct)}</td></tr>
+            <tr><td>Model files the original converter never attempted, found and converted here</td><td>${formatCount(c.db1_coverage.found_never_attempted)}</td></tr>
+            <tr><td><strong>Model DB1 files with a STEP now</strong></td><td><strong>${formatCount(c.db1_coverage.models_with_step)}</strong> of ${formatCount(c.db1_coverage.model_db1_distinct_all)}${pct(c.db1_coverage.models_with_step, c.db1_coverage.model_db1_distinct_all)}</td></tr>
+          </tbody></table></div>` : ""}
+          <div class="table-wrap"><table><thead><tr><th>Outcome</th><th>Files</th></tr></thead>
+            <tbody><tr><td><strong>Converted to STEP (checked)</strong></td><td><strong>${formatCount(db1.converted)}</strong>${pct(db1.converted, db1.distinct_sources)}</td></tr>
+            ${reasonRows(db1.not_converted, db1Reasons)}</tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>Tekla version</th><th>Files</th><th>Converted</th><th>Not converted</th></tr></thead>
+            <tbody>${versionRows}</tbody></table></div>
+          <p class="caption">${escapeHtml(db1.checks || "")}${number(db1.elements_excluded_total) ? ` ${formatCount(db1.elements_excluded_total)} element(s) that hang the geometry kernel were left out of their models and are listed in the results.` : ""}${number(db1.regenerated_outputs) ? ` ${formatCount(db1.regenerated_outputs)} output(s) regenerated after a mesh vertex at the kernel's infinite bound was found.` : ""}</p>
+        </section>
+        <section class="data-section">
+          <div class="data-heading"><div><h3>Packaged dataset (projpkg4)</h3></div><p>${escapeHtml(pkg.layout || "")}</p></div>
+          <div class="table-wrap"><table><thead><tr><th>Measure</th><th>Value</th></tr></thead><tbody>
+            <tr><td>Projects</td><td>${formatCount(pkg.projects_total)}</td></tr>
+            <tr><td>main/3d (hold STEP)</td><td>${formatCount(pkg.projects_3d)}</td></tr>
+            <tr><td>main/2d (drawings / fabrication only)</td><td>${formatCount(pkg.projects_2d)}</td></tr>
+            <tr><td>Moved 2d → 3d by these conversions</td><td>${formatCount(pkg.moved_2d_to_3d)}</td></tr>
+            ${isObject(pkg.corrections) ? `
+            <tr><td>STEP placed for identical DB1 copies the first pass missed</td><td>${formatCount(pkg.corrections.missed_copies_placed)}</td></tr>
+            <tr><td>Header-only STEP files (no geometry) from the original DB1 pipeline, removed</td><td>${formatCount(pkg.corrections.empty_step_removed)}${number(pkg.corrections.projects_moved_back_to_2d) ? ` · ${formatCount(pkg.corrections.projects_moved_back_to_2d)} projects back to 2d` : ""}</td></tr>
+            <tr><td>Identical STEP stored twice in a project, collapsed</td><td>${formatCount(pkg.corrections.step_duplicates_collapsed)}</td></tr>` : ""}
+            <tr><td>STEP rows tagged native / IFC / DB1</td><td>${formatCount(step.native)} / ${formatCount(step.from_ifc)} / ${formatCount(step.from_db1)}${number(step.untagged) ? ` · ${formatCount(step.untagged)} untagged` : ""}</td></tr>
+          </tbody></table></div>
+          ${number(pkg.verified_projects) > 0 ? `<div class="table-wrap"><table><thead><tr><th>Structure check (${formatCount(pkg.verified_projects)} projects)</th><th>Problems found</th></tr></thead><tbody>
+            ${Object.entries(checkLabels).map(([k, label]) => `<tr><td>${escapeHtml(label)}</td><td>${formatCount(number(checks[k]) ?? 0)}</td></tr>`).join("")}
+          </tbody></table></div>
+          <p class="caption">${checkTotal === 0 ? "Every check passed on every project." : `${formatCount(checkTotal)} problems flagged.`}${number((pkg.info || {}).empty_packages) ? ` ${formatCount(pkg.info.empty_packages)} packages hold no files at all (their archives had only non-asset files).` : ""}</p>`
+          : `<p class="caption">The full structure check runs once packaging finishes.</p>`}
+        </section>
+        <section class="data-section">
+          <div class="data-heading"><div><h3>Not opened during extraction</h3></div><p>Everything readable around these was extracted</p></div>
+          <div class="table-wrap"><table><thead><tr><th>Reason</th><th>Archives</th><th>Items</th></tr></thead><tbody>
+            <tr><td>Password-protected nested zips</td><td>${formatCount((ext.encrypted || {}).archives)}</td><td>${formatCount((ext.encrypted || {}).nested_zips)} zips · ${formatCount((ext.encrypted || {}).member_files_locked)} files locked</td></tr>
+            <tr><td>Nested archives 7-Zip cannot open at all</td><td>${formatCount((ext.unopenable_nested_archives || {}).archives)}</td><td>${formatCount((ext.unopenable_nested_archives || {}).nested)} nested archives</td></tr>
+            ${isObject(ext.damaged_nested_archives) ? `<tr><td>Damaged nested archives, partly extracted</td><td>${formatCount(ext.damaged_nested_archives.archives)}</td><td>${formatCount(ext.damaged_nested_archives.entries)} nested archives · ${formatCount(ext.damaged_nested_archives.files_named_not_extracted)} files not extracted</td></tr>` : ""}
+            <tr><td>7-Zip fatal errors, partial content kept</td><td>${formatCount((ext.sevenzip_fatal_accepted_partial || {}).archives)}</td><td>${formatCount((ext.sevenzip_fatal_accepted_partial || {}).events)} events</td></tr>
+          </tbody></table></div>
+          <p class="caption">Recorded by the EC2 extraction pipeline for the ${formatCount(ext.archives_scanned_ec2_era)} archives it processed; the earlier baseline pipeline recorded only explicit errors (${formatCount(ext.baseline_explicit_failure_events)} events, all on archives that later completed).</p>
+        </section>
+      </section>`;
+    }
+
+    function render(status) {
+      app.innerHTML = `<div class="shell">
+        ${renderHeader(status)}
+        <div class="page-grid">
+          <main class="main-column">
+            ${renderScheduler(status)}
+            ${renderWorkers(status)}
+            ${renderDatasetTabs(status)}
+            ${renderConversions()}
+            ${renderThroughput(status)}
+            ${renderRecent(status)}
+          </main>
+          ${renderCostCard(status)}
+        </div>
+        <footer>Read-only public telemetry · Missing values are shown as not measured or not available · Source paths and archive identities are redacted</footer>
+      </div>`;
+      applySelectedScope(false);
+      updateLiveIndicators();
+    }
+
+    function renderInitialError(error) {
+      app.innerHTML = `<div class="shell"><div class="loading"><div class="loading-box">
+        <strong>Status is temporarily unavailable</strong>
+        <div>${escapeHtml(error.message || error)}. Retrying every 5 seconds.</div>
+      </div></div></div>`;
+    }
+
+    function applySelectedScope(shouldFocus) {
+      document.querySelectorAll("[data-scope-tab]").forEach(tab => {
+        const active = tab.dataset.scopeTab === selectedScope;
+        tab.setAttribute("aria-selected", String(active));
+        tab.tabIndex = active ? 0 : -1;
+        if (active && shouldFocus) tab.focus();
+      });
+      document.querySelectorAll("[data-scope-panel]").forEach(panel => {
+        panel.hidden = panel.dataset.scopePanel !== selectedScope;
+      });
+    }
+
+    function setPollState() {
+      const element = document.getElementById("poll-state");
+      if (!element) return;
+      if (pollError) {
+        element.textContent = "Retrying";
+        element.classList.add("retrying");
+        element.classList.remove("fallback");
+        element.title = pollError.message || String(pollError);
+      } else {
+        element.textContent = lastFetchAt
+          ? `${statusSourceLabel()} · checked ${ageTextFromSeconds((Date.now() - lastFetchAt) / 1000)} ago`
+          : statusSourceLabel();
+        element.classList.remove("retrying");
+        element.classList.toggle("fallback", statusSource === "github-fallback" || statusSource === "fallback");
+        element.removeAttribute("title");
+      }
+    }
+
+    function updateLiveIndicators() {
+      if (!latestStatus) return;
+      const health = healthInfo(latestStatus);
+      const badge = document.getElementById("status-badge");
+      const age = document.getElementById("heartbeat-age");
+      if (badge) {
+        badge.className = `status-badge ${health.key}`;
+        badge.textContent = health.label;
+      }
+      if (age) age.textContent = `${ageTextFromSeconds(health.age)} ago`;
+      setPollState();
+    }
+
+    app.addEventListener("click", event => {
+      const tab = event.target.closest("[data-scope-tab]");
+      if (!tab) return;
+      selectedScope = tab.dataset.scopeTab;
+      applySelectedScope(false);
+    });
+
+    app.addEventListener("keydown", event => {
+      const tab = event.target.closest("[data-scope-tab]");
+      if (!tab || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      event.preventDefault();
+      const currentIndex = SCOPE_DEFS.findIndex(scope => scope.id === tab.dataset.scopeTab);
+      let nextIndex = currentIndex;
+      if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + SCOPE_DEFS.length) % SCOPE_DEFS.length;
+      if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % SCOPE_DEFS.length;
+      if (event.key === "Home") nextIndex = 0;
+      if (event.key === "End") nextIndex = SCOPE_DEFS.length - 1;
+      selectedScope = SCOPE_DEFS[nextIndex].id;
+      applySelectedScope(true);
+    });
+
+    const LIVE_STATUS_URL_ALT = "https://cad-extract-status-874846752452.s3.amazonaws.com/status.json";
+
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async function fetchStatus(url, { credentials = "omit" } = {}) {
+      const separator = url.includes("?") ? "&" : "?";
+      const response = await fetch(`${url}${separator}t=${Date.now()}`, {
+        cache: "no-store",
+        mode: "cors",
+        credentials
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    }
+
+    async function fetchLiveS3Status() {
+      const urls = [LIVE_STATUS_URL, LIVE_STATUS_URL_ALT];
+      const credentialModes = ["include", "omit"];
+      let lastError = null;
+      for (const url of urls) {
+        for (const credentials of credentialModes) {
+          for (let attempt = 0; attempt < 2; attempt += 1) {
+            try {
+              return await fetchStatus(url, { credentials });
+            } catch (error) {
+              lastError = error;
+              if (attempt === 0) await sleep(350);
+            }
+          }
+        }
+      }
+      throw lastError || new Error("live S3 status fetch failed");
+    }
+
+    let conversionsLoadedAt = 0;
+    async function tick() {
+      if (!conversionsData || Date.now() - conversionsLoadedAt > 60000) {
+        await loadConversions(); conversionsLoadedAt = Date.now();
+      }
+      try {
+        let status;
+        let source;
+        // Live S3 is source of truth whenever fetch succeeds. GitHub/GCS only when S3 throws.
+        try {
+          status = await fetchLiveS3Status();
+          source = "aws-s3";
+        } catch (primaryError) {
+          try {
+            status = await fetchStatus(FALLBACK_GITHUB_STATUS_URL);
+            source = "github-fallback";
+          } catch (githubError) {
+            try {
+              status = await fetchStatus(FALLBACK_GCS_STATUS_URL);
+              source = "gcs-fallback";
+            } catch (gcsError) {
+              throw new Error(`AWS/GitHub/GCS status failed (${primaryError.message}; ${githubError.message}; ${gcsError.message})`);
+            }
+          }
+        }
+        status = normalizeStatus(status);
+        const payload = `${source}:${JSON.stringify(status)}`;
+        latestStatus = status;
+        statusSource = source;
+        lastFetchAt = Date.now();
+        pollError = null;
+        if (payload !== lastPayload) {
+          lastPayload = payload;
+          render(status);
+        } else {
+          updateLiveIndicators();
+        }
+      } catch (error) {
+        pollError = error;
+        if (!latestStatus) renderInitialError(error);
+        setPollState();
+      }
+    }
+
+    tick();
+    setInterval(tick, POLL_MS);
+    setInterval(updateLiveIndicators, 1000);
+  </script>
+</body>
+</html>

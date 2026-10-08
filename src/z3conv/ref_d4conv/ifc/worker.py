@@ -1,0 +1,415 @@
+#!/usr/bin/env python3
+"""Zentitude-data-4 IFC / IFCZIP / ifcXML -> STEP worker (fleet kit, one process per host).
+
+Job list  _control/conv/ifc/jobs.json   (one job per distinct new sha256; input_key = stored data-4 object)
+Output    conversions/ifc-step/<sha256>.step (+ .stats.json, .validate.json)
+Result    _state/conv/ifc/results/<sha256>.json   {status ok|fail, reason, input_fix, step{...}, validate{...}}
+
+Per job (lessons of the Disk-1/2 run, HANDOFF_CAD_STEP.md 5.3):
+  1. unpack: .ifczip / zip saved as .ifc -> largest .ifc member; gzip -> raw; OLE2 / CIS/2 / stub -> fail with reason
+  2. input repairs: legacy schema (IFC2X2_FINAL, IFC2X_FINAL...) declared IFC2X3; concatenated exports merged
+     (ifc_concat_fix: renumber + one IfcProject); file cut mid-statement: strict tail repair (0 dangling refs)
+  3. ifc2step5.py --mode hybrid --prec 2 (transcode faceted items, tessellate the rest; AP214 faceted B-rep, mm)
+     on ifcopenshell 0.9.0; kernel crash / hang / timeout -> retry on 0.8.4.post1; still crashing -> bisect the
+     crashing elements (ifc_crash_bisect) and leave out only those (<= max(50, 1%)), listed in the result;
+     parse failure -> normalized header, then tess-only mode
+  4. bbox check (|v| >= 1e10 mm = corrupt source coordinates) -> ifc2step5_guard (tessellates those elements)
+  5. flavour markers + OpenCASCADE read-back (roots, solids, faces, bbox) -> status ok only if geometry reads back
+"""
+import os, sys, re, json, time, gzip, shutil, zipfile
+HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
+import convfleet as cf
+
+CODE = 'z4-ifc-2026-09-30f'
+# f: runtime v5 - redo rules evaluated safely (requeued download_error results were hidden: 'attempts' is an int retry count
+#    on transient-final results); redo() accepts a non-list attempts
+# e: runtime v4: at most 3 jobs >= 100 MB per host (all processes), disk reserved 40x input per job (several 200 MB
+#    Tekla CMC IFC filled a 400 GB root), redo entries by failure reason (download_error requeue after the extraction repair)
+# d: runtime convfleet-v3 (redo list read from S3 every round instead of a watched file; hand-off without waiting)
+# c: STEP writer encodes names safely (Revit feet-inch names 8'' were written as '''' which OpenCASCADE 8.0.1 cannot lex:
+#    entities dropped -> segfault on read-back), drops zero-area POLY_LOOPs; read-back crashes -> readback_crash (STEP kept
+#    under _readback_crash/); code a/b readback failures and the ids in redo_ids.json (published but unreadable) re-run
+# b: parse errors retried on ifcopenshell 0.8.4 (0.9.0 rejects e.g. Windows '-1.#IND' NaN tokens of Tekla 16 exports; 0.8.4 was
+#    the Disk-1/2 kernel); code-a failures that never tried 0.8.4 re-run; disk gating (runtime v2)
+OUT = cf.ROOT + '/conversions/ifc-step'
+W = os.environ.get('CONV_HOME', '/opt/conv')
+PY = os.path.join(W, 'env/bin/python')                 # conda: ifcopenshell 0.9.0 + pythonocc-core
+PY84 = os.path.join(W, 'ifc84/bin/python')             # venv: ifcopenshell 0.8.4.post1 (fallback kernel)
+CONV = os.path.join(HERE, 'ifc2step5.py'); GUARD = os.path.join(HERE, 'ifc2step5_guard.py')
+VAL = os.path.join(HERE, 'validate_step.py')
+RB_MAX = int(os.environ.get('RB_MAX_MB', '256')) << 20
+TIMEOUT = int(os.environ.get('IFC_TIMEOUT_S', str(6 * 3600)))
+STALL = 1800
+THREADS = os.environ.get('IFC_THREADS', '2')
+FILES = ('worker.py', 'convfleet.py', 'ifc2step5.py', 'ifc2step5_guard.py', 'ifc_concat_fix.py', 'ifc_crash_bisect.py',
+         'ifc_exclude.py', 'validate_step.py')
+CRASH = (-11, 139, -6, 134, 124, 125)
+
+
+def need_disk(job):
+    # input + unpacked copy + STEP (large Tekla inputs expand 2-10x, small ones up to 80x)
+    n = job.get('size') or 0
+    if job.get('kind') == 'ifczip':
+        n *= 6
+    return max(2 << 30, n * 40)
+
+
+def redo(r):
+    """results of older code that this code can do better"""
+    if r.get('status') == 'ok':
+        return False
+    if any(m in json.dumps(r, default=str) for m in cf.ENOSPC_MARKS):
+        return True
+    att = r.get('attempts') if isinstance(r.get('attempts'), list) else []
+    tried84 = any(isinstance(a, dict) and a.get('kernel') == '0.8.4.post1' for a in att)
+    if r.get('reason') in ('readback_fail', 'readback_crash') and r.get('code') in ('z4-ifc-2026-09-30a', 'z4-ifc-2026-09-30b'):
+        return True                               # written before the degenerate-loop fix of the STEP writer
+    return r.get('reason') in ('parse_error', 'convert_error', 'empty_output', 'truncated_source') and not tried84
+
+
+def need_bytes(job):
+    # measured on the Disk-1/2 run: ifcopenshell peaks at ~10-20x the SPF size (parse + tessellation)
+    n = job.get('size') or 0
+    if job.get('kind') == 'ifczip':
+        n *= 6                                    # zip ratio of SPF text is ~5-10x
+    return max(2 << 30, n * 16)
+
+
+def unpack(src, dst, rec):
+    """-> path of the SPF / ifcXML file to convert, or raises Fail"""
+    with open(src, 'rb') as f:
+        head = f.read(8)
+    if head[:4] == b'PK\x03\x04':
+        with zipfile.ZipFile(src) as z:
+            infos = [i for i in z.infolist() if not i.is_dir()]
+            rec['zip_members'] = [[i.filename, i.file_size] for i in infos][:50]
+            ifcs = [i for i in infos if i.filename.lower().endswith(('.ifc', '.ifcxml'))] or infos
+            if not ifcs:
+                raise Fail('empty_zip')
+            m = max(ifcs, key=lambda i: i.file_size)
+            ext = '.ifcXML' if m.filename.lower().endswith('.ifcxml') else '.ifc'
+            out = dst + ext
+            try:
+                with z.open(m) as a, open(out, 'wb') as b:
+                    shutil.copyfileobj(a, b, 1 << 24)
+            except RuntimeError as e:             # encrypted member
+                raise Fail('zip_encrypted', str(e)[:200])
+            except (zipfile.BadZipFile, NotImplementedError) as e:
+                raise Fail('zip_unreadable', str(e)[:200])
+            rec['unzipped'] = {'member': m.filename, 'bytes': m.file_size, 'members': len(infos),
+                               'ifc_members': sum(1 for i in infos if i.filename.lower().endswith('.ifc'))}
+            return unpack(out, dst + '.inner', rec) if open(out, 'rb').read(4) in (b'PK\x03\x04',) else out
+    if head[:2] == b'\x1f\x8b':
+        out = dst + '.ifc'
+        with gzip.open(src) as a, open(out, 'wb') as b:
+            shutil.copyfileobj(a, b, 1 << 24)
+        rec['gunzipped'] = True
+        return out
+    if head[:8] == bytes.fromhex('D0CF11E0A1B11AE1'):
+        raise Fail('not_ifc_ole2_document')
+    return src
+
+
+class Fail(Exception):
+    def __init__(self, reason, detail=None):
+        super().__init__(reason); self.reason = reason; self.detail = detail
+
+
+def sniff(path, rec):
+    size = os.path.getsize(path)
+    with open(path, 'rb') as f:
+        head = f.read(1 << 16)
+        f.seek(max(0, size - 4096)); tail = f.read()
+    if size < 200 or not head.strip(b'\x00 \r\n\t'):
+        raise Fail('empty_or_stub_file', f'{size} bytes')
+    if head.lstrip()[:5] == b'<?xml' or b'<ifcXML' in head[:4096] or b'iso_10303_28' in head[:4096]:
+        rec['format'] = 'ifcxml'; return 'ifcxml'
+    if b'ISO-10303-21' not in head[:4096]:
+        if not head.replace(b'\x00', b''):
+            raise Fail('all_zero_file')
+        raise Fail('not_step21', head[:60].decode('latin1'))
+    m = re.search(rb"FILE_SCHEMA\s*\(\s*\(\s*'([^']+)'", head)
+    schema = m.group(1).decode('latin1').upper() if m else None
+    rec['schema_in'] = schema
+    if schema and schema.startswith('STRUCTURAL_FRAME'):
+        raise Fail('not_ifc_cis2', schema)
+    rec['terminated'] = tail.rstrip(b'\x00 \r\n\t').endswith(b'END-ISO-10303-21;')
+    return schema
+
+
+def fix_schema(src, dst, schema, rec):
+    if schema in ('IFC2X2_FINAL', 'IFC2X_FINAL', 'IFC2X2', 'IFC2X', 'IFC2X2_PLATFORM', 'IFC2X_PLATFORM', 'IFC2X3_FINAL', 'IFC2X3_TC1'):
+        data = open(src, 'rb').read()
+        m = re.search(rb"FILE_SCHEMA\s*\(\s*\(\s*'([^']+)'", data[:1 << 16])
+        data = data[:m.start(1)] + b'IFC2X3' + data[m.end(1):]
+        open(dst, 'wb').write(data); rec.setdefault('input_fix', []).append(f'schema_{schema}_declared_IFC2X3')
+        return dst
+    if schema in ('IFC4X1', 'IFC4X2', 'IFC4X3_RC1', 'IFC4X3_RC2', 'IFC4X3_RC3', 'IFC4X3_RC4', 'IFC4X3_TC1', 'IFC4X3_ADD1', 'IFC4X3_ADD2'):
+        data = open(src, 'rb').read()
+        m = re.search(rb"FILE_SCHEMA\s*\(\s*\(\s*'([^']+)'", data[:1 << 16])
+        data = data[:m.start(1)] + b'IFC4X3_ADD2' + data[m.end(1):]
+        open(dst, 'wb').write(data); rec.setdefault('input_fix', []).append(f'schema_{schema}_declared_IFC4X3_ADD2')
+        return dst
+    return src
+
+
+def normalize_header(src, dst, schema, rec):
+    data = open(src, 'rb').read()
+    h = re.search(rb'HEADER;(.*?)ENDSEC;', data, re.S)
+    if not h:
+        return None
+    std = (b"HEADER;\nFILE_DESCRIPTION(('ViewDefinition [CoordinationView]'),'2;1');\n"
+           b"FILE_NAME('model.ifc','2000-01-01T00:00:00',(''),(''),'','','');\n"
+           b"FILE_SCHEMA(('" + (schema or 'IFC2X3').encode() + b"'));\nENDSEC;")
+    open(dst, 'wb').write(data[:h.start()] + std + data[h.end():])
+    rec.setdefault('input_fix', []).append('header_normalized')
+    return dst
+
+
+def tail_repair(path, rec):
+    """a file cut mid-statement is repaired ONLY if nothing but the unfinished tail is lost: cut at the last
+    complete statement, terminate, and require 0 dangling #refs + IfcProject + IfcUnitAssignment"""
+    data = open(path, 'rb').read()
+    cut = max(data.rfind(b';\r\n'), data.rfind(b';\n'))
+    if cut < 0:
+        return {'refused': 'no complete statement'}
+    body = data[:cut + 1]; dropped = len(data) - len(body)
+    if body.rstrip().endswith(b'ENDSEC;'):
+        body = body.rstrip()[:-len(b'ENDSEC;')]
+    ids = set(int(m.group(1)) for m in re.finditer(rb'#(\d+)\s*=', body))
+    refs = set(int(m.group(1)) for m in re.finditer(rb'#(\d+)', re.sub(rb"'[^']*'", b'', body)))
+    dangling = len(refs - ids)
+    proj = re.search(rb'=\s*IFCPROJECT\s*\(', body, re.I) is not None
+    units = re.search(rb'=\s*IFCUNITASSIGNMENT\s*\(', body, re.I) is not None
+    info = {'dropped_bytes': dropped, 'entities_kept': len(ids), 'dangling_refs': dangling, 'project': proj, 'units': units}
+    if dangling or not proj or not units or dropped > 1 << 20:
+        info['refused'] = f'{dangling} dangling refs, project={proj}, units={units}, cut {dropped} bytes'
+        return info
+    nl = b'\r\n' if b'\r\n' in body[-64:] else b'\n'
+    with open(path, 'wb') as fh:
+        fh.write(body.rstrip() + nl + b'ENDSEC;' + nl + b'END-ISO-10303-21;' + nl)
+    info['repaired'] = True
+    return info
+
+
+def geometry_census(fl, path, logf):
+    """what the model holds when a conversion writes no parts: products with a body vs grids/annotations only"""
+    code = ("import ifcopenshell,json,sys\nf=ifcopenshell.open(sys.argv[1])\nskip={'IfcOpeningElement','IfcSpace','IfcGrid','IfcAnnotation','IfcVirtualElement','IfcOpeningStandardCase'}\n"
+            "n=0;b=0;g=0\nfor p in f.by_type('IfcProduct'):\n  n+=1\n  if p.is_a() in ('IfcGrid','IfcAnnotation'): g+=1\n  elif p.is_a() not in skip and p.Representation: b+=1\n"
+            "print(json.dumps({'products':n,'with_body':b,'grids_annotations':g}))")
+    try:
+        rc, out, err = fl.sh([PY, '-c', code, path], timeout=3600)
+        return json.loads(out.strip().splitlines()[-1])
+    except Exception as e:
+        return {'error': f'{type(e).__name__}: {str(e)[:100]}'}
+
+
+def convert(fl, jid, py, conv, src, stp, logf, mode='hybrid'):
+    for f in (stp, stp + '.stats.json'):
+        if os.path.exists(f): os.remove(f)
+    t = time.time()
+    rc = fl.run(jid, [py, conv, src, stp, '--mode', mode, '--prec', '2', '--threads', THREADS], logf, TIMEOUT, stall=STALL,
+                env=dict(os.environ, DEFLECTION='0.005', ANG_DEFLECTION='0.6'))
+    st = {}
+    try:
+        st = json.load(open(stp + '.stats.json'))
+    except Exception:
+        pass
+    ok = rc == 0 and os.path.exists(stp) and (st.get('parts') or 0) > 0
+    return {'rc': rc, 'ok': ok, 'sec': round(time.time() - t, 1), 'mode': mode, 'kernel': '0.8.4.post1' if py == PY84 else '0.9.0',
+            'converter': os.path.basename(conv), 'parts': st.get('parts'), 'stats': st}
+
+
+def tail_of(logf, n=1500):
+    try:
+        return open(logf, errors='replace').read()[-n:]
+    except Exception:
+        return ''
+
+
+def process(fl, job, d):
+    jid = job['id']; logf = os.path.join(d, 'log.txt')
+    rec = {'sha256': job['sha256'], 'kind': job.get('kind'), 'input_key': job['input_key'], 'in_bytes': job.get('size'),
+           'n_paths': job.get('n_paths'), 'paths_sample': job.get('paths', [])[:3], 'out_key': f'{OUT}/{jid}.step', 'attempts': []}
+    raw = os.path.join(d, 'in.bin')
+    try:
+        cf.s3.download_file(cf.B, job['input_key'], raw)
+    except Exception as e:
+        return dict(rec, status='fail', reason='download_error', transient=True, error=str(e)[:300])
+    got = cf.sha256_file(raw)
+    if got != job['sha256']:
+        return dict(rec, status='fail', reason='input_sha_mismatch', transient=True, error=got)
+    try:
+        src = unpack(raw, os.path.join(d, 'unz'), rec)
+        schema = sniff(src, rec)
+    except Fail as e:
+        return dict(rec, status='fail', reason=e.reason, detail=e.detail)
+    except Exception as e:
+        return dict(rec, status='fail', reason='unpack_error', detail=f'{type(e).__name__}: {str(e)[:200]}')
+    if schema == 'ifcxml':
+        x = src if src.lower().endswith('.ifcxml') else src + '.ifcXML'
+        if x != src: os.replace(src, x)
+        src = x
+    else:
+        src = fix_schema(src, os.path.join(d, 'schema.ifc'), schema, rec)
+        n_iso = 0
+        with open(src, 'rb') as f:              # headers = 'ISO-10303-21;' not preceded by 'END-' (chunk overlap kept)
+            prev = b''
+            for chunk in iter(lambda: f.read(1 << 24), b''):
+                buf = prev[-32:] + chunk
+                n_iso += buf.count(b'ISO-10303-21;') - buf.count(b'END-ISO-10303-21;') - (prev[-32:].count(b'ISO-10303-21;') - prev[-32:].count(b'END-ISO-10303-21;'))
+                prev = chunk
+        rec['spf_headers'] = n_iso
+        if n_iso > 1:
+            rc, out, err = fl.sh([PY, os.path.join(HERE, 'ifc_concat_fix.py'), src, os.path.join(d, 'merged.ifc')], timeout=3600)
+            try:
+                rep = json.loads(out.strip().splitlines()[-1])
+            except Exception:
+                rep = {'result': 'error', 'err': err[-300:]}
+            rec['concat'] = rep
+            if rep.get('result') == 'merged':
+                src = os.path.join(d, 'merged.ifc'); rec.setdefault('input_fix', []).append('concatenated_exports_merged')
+        if not rec.get('terminated'):
+            tr = tail_repair(src, rec); rec['tail'] = tr
+            if tr.get('repaired'):
+                rec.setdefault('input_fix', []).append('truncated_tail_repaired')
+    stp = os.path.join(d, 'out.step')
+    # ---- conversion ladder
+    a = convert(fl, jid, PY, CONV, src, stp, logf); rec['attempts'].append(a)
+    if not a['ok'] and a['rc'] == -9:
+        raise MemoryError()
+    if not a['ok'] and schema == 'ifcxml' and os.path.exists(PY84):
+        a = convert(fl, jid, PY84, CONV, src, stp, logf); rec['attempts'].append(a)   # 0.9.0 dropped the ifcXML reader
+        if not a['ok'] and a['rc'] == -9: raise MemoryError()
+    if not a['ok'] and a['rc'] in CRASH and os.path.exists(PY84):
+        a = convert(fl, jid, PY84, CONV, src, stp, logf); rec['attempts'].append(a)
+        if not a['ok'] and a['rc'] == -9: raise MemoryError()
+    soft = lambda a: not a['ok'] and a['rc'] not in CRASH and a['rc'] not in (0, -9)
+    if soft(a) and schema != 'ifcxml':
+        if os.path.exists(PY84):
+            # 0.9.0 parses strictly (e.g. Windows '-1.#IND' NaN tokens of Tekla 16 exports); 0.8.4.post1 (the Disk-1/2 kernel) is lenient
+            a = convert(fl, jid, PY84, CONV, src, stp, logf); rec['attempts'].append(a)
+            if not a['ok'] and a['rc'] == -9: raise MemoryError()
+        if soft(a):
+            nh = normalize_header(src, os.path.join(d, 'hdr.ifc'), schema if schema and schema.startswith('IFC') else None, rec)
+            if nh:
+                src = nh
+                for py in ([PY, PY84] if os.path.exists(PY84) else [PY]):
+                    a = convert(fl, jid, py, CONV, src, stp, logf); rec['attempts'].append(a)
+                    if not a['ok'] and a['rc'] == -9: raise MemoryError()
+                    if not soft(a): break
+        if soft(a):
+            a = convert(fl, jid, PY84 if a['kernel'] == '0.8.4.post1' else PY, CONV, src, stp, logf, mode='tess'); rec['attempts'].append(a)
+            if not a['ok'] and a['rc'] == -9: raise MemoryError()
+    if not a['ok'] and a['rc'] in CRASH and schema != 'ifcxml':
+        # geometry kernel crash / hang: bisect the culprit elements, leave out exactly those
+        py = PY84 if os.path.exists(PY84) else PY
+        info = {'at': cf.now()}
+        try:
+            rc = fl.run(jid, [py, os.path.join(HERE, 'ifc_crash_bisect.py'), src, CONV, THREADS if int(THREADS) > 2 else '4', '300'],
+                        os.path.join(d, 'bisect.log'), 4 * 3600)
+            lines = [l for l in tail_of(os.path.join(d, 'bisect.log'), 200000).splitlines() if l.startswith('{')]
+            res = json.loads(lines[-1]) if lines else None
+            if res is None:
+                info['result'] = f'bisect produced no result (rc {rc})'
+            else:
+                culprits = res['culprits']; cap = max(50, res['tessellate_set'] // 100)
+                info.update(tessellate_set=res['tessellate_set'], culprits=len(culprits), bisect_sec=res['secs'])
+                if not culprits:
+                    info['result'] = 'no crashing element isolated'
+                elif len(culprits) > cap:
+                    info['result'] = f'too many crashing elements ({len(culprits)} > {cap})'
+                else:
+                    fixed = os.path.join(d, 'excl.ifc')
+                    rc2, out, err = fl.sh([py, os.path.join(HERE, 'ifc_exclude.py'), src, fixed] + [c['guid'] for c in culprits if c.get('guid')], timeout=3600)
+                    rec['excluded_elements'] = json.loads(out.strip().splitlines()[-1])
+                    a = convert(fl, jid, py, CONV, fixed, stp, logf); rec['attempts'].append(a)
+                    info['result'] = f'converted without {len(culprits)} crashing element(s)' if a['ok'] else f"still fails (rc {a['rc']})"
+                    if a['ok']:
+                        src = fixed; rec.setdefault('input_fix', []).append('kernel_crash_elements_excluded')
+        except Exception as e:
+            info['result'] = f'rescue error: {type(e).__name__}: {str(e)[:200]}'
+        rec['rescue'] = info
+    if not a['ok']:
+        if a['rc'] == 0 and (a['parts'] or 0) == 0:
+            gc = geometry_census(fl, src, logf); rec['census'] = gc
+            reason = 'no_geometry_grid_or_annotation_only' if gc.get('with_body') == 0 else 'empty_output'
+        elif a['rc'] in (124,):
+            reason = 'timeout'
+        elif a['rc'] == 125:
+            reason = 'kernel_hang'
+        elif a['rc'] in (-11, 139, -6, 134):
+            reason = 'kernel_crash'
+        elif schema == 'ifcxml':
+            reason = 'ifcxml_unsupported'
+        elif not rec.get('terminated') and (rec.get('tail') or {}).get('refused'):
+            reason = 'truncated_source'
+        else:
+            t = tail_of(logf, 4000)
+            reason = 'parse_error' if re.search(r'(?i)unable to parse|syntax|parse|unexpected token|not a valid|schema', t) else 'convert_error'
+        return dict(rec, status='fail', reason=reason, log_tail=tail_of(logf))
+    st = a['stats']; bb = st.get('bbox')
+    if not cf.bbox_sane(bb) and schema != 'ifcxml':
+        # corrupt source coordinates (e.g. 2.6e266): the guard converter tessellates such elements
+        g = convert(fl, jid, PY84 if a['kernel'] == '0.8.4.post1' else PY, GUARD, src, stp, logf); rec['attempts'].append(g)
+        if g['ok'] and cf.bbox_sane(g['stats'].get('bbox')):
+            a = g; st = g['stats']; rec.setdefault('input_fix', []).append('corrupt_coordinates_tessellated')
+        else:
+            return dict(rec, status='fail', reason='corrupt_coordinates', bbox=bb, guard_bbox=(g['stats'] or {}).get('bbox'))
+    # ---- validation
+    nb = os.path.getsize(stp)
+    mk = cf.count_markers(stp, cf.STEP_MARKERS)
+    head = open(stp, errors='replace').read(3000)
+    flavour = mk['ADVANCED_FACE'] == 0 and mk['TESSELLATED'] == 0 and mk['TRIANGULATED_FACE_SET'] == 0 and 'AUTOMOTIVE_DESIGN' in head
+    v = {}
+    if nb < RB_MAX:
+        rc = fl.run(jid, [PY, VAL, stp], os.path.join(d, 'val.log'), 3 * 3600, mem_frac=0.85)
+        lines = [l for l in tail_of(os.path.join(d, 'val.log'), 20000).splitlines() if l.startswith('{')]
+        try:
+            v = json.loads(lines[-1])
+        except Exception:
+            v = {'error': f'read-back rc {rc}', 'rc': rc, 'log': tail_of(os.path.join(d, 'val.log'), 300)}
+        if rc == -9:
+            v = {'skipped': 'read-back ran out of memory'}
+    else:
+        v = {'skipped': f'STEP >= {RB_MAX >> 20} MB (marker count used)'}
+    v.pop('file', None); v['markers'] = mk; v['flavour_ok'] = flavour
+    if v.get('read_status') == 'ok' and 'faces' in v:
+        grade = 'ok_solid' if v.get('solids', 0) > 0 else ('ok_surface' if v.get('faces', 0) > 0 else 'empty')
+        v['roots_match_parts'] = v.get('transferred') == st.get('parts')
+        if v.get('bbox') and not cf.bbox_sane(v['bbox']):
+            grade = 'bad_bbox'
+    elif 'skipped' in v:
+        grade = 'ok_solid' if mk['FACETED_BREP'] > 0 else ('ok_surface' if mk['POLY_LOOP'] > 0 else 'empty')
+    else:
+        grade = 'readback_fail'
+    v['grade'] = grade; v['validated'] = v.get('read_status') == 'ok'
+    rec['validate'] = v
+    rec['step'] = {'key': rec['out_key'], 'bytes': nb, 'parts': st.get('parts'), 'faces': st.get('faces'), 'points': st.get('points'),
+                   'bbox_mm': st.get('bbox'), 'schema_in': st.get('schema'), 'file_length_unit': st.get('file_length_unit'),
+                   'transcode_products': st.get('transcode_products'), 'tess_products': st.get('tess_products'),
+                   'kernel': a['kernel'], 'converter': f"{a['converter']} --mode {a['mode']} --prec 2", 'sec': a['sec'],
+                   'peak_rss_mb': st.get('peak_rss_mb'), 'degenerate_faces_dropped': st.get('degenerate_faces_dropped')}
+    if grade == 'readback_fail' and v.get('rc') in (-11, 139, -6, 134):
+        # OpenCASCADE crashes transferring this STEP: not published as a conversion; kept aside for diagnosis
+        key = f'{OUT}/_readback_crash/{jid}.step'
+        try:
+            fl.upload(stp, key, 'application/step'); rec['unverified_key'] = key
+        except Exception:
+            pass
+        return dict(rec, status='fail', reason='readback_crash')
+    if grade not in ('ok_solid', 'ok_surface') or not flavour:
+        return dict(rec, status='fail', reason={'empty': 'empty_output', 'bad_bbox': 'corrupt_coordinates', 'readback_fail': 'readback_fail'}.get(grade, 'bad_flavour'))
+    json.dump(v, open(stp + '.validate.json', 'w'))
+    fl.upload(stp, rec['out_key'], 'application/step')
+    if os.path.exists(stp + '.stats.json'):
+        fl.upload(stp + '.stats.json', rec['out_key'] + '.stats.json', 'application/json')
+    fl.upload(stp + '.validate.json', rec['out_key'] + '.validate.json', 'application/json')
+    rec['status'] = 'ok'
+    if not rec.get('input_fix'): rec['input_fix'] = None
+    return rec
+
+
+if __name__ == '__main__':
+    fl = cf.Fleet('ifc', CODE, process, need_bytes, FILES, need_disk=need_disk, redo=redo, redo_ids_key=f'{cf.ROOT}/_control/conv/ifc/redo_ids.json', big=(100 << 20, 3))
+    sys.exit(fl.main())

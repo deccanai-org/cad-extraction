@@ -1,0 +1,786 @@
+diff -ruN a/sds2-step-pipeline/CHANGES.md b/sds2-step-pipeline/CHANGES.md
+--- a/sds2-step-pipeline/CHANGES.md	2026-10-01 20:36:05
++++ b/sds2-step-pipeline/CHANGES.md	2026-10-01 20:36:05
+@@ -1,5 +1,56 @@
+ # sds2-step-pipeline v5.5.3 — changes from the v4 candidate
+ 
++## v5.5w patch (agentjob sds2-weights-failures; same CLI, same outputs, new manifest fields)
++
++Weights (data-3 items "sds2 family weight" / "sds2 weight 5%"):
++- **Studs, rods, anchors and SDS2 bolt pieces are checked against SDS2's own piece weight** (`turned_brep`).
++  `special_solid` builds them from rings of mesh vertices or, failing that, a straight rod; nothing compared the result
++  with the piece weight. It wrote stud heads without shanks (EDWARDS AFB WS7/8 0.07 vs 1.04 lb), the first leg of
++  bent bars (Cats Rail RB1/2 0.18 vs 1.17 lb), curved rails as straight bars, and 7.039 headed studs at 3.47x (RCMS HS,
++  400 pieces). When the primitive is a guess, or more than 5 % off SDS2's weight, the piece's own closed B-rep is used
++  if it is within 15 % and closer (STERLING VIII RB3/4: 0.11x -> 1.0001x, all 101 bars exact).
++- **Ring detection no longer splits values on a .xxx5 boundary** (`_snap`; 0.4375 / 3.6875 were rounded into two keys).
++- **Square / hex rings stay polygons** (`_polygon_ring`): bolt heads / nuts with 4 or 6 vertices are the prism of
++  SDS2's own polygon, not a cylinder through its corners (+21 % on the head).
++- **Straight-rod stand-ins use the real diameter and length** (`rod_diameter`, `rod_length`): v5.4 used the table W
++  (RB3/4: W = 0.25) and L (the diameter on stud records). Still tagged `[approx: straight rod ...]`.
++- **Exact pieces whose B-rep is SDS2's own stock are no longer replaced by approximations** (`_stock_match`): a closed
++  B-rep outside the 0.6-1.6 weight gate is accepted when it equals the piece-table L x W x T (plates) or the section's
++  catalog lb/ft x L with table length x d x bf extents; the recorded weight is then the outlier
++  (`weight_check.sds2_weight_outliers`, kept out of the ratio). processing-Ted L8x8x3/4: catalog 1,556 lb, B-rep
++  1,563, recorded 4,000; AGRANCLISSEMENT 254S89-144M studs: record 7.53 lb/ft, B-rep 3.71 (v5.4 wrote a 15.9x profile).
++- **Weight tally split by geometry source**: `weight_check.by_source.{exact,built,standin}` and the same parts in every
++  `by_family` entry (`exact` = SDS2's own piece B-rep, `built` = untagged solids the converter built, `standin` =
++  tagged approximations), plus `weight_check.turned_brep`.
++- **Bent-plate fallback no longer hangs on large rings** (`BENT_DROP_BUDGET`; Cardinal Misc_job 7.135: > 45 min ->
++  212 s) and **gross fallbacks are gated at 10x / +50 lb** too (the 1,000-lb floor let MOUNTAIN VIEW BLDG#B-G 7.433
++  write 300 BPL10GAx83 3/16 at 206 lb each vs SDS2's 14.0 lb; such pieces get the piece-table slab stand-in).
++
++Stage-2 failures (data-3 item "sds2 stage 2 failure", 68 jobs on members-only stage 1):
++- **`batch/run_batch.parse_log` reads the last read-back block** (the fleet worker loads it from this zip). With
++  `--verify`, a read-back repair pass re-converts and re-verifies; the fleet judged the first, pre-repair block. 39
++  jobs fell back to stage 1 as `invalid_solids`; 31 of their final STEPs were within the limit (GREAT OAKS 7.132: 13,606
++  of 13,626 valid before the repair, 13,626 of 13,626 after).
++- **The repair pass can leave out instances of parts that failed the assembly check** (and flat-mode exact parts):
++  they went out as placed copies before `DROP_LABELS` was consulted, so solids that stay invalid as placed copies were
++  written again on the last pass (CCJ 7.132 x5, POLICE HEADQUARTERS 7.135, BAHAMAR BLDG#40 7.135: 46-256 invalid).
++  They are now dropped and reported (`exact_solid_invalid_at_placement`).
++- **Job folders without the piece table (`subm/subm_idx`)** convert (21 data-3 jobs; FileNotFoundError before):
++  members as tagged envelopes / joist stand-ins, SDS2 bolt records as usual, and where `subm/` still holds the piece
++  files (BOSK_E 8.010, TATTIER 7.312, RCMS 7.039 x2) each piece the member files place is written from SDS2's stored
++  B-rep (`brep_unindexed`: closed solids only, decoded holes cut), tagged `[unindexed: ...]` because its name, section
++  and weight are not in the job. Manifest: `counts.piece_table_absent`, `counts.subm_piece_files`, stand-in type
++  `unindexed_brep`; never class 1. `instances._is_71` / `_is_70` take the layout from `main/jsetup` when there is no
++  `subm_idx`.
++- **Bolt-derived holes skip parts with a void bounding box** (Nantucket JOB 29MAY14 7.312: `Standard_ConstructionError:
++  Bnd_Box is void` failed the whole stage 2).
++
++ValueErrors (data-3 item "valueerror"):
++- **`sparse_layout` tolerates stale member records** (same change as the SDS2 fixer's v5.5.4 draft, `rel554`): 15-027
++  CSU 7.312 has 810 COLUMN records with NaN end points among 10,452.
++- **The documented 7.243 layout is a sparse fallback** (module docstring, validated on 50_Binney): 100_Binney_Slab_Job
++  (7.243, three MISC members, no work-point key match) failed with `member work points not found`.
++
+ ## v5.5.3 (v5.5.0 + three fixes, released together; same CLI)
+ 
+ Released as one version (owner: avoid three re-run waves). The fixes are listed as 5.5.1, 5.5.2 and 5.5.3.
+diff -ruN a/sds2-step-pipeline/batch/run_batch.py b/sds2-step-pipeline/batch/run_batch.py
+--- a/sds2-step-pipeline/batch/run_batch.py	2026-10-01 20:36:05
++++ b/sds2-step-pipeline/batch/run_batch.py	2026-10-01 20:36:05
+@@ -258,7 +258,17 @@
+ 
+ # ---------------------------------------------------------------------------------------------------------- convert
+ def parse_log(txt):
+-    g = lambda pat, d=None, f=str: (lambda m: f(m.group(1)) if m else d)(re.search(pat, txt))
++    # v5.5w: the LAST match of each pattern. With --verify, sds2_to_step.py re-converts and re-verifies after a read-back
++    # repair pass (up to 3 conversion + read-back blocks in one log); the STEP on disk is the last one. re.search took
++    # the first block, so the fleet judged the pre-repair counts: 39 data-3 jobs fell back to members-only stage 1 as
++    # "invalid_solids" although 31 of their final STEPs were within the limit (e.g. GREAT OAKS 7.132: 13,606 of 13,626
++    # valid before the repair, 13,626 of 13,626 after).
++    def _last(pat):
++        m = None
++        for m in re.finditer(pat, txt):
++            pass
++        return m
++    g = lambda pat, d=None, f=str: (lambda m: f(m.group(1)) if m else d)(_last(pat))
+     return dict(version=g(r"SDS2 version (\S+)"), exact=g(r"'exact': (\d+)", 0, int), plate=g(r"'plate': (\d+)", 0, int),
+                 exact_brep=g(r"'exact_brep': (\d+)", 0, int),
+                 profile_fallback=g(r"'profile_fallback': (\d+)", 0, int),
+diff -ruN a/sds2-step-pipeline/decode/instances.py b/sds2-step-pipeline/decode/instances.py
+--- a/sds2-step-pipeline/decode/instances.py	2026-10-01 20:36:05
++++ b/sds2-step-pipeline/decode/instances.py	2026-10-01 20:36:05
+@@ -105,16 +105,35 @@
+     B+0x6C (512-B blocks, main block at B=0x68, main piece u16 at 0xD4) and the next word is not the member id, so
+     only the orthonormal-rotation / finite-origin checks decide. Chosen from the job's subm_idx layout (440-B)."""
+     if job not in cache:
+-        from piece_table import slot_size
+-        cache[job] = slot_size(open(os.path.join(job, "subm", "subm_idx"), "rb").read(64 * 1024)) in (440, 384)  # 7.1 / 7.0
++        sz = _idx_slot(job)
++        cache[job] = sz in (440, 384) if sz is not None else _jsetup_major(job) in ("7.0", "7.1")  # 7.1 / 7.0
+     return cache[job]
+ 
+ 
+ def _is_70(job, cache={}):
+     if job not in cache:
+-        from piece_table import slot_size
+-        cache[job] = slot_size(open(os.path.join(job, "subm", "subm_idx"), "rb").read(64 * 1024)) == 384
++        sz = _idx_slot(job)
++        cache[job] = sz == 384 if sz is not None else _jsetup_major(job) == "7.0"
+     return cache[job]
++
++
++def _idx_slot(job):
++    """subm_idx slot size, or None when the job folder has no piece table (v5.5w: data-3 has 21 such job folders, e.g.
++    BOSK_E 8.010, TATTIER 7.312, RCMS 7.039: v5.4 raised FileNotFoundError here and the fleet fell back to stage 1)."""
++    from piece_table import slot_size
++    try:
++        with open(os.path.join(job, "subm", "subm_idx"), "rb") as f:
++            return slot_size(f.read(64 * 1024))
++    except OSError:
++        return None
++
++
++def _jsetup_major(job):
++    """'7.0' / '7.1' / ... from main/jsetup's version line ('' when unreadable): the member-file block layout follows
++    the SDS2 version when no subm_idx is there to tell (7.0xx / 7.1xx use the u16 piece-id blocks)."""
++    from sds2job import read_version
++    v = read_version(job)
++    return v[:3] if len(v) >= 3 else ""
+ 
+ 
+ def _member_ids(job, cache={}):
+diff -ruN a/sds2-step-pipeline/decode/manifest.py b/sds2-step-pipeline/decode/manifest.py
+--- a/sds2-step-pipeline/decode/manifest.py	2026-10-01 20:36:05
++++ b/sds2-step-pipeline/decode/manifest.py	2026-10-01 20:36:05
+@@ -34,6 +34,7 @@
+     "mesh_cylinder": "the fastener mesh as a closed solid",
+     "holes_derived_from_bolts": "SDS2 hole records for the main material (NC hole data)",
+     "mating_holes_not_stored": "hole records for the main member (SDS2 keeps them only for NC output)",
++    "unindexed_brep": "the job's piece table subm/subm_idx (piece names, sections, weights); the geometry is SDS2's own B-rep",
+ }
+ 
+ 
+@@ -96,9 +97,19 @@
+             r.append("stand-ins: " + ", ".join(f"{v} {k}" for k, v in st.items()))
+         return (2 if (c.get("skipped") or st) else 1), "R", r
+     if c.get("pieces_written", 0) == 0:
++        if c.get("piece_table_absent"):
++            # v5.5w: source file missing, not a converter limit (piece names / sections / weights live only in subm_idx)
++            return 3, "C", ["members only: the job folder has no piece table (subm/subm_idx"
++                            + (f"; {c.get('subm_piece_files')} unindexed piece files" if c.get("subm_piece_files") else "; no subm/ piece data")
++                            + f"), so no fabricated piece can be read ({c.get('joist_standins', 0)} joist stand-ins, "
++                            f"{c.get('member_envelopes', 0)} envelopes)"]
+         return 3, "C", ["no fabricated pieces in the job: members only"
+                         + (f" ({c.get('joist_standins', 0)} joist stand-ins, {c.get('member_envelopes', 0)} envelopes)")]
+     st = dict(m["standins"]["by_type"])
++    if c.get("piece_table_absent"):
++        # v5.5w: never class 1 - nothing to check the pieces against (names / sections / weights live only in subm_idx)
++        reasons.append(f"the job folder has no piece table (subm/subm_idx): {c.get('pieces_written', 0)} pieces placed from "
++                       "SDS2's stored B-rep without name / section / weight")
+     minor = {k: st.pop(k) for k in list(st) if k in CLASS1_TOLERATED}
+     if minor:
+         reasons.append("tolerated for class 1: " + ", ".join(f"{v} {k}" for k, v in minor.items()))
+@@ -204,7 +215,9 @@
+                                                 nominal=stats.get("bolts_on_stored_hardware_nominal", 0)),
+                   solids_written=len(rows) + stats.get("bolts", 0),
+                   skipped=len(skipped), converter_duplicates_skipped=len(dups),
+-                  unique_parts=stats.get("unique_parts"), parts_written_flat=stats.get("parts_written_flat"))
++                  unique_parts=stats.get("unique_parts"), parts_written_flat=stats.get("parts_written_flat"),
++                  # v5.5w: proof for jobs whose folder lacks the piece table (subm/subm_idx)
++                  piece_table_absent=bool(stats.get("piece_table_absent")), subm_piece_files=stats.get("subm_piece_files"))
+     skip_reasons = collections.Counter(s["reason"] for s in skipped)
+     outl, ratio_ex = _outliers(piece_dev, weights["step_lb"], weights["sds2_lb"])
+     man = dict(schema=SCHEMA, converter="sds2-step-pipeline v5", job=os.path.basename(job.rstrip("/\\")), version=version,
+@@ -215,7 +228,17 @@
+                                  dominant_outliers=outl, ratio_without_outliers=ratio_ex,
+                                  note="steel pieces only: concrete, grating panels and member envelopes are excluded; "
+                                       "joist stand-ins are sized to typical joist weights (not SDS2 data)",
+-                                 by_family=weights.get("by_family")),
++                                 by_family=weights.get("by_family"),
++                                 # v5.5w: the same tally split by geometry source: "exact" = SDS2's own piece B-rep
++                                 # (differs from SDS2's recorded weight only by SDS2's conventions: catalog lb/ft vs
++                                 # its k-based fillets, floor-plate / deck weight tables), "built" = solids the converter
++                                 # built and wrote untagged (stud / rod / bolt primitives), "standin" = tagged
++                                 # approximations (already listed under standins); by_family entries carry all three
++                                 by_source=weights.get("by_source"),
++                                 turned_brep=weights.get("turned_brep"),
++                                 # v5.5w: exact pieces whose B-rep is SDS2's own stock (table L x W x T or catalog lb/ft x L)
++                                 # while the recorded weight disagrees; written exactly, kept out of the ratios
++                                 sds2_weight_outliers=weights.get("sds2_weight_outliers")),
+                holes=holes,
+                standins=dict(total=sum(by_type.values()), by_type=dict(by_type),
+                              share_of_solids=round(sum(by_type.values()) / max(counts["solids_written"], 1), 4),
+diff -ruN a/sds2-step-pipeline/decode/sds2job.py b/sds2-step-pipeline/decode/sds2job.py
+--- a/sds2-step-pipeline/decode/sds2job.py	2026-10-01 20:36:05
++++ b/sds2-step-pipeline/decode/sds2job.py	2026-10-01 20:36:05
+@@ -325,6 +325,11 @@
+     }.get(slot)
+     if slot == 2494 and ver == "7.245":
+         fixed = dict(type=0x988, p1=0x112, p2=0x172, sec=0x1D8, roll=0x1DE, fw=8)
++    if slot == 2494 and ver == "7.243":
++        # v5.5w: the 7.243 layout itself (module docstring: validated on 50_Binney against its IFC). calibrate() needs a
++        # work-point key match in the member files; data-3 100_Binney_Slab_Job (7.243, three MISC members, two of them
++        # with zero work points) has none, so it failed with "member work points not found" (ValueError, class 3)
++        fixed = dict(type=0x988, p1=0x112, p2=0x172, sec=0x1D4, roll=0x1DA, fw=8)
+     if slot in (3204, 3404, 3600):
+         # Later families share the 7.4+ point/section fields.  Their type field moved with the slot width, so accept
+         # it only when at least one real member marker identifies the offset (the failing 7.613 and 8.007 jobs do).
+@@ -354,7 +359,7 @@
+     # allowed, but at least one materialised member must have a printable type.  Structural records additionally need
+     # finite, plausible end points and a real section-table entry.
+     fmt, pl = (">3d", 24) if L["fw"] == 8 else (">3f", 12)
+-    typed = structural = 0
++    typed = structural = bad_points = 0
+     for n in ids:
+         s = idx[n * slot:(n + 1) * slot]
+         if len(s) < slot:
+@@ -370,9 +375,14 @@
+             p2 = np.asarray(struct.unpack(fmt, s[L["p2"]:L["p2"] + pl]), dtype=float)
+         sec = struct.unpack(">h", s[L["sec"]:L["sec"] + 2])[0]
+         if not np.isfinite(p1).all() or not np.isfinite(p2).all() or max(np.abs(p1).max(), np.abs(p2).max()) > 1e6:
+-            return None
++            bad_points += 1
++            continue
+         if sec not in shapes:
+             return None
++    if bad_points and (bad_points > 0.1 * structural or structural - bad_points < 20):
++        # a few unusable end points (data-3 CSU 15-027 7.312: 810 of 10,452, every section valid) are left to the
++        # member builders, which skip non-finite members; more than 10 % means a wrong layout
++        return None
+     return (L, typed) if typed else None
+ 
+ 
+diff -ruN a/sds2-step-pipeline/decode/to_step2.py b/sds2-step-pipeline/decode/to_step2.py
+--- a/sds2-step-pipeline/decode/to_step2.py	2026-10-01 20:36:05
++++ b/sds2-step-pipeline/decode/to_step2.py	2026-10-01 20:36:05
+@@ -123,6 +123,9 @@
+     return np.sort(c)[-2:].sum() / len(x)
+ 
+ 
++BENT_DROP_BUDGET = 5e8   # v5.5w: work cap (combinations x ring points^2) for the dropped-point search in bent_plate_local
++
++
+ def bent_plate_local(V, p):
+     """Bent plate: extrusion of its end-face section. The section outline is the vertices lying on the min face of the
+     extrusion axis, in file order; arc helper points (bend centres) can make that ring self-intersect, so the fewest
+@@ -145,6 +148,9 @@
+         return None
+     best = None
+     for drop in range(0, min(3, len(ring) - 3) + 1):
++        if drop and math.comb(len(ring), drop) * len(ring) ** 2 > BENT_DROP_BUDGET:
++            break   # v5.5w: C(n, drop) rings x an O(n^2) _revisits each never ended on large rings (data-3 Cardinal
++                    # Misc_job 7.135: v5.4 still running after 45 min on a 5 MB job); the concave hull below applies
+         for rm in combinations(range(len(ring)), drop):
+             pts = [ring[k] for k in range(len(ring)) if k not in rm]
+             if _revisits(pts):
+@@ -365,6 +371,21 @@
+     return np.array(V[:nv]) if nv >= 4 and len(V) >= 4 else None
+ 
+ 
++def _snap(v, tol=2e-3):
++    """v5.5w: values closer than tol (gaps of the sorted values) -> their cluster mean. v5.4 rounded stations and radii
++    to 3 decimals, which splits a value on a .xxx5 boundary (radius 0.4375 -> 0.437 / 0.438, 0.3125 -> 0.312 / 0.313,
++    station 3.6875 -> 3.687 / 3.688): rings fell under 3 points or two stations lost their common radius, and studs /
++    bolts were written as their head only (EDWARDS AFB WS7/8: 0.07 vs SDS2 1.04 lb; Sinclair 5/8 x 9 BLT: 0.22 vs 0.86)."""
++    v = np.asarray(v, float)
++    if not len(v):
++        return v
++    o = np.argsort(v, kind="stable"); s_ = v[o]
++    gid = np.concatenate([[0], np.cumsum(np.diff(s_) > tol)])
++    mean = np.bincount(gid, weights=s_) / np.bincount(gid)
++    out = np.empty_like(v); out[o] = np.round(mean[gid], 4)
++    return out
++
++
+ def turned_local(V):
+     """Studs/bolts/rods: rings of vertices at stations along one axis. Returns [(start, length, radius, axis)] local:
+     each segment between consecutive stations takes a radius present at both ends (the larger one only when the
+@@ -375,14 +396,14 @@
+         r = np.linalg.norm(V[:, o], axis=1)
+         ok = r > 0.05
+         if ok.sum() < 6: continue
+-        score = len(np.unique(np.round(r[ok], 3)))
++        score = len(np.unique(_snap(r[ok])))
+         if best is None or score < best[0]:
+             best = (score, a, r)
+     if best is None:
+         return None
+     _, a, r = best
+-    x = np.round(V[:, a], 3)
+-    cnt = collections.Counter((xi, ri) for xi, ri in zip(x, np.round(r, 3)) if ri > 0.05)
++    x = _snap(V[:, a]); rs = _snap(r)
++    cnt = collections.Counter((xi, ri) for xi, ri in zip(x, rs) if ri > 0.05)
+     st = {}
+     for (xi, ri), c in cnt.items():
+         if c >= 3:                                 # a ring, not a stray point (e.g. the weld-fillet ring of a stud)
+@@ -394,10 +415,26 @@
+         if not common: continue
+         L = x1 - x0
+         rr = next((c for c in reversed(common) if L <= 2.5 * c), common[0])
+-        segs.append((x0, L, rr, a))
++        segs.append((x0, L, rr, a, _polygon_ring(V, x, rs, x0, x1, rr, a)))
+     return segs or None
+ 
+ 
++def _polygon_ring(V, x, rs, x0, x1, rr, a):
++    """v5.5w: when the ring at both ends of a segment has exactly 4 or 6 distinct vertices at the same angles (square /
++    hex bolt heads and nuts as SDS2 stores them), -> those cross-axis points in angle order, so the segment is the prism
++    of SDS2's own polygon; None -> a cylinder (faceted circles carry 12+ vertices). v5.4 wrote heads as cylinders
++    through the hexagon's corners: +21 % on the head (ASC 1/2 x 3 1/2 BLT 1.085x, Sinclair 5/8 x 9 BLT 1.068x SDS2)."""
++    o = [k for k in range(3) if k != a]
++    P0 = np.unique(np.round(V[(x == x0) & (rs == rr)][:, o], 4), axis=0)
++    P1 = np.unique(np.round(V[(x == x1) & (rs == rr)][:, o], 4), axis=0)
++    if len(P0) not in (4, 6) or len(P1) != len(P0):
++        return None
++    t0 = np.arctan2(P0[:, 1], P0[:, 0]); t1 = np.sort(np.arctan2(P1[:, 1], P1[:, 0]))
++    if np.abs(np.angle(np.exp(1j * (np.sort(t0) - t1)))).max() > 1e-2:
++        return None                                 # not the same polygon at both ends
++    return [(float(P0[k, 0]), float(P0[k, 1])) for k in np.argsort(t0)]
++
++
+ def concrete_local(V, p, M):
+     """Concrete piece (footing / grade beam): a T-thick prism (volume = the cubic yards in its name). Its mesh also
+     carries a reference level far above (world z 424 on TRI NORTH), so the solid is the bottom T band of the mesh
+@@ -455,14 +492,28 @@
+             # piece's diameter and length along the mesh's longest direction
+             Vx = V if V is not None else Vt
+             if Vx is not None and len(Vx):
++                Vf = piece_vertices(job, sid)            # v5.5w: the piece's face vertices (its solid's own extent)
++                if Vf is not None and len(Vf) >= 4:
++                    Vx = Vf
+                 a = int(np.argmax(np.ptp(Vx, 0)))
+-                segs = [(float(Vx[:, a].min()), p["L"], p["W"] / 2, a)]
++                d_ = rod_diameter(p, Vx)
++                segs = [(float(Vx[:, a].min()), rod_length(p, Vx[:, a], d_), d_ / 2, a)]
+                 SPECIAL_NOTE = "straight rod of the piece diameter and length along the mesh's longest direction (hook / bend not modelled)"
+         if not segs: return None, "fastener: no rings"
+         parts = []
+-        for x0, L, r, a in segs:
++        for sg in segs:
++            x0, L, r, a = sg[:4]
+             u = np.zeros(3); u[a] = 1.0
+             q0 = np.zeros(3); q0[a] = x0
++            if len(sg) > 4 and sg[4]:
++                # v5.5w: square / hex ring -> prism of SDS2's own polygon (see _polygon_ring)
++                o2 = [k for k in range(3) if k != a]; loop = []
++                for c0, c1 in sg[4]:
++                    q = q0.copy(); q[o2[0]] = c0; q[o2[1]] = c1
++                    loop.append(o + Rt @ q)
++                pr = prism(loop, Rt @ (u * L))
++                if pr is not None:
++                    parts.append(pr); continue
+             P0 = (o + Rt @ q0) * MM; D = Rt @ u
+             try:
+                 parts.append(BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(*P0), gp_Dir(*D)), r * MM, L * MM).Shape())
+@@ -473,6 +524,87 @@
+     return None, "no geometry"
+ 
+ 
++_NAME_DIA = re.compile(r"^(?:RB|RD|WS|TWS|HS|NS|AB|DBA|THD(?:\s*STUD)?|STUD)\s*(\d+\s+\d+/\d+|\d+/\d+|\d+\.\d+|\d+)\b")
++
++
++def rod_diameter(p, V):
++    """v5.5w: diameter of a straight-rod stand-in. v5.4 used the piece-table W field, which is the diameter on 7.0-7.4
++    jobs but not on 7.5+ ones (RB3/4, RB5/8: W = 0.25 -> 1/9 or 1/6 of SDS2's weight, STERLING VIII 7.613,
++    THERMOFISHER 8.0). The diameter is now the smallest extent of the piece's own mesh (a bar bent in a plane keeps its
++    diameter across that plane) when the nominal diameter in its SDS2 name (RB3/4, DBA1/2, TWS2) agrees within 15 %;
++    else the name's diameter; W only when neither is available."""
++    from fractions import Fraction
++    dn = 0.0
++    m = _NAME_DIA.match(p.get("name") or "")
++    if m:
++        try:
++            dn = float(sum(Fraction(x) for x in m.group(1).split()))
++        except (ValueError, ZeroDivisionError):
++            dn = 0.0
++        if not 0 < dn <= 48:
++            dn = 0.0
++    dm = float(np.ptp(V, 0).min()) if V is not None and len(V) >= 2 else 0.0
++    if dn and dm and abs(dm - dn) <= 0.15 * dn:
++        return dm
++    return dn or p["W"]
++
++
++def rod_length(p, x, d):
++    """v5.5w: length of a straight-rod stand-in: the piece-table L or the extent of the piece's own vertices along the
++    rod axis, whichever reproduces SDS2's recorded weight with diameter d (stud-type records hold the diameter in L:
++    CENTER GROVE 7.708 'THD STUD 3/4' L = 0.75, extent 2.0 in -> 0.0163 vs SDS2 0.2506 lb; the extent gives 0.2506).
++    The piece-table L when SDS2 has no usable weight (v5.4 behaviour)."""
++    ext = float(np.ptp(x)) if len(x) else 0.0
++    if not (1e-3 < p.get("wt", 0) < 1e6 and d > 0 and ext > 0):
++        return p["L"]
++    lb = lambda L_: math.pi * d * d / 4 * L_ * 0.2836
++    return min((p["L"], ext), key=lambda L_: abs(lb(L_) / p["wt"] - 1))
++
++
++TURNED_TOL = 0.05        # v5.5w: a stud / rod primitive within 5 % of SDS2's piece weight is kept (true cylinders)
++TURNED_BREP_TOL = 0.15   # else the piece's own closed B-rep replaces it when within 15 % and closer to SDS2's weight
++_TURNED = {}             # (job, piece) -> use the B-rep (decided once per piece)
++TURNED_INFO = collections.Counter()   # pieces switched to their B-rep, by reason (manifest: weight_check.turned_brep)
++
++
++def _solid_lb(sh):
++    from OCP.GProp import GProp_GProps
++    from OCP.BRepGProp import BRepGProp
++    g = GProp_GProps(); BRepGProp.VolumeProperties_s(sh, g)
++    return abs(g.Mass()) / MM ** 3 * 0.2836
++
++
++def turned_brep(job, sid, p, M, o, prim, guessed):
++    """v5.5w: special_solid() builds studs, rods and anchors from rings of mesh vertices (or, failing that, a straight
++    rod) and nothing checked them against SDS2's own piece weight. In the data-3 family-weight jobs the ring search kept
++    only a stud's head (P545 HANGAR WS1/2: 0.070 vs SDS2 0.275 lb) or the first leg of a bent bar (Cats Rail RB1/2:
++    0.18 vs 1.17 lb; Eastwood RB1 curved rails 0.75x), and straight rods were sized from W (see rod_diameter). The
++    piece's own B-rep closes for these and matches SDS2's weight (STERLING VIII RB3/4 x 648 in: 80.67 vs 80.66 lb).
++    -> brep_placed() result (SDS2's exact faceted solid, same weight gate as every exact piece) when the primitive is
++    a guess (tagged straight rod) and the B-rep is within TURNED_BREP_TOL of SDS2's weight, or when ring-built
++    cylinders are off SDS2's weight by more than TURNED_TOL and the B-rep is within TURNED_BREP_TOL and closer;
++    None keeps the primitive (true cylinders of the decoded rings: studs within 0.1 % of SDS2's weight)."""
++    key = (job, sid)
++    if key not in _TURNED:
++        use, why = False, ""
++        wt = p.get("wt", 0)
++        okw = 1e-3 < wt < 1e6
++        rp = _solid_lb(prim) / wt if okw else None
++        if guessed or (rp is not None and abs(rp - 1) > TURNED_TOL):
++            if brep_placed(job, sid, p, M, o) is not None and _BREP.get(key) is not None:
++                rb = _solid_lb(_BREP[key]) / wt if okw else None
++                if rb is None:
++                    use, why = guessed, "guessed straight rod replaced by the piece's closed B-rep (no SDS2 weight)"
++                elif abs(rb - 1) <= TURNED_BREP_TOL and (guessed or rp is None or abs(rb - 1) < abs(rp - 1)):
++                    use = True
++                    why = ("guessed straight rod replaced by the piece's closed B-rep" if guessed else
++                           "decoded rings off SDS2's weight; the piece's closed B-rep matches it")
++        _TURNED[key] = use
++        if use:
++            TURNED_INFO[why] += 1
++    return brep_placed(job, sid, p, M, o) if _TURNED[key] else None
++
++
+ SPECIAL_NOTE = ""     # set by special_solid when it had to guess a shape (tagged by the caller)
+ USE_BREP = True       # exact faceted solids from the piece file's own topology (brep.py); False = approximate builders
+ USE_HOLES = True      # cut the piece's bolt holes / slots (brep.holes) into its exact solid
+@@ -493,6 +625,35 @@
+     return all(abs(e - d) <= tol * d + 1e-3 for e, d in zip(ext, dims))
+ 
+ 
++_SHAPES = {}            # v5.5w: job -> section records (set by convert; catalog lb/ft for _stock_match)
++SDS2_WT_OUTLIER = {}    # v5.5w: (job, piece) -> exact B-rep accepted against SDS2's own stock, recorded weight disagrees
++
++
++def _stock_match(V, faces, p, brep_lb, job):
++    """v5.5w: (basis, reference lb) when the piece's closed B-rep is SDS2's own stock although its recorded weight
++    disagrees: a plate whose extents equal the piece-table L x W x T and whose solid is no heavier than that stock, or a
++    rolled piece whose extents equal the table length x its section's d x bf and whose solid is no heavier than 1.1 x
++    the section's catalog lb/ft x L. data-3: EDWARDS AFB PL3/8x3 5/16 (stock 7.93 lb, B-rep 7.83, recorded 4.69),
++    processing-Ted L8x8x3/4 (catalog 1,556 lb, B-rep 1,563, recorded 4,000), YSIDRO W360x237/382/463 (job_mtrl gives
++    all three 335.3 lb/ft; B-reps 163 / 261 / 315 lb/ft as their 237 / 382 / 463 kg/m designations), AGRANCLISSEMENT
++    254S89-144M 16 ga studs (record 7.53 lb/ft, B-rep 3.71; v5.4 wrote a 15.9x profile instead). None otherwise: a
++    misparsed or foreign B-rep stays rejected (EDWARDS AFB PL3/8x7: extents 70.5 x 5 x 5 vs 7 x 7 x 3/8)."""
++    L, W, T = p.get("L", 0), p.get("W", 0), p.get("T", 0)
++    if L > 0 and W > 0 and T > 0 and _extents_match(V, faces, p):
++        stock = L * W * T * 0.2836
++        if 0 < brep_lb <= 1.02 * stock:
++            return ("piece-table L x W x T", stock)
++    sh_ = _SHAPES.get(job, {}).get(p.get("sec")) if p.get("sec", 0) > 0 else None
++    if sh_ is not None and sh_.weight > 0 and L > 0 and sh_.d > 0:
++        used = sorted({i for f in faces for i in f})
++        ext = np.sort(np.ptp(V[used], 0))[::-1]
++        want = np.array([L, max(sh_.d, sh_.bf or sh_.d), min(sh_.d, sh_.bf or sh_.d)])
++        cat = sh_.weight * L / 12
++        if np.all(np.abs(ext - want) <= 0.02 * want + 0.05) and 0 < brep_lb <= 1.1 * cat:
++            return (f"{sh_.name}: B-rep = table length x section d x bf; catalog {sh_.weight:g} lb/ft x L", cat)
++    return None
++
++
+ def brep_placed(job, sid, p, M, o):
+     """Piece's exact solid (built once per piece, cached) placed at o + M.T @ local, or None -> approximate builders.
+     Accepted only when its volume is within 0.6-1.6x of SDS2's recorded weight (guards against misparsed layouts)."""
+@@ -532,8 +693,17 @@
+                 elif r_ <= 0.6 and _extents_match(r[0], r[1], p):
+                     pass          # cut plate weighed as its rectangular stock (SUNY triangular stiffeners: 0.495)
+                 elif not 0.6 < r_ < 1.6:
+-                    sh = None
+-                    BREP_WHY[key] = f"piece B-rep volume {r_:.2f}x SDS2's weight (outside 0.6-1.6)"
++                    basis = _stock_match(r[0], r[1], p, abs(g.Mass()) / MM ** 3 * 0.2836, job)
++                    if basis:
++                        # v5.5w: the B-rep reproduces SDS2's own stock (piece-table L x W x T, or section lb/ft x L) and
++                        # only the recorded weight disagrees (EDWARDS AFB PL3/8x3 5/16: stock 7.93 lb, B-rep 7.83, recorded
++                        # 4.69; Eastwood PIPE 1 1/4 STD x 256 in: catalog 48.4 lb, B-rep 48.1, recorded 17.5): SDS2's exact
++                        # piece, not an approximation; listed in weight_check.sds2_weight_outliers, kept out of the ratio
++                        SDS2_WT_OUTLIER[key] = dict(piece=sid, name=p["name"], sds2_lb=round(p["wt"], 3), basis=basis[0],
++                                                    reference_lb=round(basis[1], 3), brep_lb=round(r_ * p["wt"], 3))
++                    else:
++                        sh = None
++                        BREP_WHY[key] = f"piece B-rep volume {r_:.2f}x SDS2's weight (outside 0.6-1.6)"
+             if sh is not None and USE_HOLES:
+                 H = brep.holes(data)
+                 HOLES[key] = H
+@@ -606,6 +776,52 @@
+     return BRepBuilderAPI_Transform(sh, t, True).Shape()
+ 
+ 
++_UNIDX = {}             # v5.5w: (job, piece) -> closed solid of an unindexed piece file (or None)
++UNINDEXED_WHY = ("piece table absent: SDS2's stored B-rep of this piece file, placed from its member file; the piece name, "
++                 "section and weight are not in the job (subm/subm_idx missing), so the piece is not checked against them")
++
++
++def brep_unindexed(job, sid, M, o):
++    """v5.5w: exact solid of a piece file in a job folder without the piece table (subm/subm_idx). The member files still
++    place their pieces (piece id + rotation + origin blocks, as for any job) and the piece file still holds SDS2's own
++    B-rep and hole records, only the piece's name / section / weight (subm_idx) are gone: data-3 BOSK_E 8.010 (54,492
++    piece files), TATTIER NEW ALBANY 7.312 (4,439), RCMS 7.039 (3,809). Accepted only as a closed, valid solid of sane
++    size (open or broken meshes are left out and counted, never closed); decoded holes are cut as for exact pieces.
++    Shared part + placement like brep_placed."""
++    key = (job, sid)
++    if key not in _UNIDX:
++        sh = None
++        try:
++            data = open(os.path.join(job, "subm", str(sid)), "rb").read()
++            r = brep.parse(data)
++            if r is not None and len(r[1]) <= REF_MAX_FACES:
++                sh = brep.solid(*r)
++            if sh is not None and (_absurd(sh, 1e5) or not BRepCheck_Analyzer(sh).IsValid()):
++                sh = None
++            if sh is not None and USE_HOLES:
++                H = brep.holes(data)
++                if H:
++                    cut = brep.cut_holes(sh, H)
++                    HOLES_CUT["pieces with holes"] += 1
++                    HOLES_CUT["holes" if cut is not sh else "holes not cut"] += len(H)
++                    if cut is sh:
++                        HOLES_NOT_CUT.add(key)
++                    sh = cut
++        except Exception:
++            sh = None
++        _UNIDX[key] = sh
++    sh = _UNIDX[key]
++    if sh is None:
++        return None
++    t = placement(M, o)
++    if t is None:
++        return None
++    if SHARED:
++        return ("shared", sh, t)
++    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
++    return BRepBuilderAPI_Transform(sh, t, True).Shape()
++
++
+ def placement(M, o):
+     """gp_Trsf for world = o + M.T @ local (inches -> mm), or None if M isn't a rotation."""
+     from OCP.gp import gp_Trsf
+@@ -771,9 +987,18 @@
+         t = np.array([trsf.Value(r, 4) for r in (1, 2, 3)]) / MM
+         if key not in loc_box:
+             b = Bnd_Box(); BRepBndLib.Add_s(local, b)
+-            lo, hi = b.CornerMin(), b.CornerMax()
+-            loc_box[key] = np.array([[lo.X(), lo.Y(), lo.Z()], [hi.X(), hi.Y(), hi.Z()]]) / MM
++            if b.IsVoid():
++                # v5.5w: a part with no bounded geometry cannot be a bolted ply. v5.4-v5.5.3 asked the void box for its
++                # corners, OCC raised Standard_ConstructionError and the whole stage 2 failed (data-3 Nantucket JOB
++                # 29MAY14 7.312 -> members-only stage 1)
++                loc_box[key] = None
++                stats["derived_holes_void_parts"] = stats.get("derived_holes_void_parts", 0) + 1
++            else:
++                lo, hi = b.CornerMin(), b.CornerMax()
++                loc_box[key] = np.array([[lo.X(), lo.Y(), lo.Z()], [hi.X(), hi.Y(), hi.Z()]]) / MM
+         lb = loc_box[key]
++        if lb is None:
++            continue
+         corners = np.array([[x, y, z] for x in lb[:, 0] for y in lb[:, 1] for z in lb[:, 2]])
+         W = corners @ R.T + t
+         inst.append((key, local, R, t, W.min(0), W.max(0), k))
+@@ -1001,12 +1226,20 @@
+         return None
+ 
+ 
++def _wpart(v):
++    """{step_lb, sds2_lb, n, ratio} of one weight tally part (None when the part is empty)."""
++    if not v or not v[2]:
++        return None
++    return dict(step_lb=round(v[0], 1), sds2_lb=round(v[1], 1), n=v[2], ratio=round(v[0] / v[1], 4) if v[1] else None)
++
++
+ def reset():
+     """Clear per-job caches before converting again in the same process (read-back repair pass)."""
+     for c in (_BREP, HOLES, BREP_WHY, _REF):
+         c.clear()
+     REF_OPEN.clear(); REF_FACES.clear(); DERIVED_INFO.clear()
+     CONCRETE.clear(); HOLES_NOT_CUT.clear(); HOLES_CUT.clear(); del INVALID_DROPPED[:]
++    _TURNED.clear(); TURNED_INFO.clear(); SDS2_WT_OUTLIER.clear(); _SHAPES.clear(); _UNIDX.clear()
+ 
+ 
+ def convert(job, out, shared=True):
+@@ -1019,7 +1252,27 @@
+     import joist as J
+     import manifest as MF
+     from instances import piece_vertices
+-    pieces = read_pieces(job); shapes = read_shapes(job)
++    # v5.5w: a job folder without the piece table (subm/subm_idx) - backups that keep the piece files but not the index
++    # (data-3: BOSK_E 8.010 54,492 piece files, TATTIER NEW ALBANY 7.312 4,439) or no subm/ at all (CHARLESVIEW 7.135,
++    # Franklin Park 7.516, FORD HUB x2 7.619, BG PODIUM 7.331, IMS6 7.720). v5.4 raised FileNotFoundError and the fleet
++    # fell back to stage 1. Names, sections and weights of the pieces exist only in that table (the piece files hold geometry only),
++    # so no piece can be placed: members are written as tagged work-line envelopes / joist stand-ins, SDS2's own bolt
++    # records and any reference parts as usual, and the manifest carries the proof (counts.piece_table_absent).
++    sdir = os.path.join(job, "subm")
++    no_table = not os.path.exists(os.path.join(sdir, "subm_idx"))
++    pieces = {} if no_table else read_pieces(job)
++    shapes = read_shapes(job)
++    _SHAPES[job] = shapes
++    unidx = {}
++    if no_table:
++        ids_u = sorted(int(x) for x in os.listdir(sdir) if x.isdigit()) if os.path.isdir(sdir) else []
++        nfiles = len(ids_u)
++        unidx = {i: dict(name=f"piece {i}", sec=0, L=0, W=0, T=0, wt=0) for i in ids_u}
++        stats_nt = dict(piece_table_absent=True, subm_piece_files=nfiles)
++        print(f"  piece table subm/subm_idx absent ({nfiles} piece files in subm/): pieces placed from SDS2's stored B-rep "
++              f"without name / section / weight; members without placed pieces as tagged envelopes")
++    else:
++        stats_nt = {}
+     mems, _ = read_members(job)
+     mtype = {m.id: m.type for m in mems}
+     mem_by_id = {m.id: m for m in mems}
+@@ -1029,6 +1282,7 @@
+     st = XCAFDoc_DocumentTool.ShapeTool_s(doc.Main())
+     rows = []; skipped_rows = []; dup_rows = []
+     stats = {"plate": 0, "rolled": 0, "skipped": 0, "member_fallback": 0, "exact": 0}
++    stats.update(stats_nt)
+     instance_counts = collections.Counter()
+     skipped = collections.Counter()
+     written = {}                                # (piece, origin, rotation) -> (member, row index): FIX item 12
+@@ -1036,11 +1290,18 @@
+     from OCP.BRepGProp import BRepGProp
+     wsum = [0.0, 0.0]; wcache = {}; wdiff = collections.Counter()
+     fam_w = collections.defaultdict(lambda: [0.0, 0.0, 0])
++    fam_s = collections.defaultdict(lambda: [0.0, 0.0, 0])  # v5.5w: (family, "exact" | "built") -> step lb, SDS2 lb, n
+     env_w = [0.0]; big = []
+ 
+-    def track(sid, sh, how):
+-        """Steel weight of the placed solid vs SDS2's piece weight (concrete excluded), one volume per piece build."""
++    out_inst = collections.Counter()            # v5.5w: placements of exact pieces whose recorded weight is an outlier
++
++    def track(sid, sh, how, tagged=False):
++        """Steel weight of the placed solid vs SDS2's piece weight (concrete excluded), one volume per piece build.
++        v5.5w: tagged = the solid carries an [approx: ...] stand-in name (tallied under "standin")."""
+         p = pieces[sid]
++        if how == "exact" and (job, sid) in SDS2_WT_OUTLIER:
++            out_inst[sid] += 1                    # v5.5w: SDS2's own stock, recorded weight disproved: not in the ratio
++            return
+         if p["name"].startswith("Conc") or not 0 < p["wt"] < 1e6:          # corrupt weights (Centene: 3e311 lb)
+             return
+         if re.match(r"G[TR]\d", p["name"]):
+@@ -1054,6 +1315,11 @@
+         big.append((wcache[(sid, how)] - p["wt"], p["wt"], p["name"], sid))
+         f = MF.family(p["name"]); fw = fam_w[f]
+         fw[0] += wcache[(sid, how)]; fw[1] += p["wt"]; fw[2] += 1
++        # v5.5w: SDS2's own B-rep ("exact") / solids the converter built and wrote as exact ("built": stud, rod and
++        # bolt primitives) / tagged stand-ins ("standin": approximations, already listed as stand-ins). Only "built"
++        # can be silently wrong; "exact" differs from SDS2's recorded weight by SDS2's own conventions
++        fs = fam_s[(f, "exact" if how == "exact" else "standin" if (tagged or how == "approx") else "built")]
++        fs[0] += wcache[(sid, how)]; fs[1] += p["wt"]; fs[2] += 1
+ 
+     def record_skip(n, sid, inst_no, p, k, origin, reason):
+         stats["skipped"] += 1
+@@ -1091,6 +1357,8 @@
+             _, local, trsf = res
+             shared_inst.append((sid, local, trsf, label))           # written at the end, after the part check
+             return local
++        if label in DROP_LABELS:
++            INVALID_DROPPED.append(label); return res     # v5.5w: flat mode honours the repair pass too (see above)
+         lab = st.AddShape(res, False)
+         TDataStd_Name.Set_s(lab, TCollection_ExtendedString(label))
+         return res
+@@ -1111,7 +1379,7 @@
+             # imported reference model: its piece files have no piece-table entry; place SDS2's stored B-rep of each
+             # (no weight to check against, never approximated: a part whose faces don't close is left out)
+             if ref_pieces is None:
+-                ids_ = [int(x) for x in os.listdir(os.path.join(job, "subm")) if x.isdigit()]
++                ids_ = [int(x) for x in os.listdir(sdir) if x.isdigit()] if os.path.isdir(sdir) else []
+                 ref_pieces = {i: pieces.get(i) or dict(name="REFERENCE", sec=0, L=0, W=0, T=0, wt=0) for i in ids_}
+             _, rinst = material_instances(job, n, ref_pieces)
+             stats["reference_members"] = stats.get("reference_members", 0) + 1
+@@ -1152,6 +1420,23 @@
+                              builder="reference_brep", ox=round(o[0], 4), oy=round(o[1], 4), oz=round(o[2], 4)),
+                         label=label)
+             continue
++        if unidx:
++            # v5.5w: job folder without the piece table: place each piece file the member file places (see brep_unindexed)
++            _, uinst = material_instances(job, n, unidx)
++            placed_u = 0
++            for sid, M, o in uinst:
++                instance_counts[(n, sid)] += 1; inst_no = instance_counts[(n, sid)]
++                sh = brep_unindexed(job, sid, M, o)
++                if sh is None:
++                    record_skip(n, sid, inst_no, unidx[sid], "unindexed", o, "unindexed_piece_no_closed_brep"); continue
++                label = f"{mtype[n]} #{n} / unindexed piece (piece {sid}, inst {inst_no}) [unindexed: {UNINDEXED_WHY}]"
++                add_exact(sid, sh, label)
++                stats["unindexed_parts"] = stats.get("unindexed_parts", 0) + 1; placed_u += 1
++                add_row(dict(member=n, member_type=mtype[n], piece=sid, inst=inst_no, name=f"piece {sid}", kind="unindexed",
++                             builder="unindexed_brep", ox=round(o[0], 4), oy=round(o[1], 4), oz=round(o[2], 4)),
++                        label=label, standin=UNINDEXED_WHY, real=f"piece {sid} (no piece-table entry)")
++            if placed_u:
++                continue
+         main_sid, inst = material_instances(job, n, pieces)
+         for sid_, M_, o_ in inst:
+             if sid_ == main_sid:
+@@ -1187,6 +1472,10 @@
+                         stats["skipped"] += 1
+                     continue
+                 why = "member work-line envelope: the job has no fabricated pieces for this member"
++                if no_table:
++                    why = ("member work-line envelope: the job folder has no piece table (subm/subm_idx"
++                           + (f"; {stats_nt['subm_piece_files']} unindexed piece files" if stats_nt["subm_piece_files"] else
++                              "; no subm/ piece data") + "), so its fabricated pieces cannot be read")
+                 if m.section is not None and m.section.name in T.PROFILE_NOTES:
+                     why += f"; {T.PROFILE_NOTES[m.section.name]} (real section dimensions not in the job)"
+                 label = _tag(f"{m.type} #{n} / {sec} (member envelope)", why)
+@@ -1287,6 +1576,11 @@
+                 # weld studs, bolts, anchor rods, concrete: built from their mesh / piece-table dimensions
+                 sh, k2 = special_solid(job, sid, p, M, o)
+                 builder = "special_primitive"
++                if sh is not None and TURNED.match(p["name"]) and not p["name"].startswith("Conc"):
++                    ex_ = turned_brep(job, sid, p, M, o, sh, bool(SPECIAL_NOTE))
++                    if ex_ is not None:                                      # v5.5w: SDS2's own B-rep (see turned_brep)
++                        sh, k2, builder = ex_, "fastener", "exact_brep"
++                        stats["exact"] += 1
+                 if sh is None and not p["name"].startswith("Conc"):
+                     # e.g. threaded studs with no rings; square / round bars and rebar keep their table kind
+                     sh, k2 = brep_placed(job, sid, p, M, o), ("fastener" if TURNED.match(p["name"]) else k)
+@@ -1314,7 +1608,7 @@
+                 if p["name"].startswith("BLT"):
+                     add_hardware(sh, M, o)
+                 sh = add_exact(sid, sh, lab_)
+-                stats[k2] = stats.get(k2, 0) + 1; track(sid, sh, k2)
++                stats[k2] = stats.get(k2, 0) + 1; track(sid, sh, "exact" if builder == "exact_brep" else k2, bool(why))
+                 stats[builder] = stats.get(builder, 0) + 1
+                 add_row(dict(member=n, member_type=mtype[n], piece=sid, inst=inst_no,
+                              name=p["name"], kind=k2, builder=builder,
+@@ -1388,7 +1682,11 @@
+                 # approximate solid wildly heavier than SDS2's weight (7.708 Center Grove: wall "plate" 7 5/8x384
+                 # whose vertices coincide -> mesh box of 50 million lb): report instead of writing it
+                 g_ = GProp_GProps(); BRepGProp.VolumeProperties_s(sh, g_); w_ = abs(g_.Mass()) / MM ** 3 * 0.2836
+-                if w_ > 5 * p["wt"] and w_ - p["wt"] > 1000:
++                # v5.5w: also >= 10x and >= 50 lb over: the 1,000-lb floor let many light pieces through at 10-15x
++                # (data-3 MOUNTAIN VIEW BLDG#B-G 7.433: 300 x BPL10GAx83 3/16, SDS2 14.0 lb each, bent-plate fallback
++                # 206 lb each = 57,600 lb of plate that is not in the job; steel ratio 1.545 -> the fleet rejected
++                # stage 2 as steel_weight_mismatch and kept members only)
++                if w_ > 5 * p["wt"] and (w_ - p["wt"] > 1000 or (w_ > 10 * p["wt"] and w_ - p["wt"] > 50)):
+                     sh = None
+                     skip_reason = "fallback_over_5x_source_weight"
+                     # v4 skipped these (CHOWNS 6.336: 34 bent plates whose convex hull fills the bend): write the
+@@ -1527,9 +1825,14 @@
+         from OCP.BRepCheck import BRepCheck_Analyzer
+         from OCP.ShapeFix import ShapeFix_Shape
+         for key, local, trsf, label in shared_inst:
+-            if key in bad:
++            if key in bad and label not in DROP_LABELS:
+                 lab = st.AddShape(BRepBuilderAPI_Transform(local, trsf, True).Shape(), False)
+                 TDataStd_Name.Set_s(lab, TCollection_ExtendedString(label)); continue
++            # v5.5w: parts that failed assembly_check went out as placed copies before DROP_LABELS was looked at, so the
++            # read-back repair pass could never leave out one that is still invalid as a placed copy: data-3 CCJ 7.132
++            # (5 jobs, 111-256 such solids of PL1/2x9 1/2 / L3x3x1/4 ...), POLICE HEADQUARTERS 7.135 (46 L5x5x5/16),
++            # BAHAMAR BLDG#40 7.135 (95) stayed above the fleet's invalid limit after all three passes -> members-only
++            # stage 1. Now such an instance is dropped and reported (exact_solid_invalid_at_placement), like the others.
+             if label in DROP_LABELS:
+                 stats["invalid_at_placement_dropped"] = stats.get("invalid_at_placement_dropped", 0) + 1
+                 INVALID_DROPPED.append(label); continue
+@@ -1552,6 +1855,8 @@
+             if key not in parts:
+                 parts[key] = st.AddShape(local, False)
+                 pn = f"{pieces[key]['name']} (piece {key})" if key in pieces else label
++                if key not in pieces and key in unidx:
++                    pn = f"unindexed piece {key} [unindexed: {UNINDEXED_WHY}]"            # v5.5w
+                 nd = DERIVED_INFO.get("derived_by_piece", {}).get(key)
+                 if nd:
+                     pn += f" [derived: bolt record + coaxial hole: {nd} hole(s)]"
+@@ -1603,8 +1908,14 @@
+                    members_without_geometry=n_members_without_geometry,
+                    weights=dict(step_lb=wsum[0], sds2_lb=wsum[1], joist_standin_lb=env_w[0],
+                                 by_family={f: dict(step_lb=round(v[0], 1), sds2_lb=round(v[1], 1), n=v[2],
+-                                                   ratio=round(v[0] / v[1], 4) if v[1] else None)
+-                                           for f, v in sorted(fam_w.items(), key=lambda kv: -kv[1][1])}),
++                                                   ratio=round(v[0] / v[1], 4) if v[1] else None,
++                                                   **{s_: _wpart(fam_s.get((f, s_))) for s_ in ("exact", "built", "standin")})
++                                           for f, v in sorted(fam_w.items(), key=lambda kv: -kv[1][1])},
++                                by_source={s_: _wpart([sum(v[i] for (f, s2), v in fam_s.items() if s2 == s_) for i in range(3)])
++                                           for s_ in ("exact", "built", "standin")},
++                                turned_brep=dict(TURNED_INFO),
++                                sds2_weight_outliers=[dict(v, instances=out_inst[k[1]]) for k, v in SDS2_WT_OUTLIER.items()
++                                                      if k[0] == job and out_inst[k[1]]][:500]),
+                    holes=dict(HOLES_CUT, derived=dict(holes=stats.get("holes_derived", 0),
+                                                       pieces=stats.get("pieces_with_derived_holes", 0),
+                                                       bolts_checked=DERIVED_INFO.get("bolts_checked", 0),

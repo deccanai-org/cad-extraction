@@ -1,0 +1,31 @@
+--- orig/grade_worker.py	2026-10-02 13:51:25
++++ new/grade_worker_v2.py	2026-10-02 14:14:33
+@@ -26,7 +26,7 @@
+ DET = cf.ROOT + '/_state/conv/grade/detail'; REN = cf.ROOT + '/_state/conv/grade/renders'
+ RB_MAX = int(os.environ.get('RB_MAX_MB', '1024')) << 20
+ FILES = ('worker.py', 'convfleet.py', 'step_check.py', 'ifc_census.py', 'grade_join.py', 'db1dec.py', 'db1step.py', 'db1old.py', 'db1bolts.py',
+-         'convert_one.py', 'layouts.json', 'step_verify_big.py')
++         'convert_one.py', 'layouts.json', 'step_verify_big.py', 'ifc_attrib_v2.py')
+ LAYOUTS = json.load(open(os.path.join(HERE, 'layouts.json')))
+ GRATING = re.compile(r'^(GT|GR|GRTG|GRATING|BAR\s*GRATING)', re.I)
+ 
+@@ -244,9 +244,18 @@
+     rec['validate'] = {k: x for k, x in v.items() if k != 'invalid_examples'}; rec['validate']['invalid_examples'] = (v.get('invalid_examples') or [])[:10]
+     if cparts and sparts:
+         rec['join'] = grade_join.join(grade_join.load(cparts), grade_join.load(sparts))
++        j = rec['join']
++        if j.get('mode') == 'gid' and (j.get('surface_parts') or ((j.get('coverage') or {}).get('all') or 1) < 1):
++            # [z3v rules 1-3] cause attribution of surface / missing parts (ifc_attrib_v2.py); build_index reads rec['attrib']
++            ap_ = os.path.join(d, 'attrib.json')
++            rc = fl.run(jid, [PY, os.path.join(HERE, 'ifc_attrib_v2.py'), src, cparts, sparts, ap_, '--unpack-dir', d], os.path.join(d, 'attrib.log'), 2 * 3600)
++            try:
++                rec['attrib'] = json.load(open(ap_))
++            except Exception:
++                rec['attrib'] = {'error': f'attrib rc {rc}', 'log': tail_of(os.path.join(d, 'attrib.log'), 300)}
+     if png:
+         fl.upload(png, f'{REN}/{jid}.png', 'image/png'); rec['render_key'] = f'{REN}/{jid}.png'
+-    upload_detail(fl, jid, d, ('census.json', 'src_parts.jsonl.gz', 'step_parts.jsonl.gz', 'check.json'))
++    upload_detail(fl, jid, d, ('census.json', 'src_parts.jsonl.gz', 'step_parts.jsonl.gz', 'check.json', 'attrib.json'))
+     rec['status'] = 'ok'
+     return rec
+ 

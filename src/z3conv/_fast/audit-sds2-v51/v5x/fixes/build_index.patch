@@ -1,0 +1,16 @@
+--- base/build_index.py	2026-10-01 17:17:05
++++ build_index.py	2026-10-01 17:17:05
+@@ -1316,7 +1316,12 @@
+                 rn = fn(dict(c, action='convert'), res_, None)
+                 if rr is None or rn is None:
+                     r = rr or rn
+-                elif rn['class'] is not None and (rr['class'] is None or score(rn) <= score(rr)):
++                # audit-sds2-v5x: SDS2 v5.x manifests list stand-ins per (type, real type) group, so the same stand-ins are 1.3-5x
++                # more entries than in a v4 inventory (325 Binney 868da294: 4 -> 18 entries for the same 92 stand-ins; hk 86b590f4:
++                # 14 -> 61). The entry count is no quality signal: on equal class the fresh v5.x conversion (manifest, every
++                # approximation tagged [approx: ...] in the STEP; v4 STEPs carry no tags - VOID 2263534c: 0 vs 34) wins.
++                elif rn['class'] is not None and (rr['class'] is None or score(rn) <= score(rr)
++                                                  or (pipe == 'sds2' and rr['class'] is not None and rn['class'] <= rr['class'])):
+                     rn['supersedes'] = {'from': rr.get('reuse_from'), 'step_key': rr.get('step_key'), 'class': rr['class']}
+                     r = rn
+                 else:

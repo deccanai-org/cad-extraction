@@ -1,0 +1,25 @@
+D1  WARN  Version / layout gate: jsetup_version=7.312, mem_idx_size=14726144, calibrated_slot=2944, slot_family=7.3xx, layout=slot=0xb80, type=0xa78, p1=0x112, p2=0x186, pt_fmt=>f8, sec=0x1fc, sec_fmt=>h, roll=0x202, decode_error=None  piece decoding is only validated on 7.2xx; 7.3xx pieces are judged by G5/E1/M1 (EC-05)
+D2  PASS  Shape table (job_mtrl) sanity: layout=record=510, base=0x100, byte_order=big, dims_at=0x1a, weight_at=0x42, votes=weight=274, dims=12, w_records=274, records=1701, aisc_checked=12, aisc_mismatch=[], w_plausible_share=1  
+D3  PASS  Section field sanity: structural=1714, with_section_share=1, distinct_sections=56, top_section=[W18x40, 289], top_share=0.1686, beam_family_ok=1  
+D4  PASS  Work-line / roll field sanity: zero_length_share=0, huge_coord_share=0, raw_roll_invalid_share=0, columns_vertical_share=1, beams_level_share=1  
+D5  PASS  Stray members (spatial outliers): members=1714, outliers=0, outlier_share=0, threshold_in=9264  
+D6  PASS  Section index vs main-piece name: agreement=0.9887, section_source=index, piece_name_path=slot=902, name_off=302, sample_hits=378/378  
+C1  PASS  Completeness vs the SDS2 job (independent): expected_pieces=2926, present=2926, missing=0, unexpected=0, shared_recorded_once=5, approximate_solids=0, member_envelopes=229, missing_by_kind=  
+S1  PASS  Solid count vs manifest: step_solids=3150, manifest_solids=3150  
+S2  WARN  B-rep validity: valid_share=1, closed_share=1, positive_volume_share=1, single_solid_share=0.9199  8.0% of non-fastener pieces are multi-body solids (valid and closed)
+S3  PASS  Solid names parse and are unique: parsed_share=1, duplicate_names=0, repeated_instance_names=0  
+S4  PASS  Units and model extent: file_unit=MM, span_in=[5160, 4087, 547.6], decoded_span_in=[5188, 4125, 539.4], span_ratio=[0.995, 0.991, 1.015], centre_shift_in=[13.2, 11.2, 4]  
+M1  PASS  Mass vs SDS2 recorded weight (rolled/plate steel): compared=2945, median_ratio=1, within_tol_share=1, tol=0.15, p05=0.979, p95=1.052, by_family=W=[1168, 1.03], WS=[591, 1], PL=[495, 1], HSS=[341, 0.998], L=[159, 1.012], WT=[141, 1.021], MC=[36, 0.992], ROUN=[14, 0.996], not_compared=  
+M2  FAIL  Open-web joists represented plausibly: joists=205, with_weight=205, median_mass_ratio=4.04, solid_block_share=0.8098  open-web joists written as solid blocks (EC-34): mass is 100x+ the real joist
+G1  NA    Solid vs work line (length, top-of-steel, column axis):   stage-2 pieces are cut to fabricated length; see E-checks
+G2  PASS  Connectivity (solids touch neighbours): solids=3150, touching_share=0.9981, isolated=6  
+G3  PASS  Connection pieces sit on their parent member: pieces_checked=1015, on_parent_share=0.999, off_parent=1, off_parent_touching_other_member=1, off_parent_confirmed_by_ifc=None, resolved_share=1, basis=touching other member  1 pieces sit on another member of the connection (EC-44), accepted on touching other member evidence
+G4  PASS  Duplicate solids: duplicates=15, already_in_sds2_job=14, introduced_by_converter=1, share=0.00032  14 duplicate members exist in the SDS2 job itself (kept as-is)
+G5  PASS  Piece solids match decoded placement (independent rebuild): solids=2921, rebuilt=2316, no_decoded_counterpart=605, within_0_1in=0.7254, within_3in=0.9668, over_12in=6, median_err_in=0, p99_err_in=3.708  
+E1  NA    SDS2 IFC export (aligned bbox IoU):   no IFC for this job
+E2  FAIL  KISS bill of materials: kiss_marks=789, compared_qty=2829, section_recall=0.5101, tight_recall=0.4878, loose_recall=0.5005, median_excess_length_in=0, unmatched_examples=[HS0.75X1.75 L=1.8 x521 (section absent), HS0.75X2 L=2.0 x426 (section absent), WS0.5X6 L=6.0 x165 (section absent), PL0.375X3 L=3.0 x56 (section absent), HS1X2.25 L=2.2 x56 (section absent), MB0.75X7 L=7.0 x48 (section absent)], section_absent=[HS0.75X1.75 L=0.0 x521 (section absent), HS0.75X2 L=0.0 x426 (section absent), WS0.5X6 L=0.0 x165 (section absent), PL0.375X3 L=0.0 x56 (section absent), HS1X2.25 L=0.0 x56 (section absent), PL0.375X4.5 L=0.0 x55 (section absent)]  sections/lengths in the STEP do not reproduce SDS2's bill of materials (EC-20/21/31/35)
+E3  FAIL  DSTV NC1 parts: nc1_files=181, parts=181, compared_qty=606, section_recall=0.4835, tight_recall=0.2904, loose_recall=0.4637, median_excess_length_in=1, unmatched_examples=[C6X8.2 L=15.5 x60 (section absent), L5X5X0.5 L=5.0 x57 (section absent), C4X7.2 L=18.5 x45 (section absent), C4X7.2 L=22.5 x34 (section absent), C6X8.2 L=8.3 x29 (section absent), W18X40 L=217.0 x8 (nearest 220.0)]  fabrication parts (profile + cut length) not reproduced (EC-21/31/35)
+OVERALL FAIL (evidence: mass); report -> ad/41b42976_verify.md
+VERDICT INCORRECT
+TIER EXCLUDED   (checks failed: E2 E3)
+ADAPTER {"name": "verify_v55", "for_converter": "sds2-step-pipeline v5.5.x", "verifier": "sds2_step_verifier v1.3.3", "decoder_fix": true, "names_reparsed": 623, "joist_standins": 205, "reference_parts": 0, "phantom_placements_dropped": 58, "unparsed_after_adapter": 0}

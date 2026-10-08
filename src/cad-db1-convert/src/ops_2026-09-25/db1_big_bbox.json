@@ -1,0 +1,782 @@
+[
+ {
+  "sha": "b5e0694a4b02a8ecced6c4128b00d8a941e23756574f6a8959a45bc178df7d1e",
+  "max": 2e+103,
+  "bbox": [
+   -65565.013,
+   -44.334,
+   0.0,
+   1.2855752143675817e+103,
+   1.5320888904380667e+103,
+   2e+103
+  ],
+  "engine": "8.07",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Front_Range_steel_6.1592-Littleton_Elementary_school.7z/6.1592-Littleton_Elementary_school/6._PRODUCTION/JAYARAM/1592-Littleton_Elementary_school_3_07192022/1592-Littleton_Elementary_school_3_07192022.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/b5e0694a4b02a8ecced6c4128b00d8a941e23756574f6a8959a45bc178df7d1e.stp"
+ },
+ {
+  "sha": "9c2e39cb0fcfc14665403bc76e27aba7c3a17e7578f1c5c448824856d8dadda2",
+  "max": 1.999999999999664e+103,
+  "bbox": [
+   0.0,
+   -502.72,
+   -28041.602,
+   1.999999999999664e+103,
+   50750.121,
+   1.1599999999998049e+97
+  ],
+  "engine": "8.62",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2019-2020_HERIC_2._4040_-_Ocean_wide_center_8._BIM.7z/8._BIM/Weekly_Tekla_models/Tower_1/04-23-2019/4040_OWC_T1_2019_0423_PHASE_1.zip!/4040_OWC_T1_2019_0423_PHASE_1/4040_OWC_T1_2019_0423_PHASE_1.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/9c2e39cb0fcfc14665403bc76e27aba7c3a17e7578f1c5c448824856d8dadda2.stp"
+ },
+ {
+  "sha": "06c935e8bf1c6b7ac3d89cd5ae5ebe14b1a9de9d27871002801849f70febeb6c",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/12._Model_Back-up/01132021/30558_Bend_Surgical_01/SF_EPM_Export/30558-ABM_002-010721.zip!/30558-ABM_002-010721-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/06c935e8bf1c6b7ac3d89cd5ae5ebe14b1a9de9d27871002801849f70febeb6c.stp"
+ },
+ {
+  "sha": "09323fc083624af308482be1eb1576f27bae9ddfd0f0adcf6cee252f30156ba0",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/12._Model_Back-up/18-01/30558_Bend_Surgical/SF_EPM_Export/30558-IFA_002-111720.zip!/30558-IFA_002-111720-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/09323fc083624af308482be1eb1576f27bae9ddfd0f0adcf6cee252f30156ba0.stp"
+ },
+ {
+  "sha": "0c3731e6d5307042af2c835bdec2451ebc94bab5340885a9028b03ddbbcc9be3",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/12._Model_Back-up/30558_Bend_Surgical_Before_Grid_Change/SF_EPM_Export/30558-012-IFC_031521-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/0c3731e6d5307042af2c835bdec2451ebc94bab5340885a9028b03ddbbcc9be3.stp"
+ },
+ {
+  "sha": "14756fb2d811d38003063761557eec631a4c82580a73b57127c42868b90a9e31",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/OFA_IFF/30558_Sub_27_Bend_Surgical_Seq_2A_For_IFF_06252021/30558-027-IFC_062521-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/14756fb2d811d38003063761557eec631a4c82580a73b57127c42868b90a9e31.stp"
+ },
+ {
+  "sha": "1fe78f765276ca3caadad340a0b4abbfa96aeaedda40ad35c03d9d030c30c5f6",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   90971.122,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/OFA_IFF/30558_Sub_37_Bend_Surgical_Seq_8_Rail_Shop_and_Revised_Field_use_Drawing_12212021/30558-037-REV_122121-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/1fe78f765276ca3caadad340a0b4abbfa96aeaedda40ad35c03d9d030c30c5f6.stp"
+ },
+ {
+  "sha": "249899bef94b556a960c948127f7b8b0915d74b221f10e903e070f4cd0e9b867",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/OFA_IFF/30558_Sub_21_Bend_Surgical_Seq_8_Misc_IFF_03242021/30558-013-IFC_032421-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/249899bef94b556a960c948127f7b8b0915d74b221f10e903e070f4cd0e9b867.stp"
+ },
+ {
+  "sha": "2f680a916d9ef7c9dc3966b0864749024d8155d7edfe7d2c7481f671fe18cb8e",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   44248.497,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/OFA_IFF/30558_Sub_8_Bend_Surgical_Seq_03_for_IFF_01282021/30558-IFC_007-012821.zip!/30558-IFC_007-012821-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/2f680a916d9ef7c9dc3966b0864749024d8155d7edfe7d2c7481f671fe18cb8e.stp"
+ },
+ {
+  "sha": "34902fd1df585314b441f01719b2fd73089137fc00567bfdfd84a9a915228f6a",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/OFA_IFF/30558_Sub_25_Bend_Surgical_Seq_2A_6_IFF_06232021/30558-025-IFC_062321-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/34902fd1df585314b441f01719b2fd73089137fc00567bfdfd84a9a915228f6a.stp"
+ },
+ {
+  "sha": "39bb4b63c6916e846a30045d64f6e28c9eb7b4b2d0a085f99a2ee94f9fbafa6e",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/OFA_IFF/30558_Sub_4_Bend_Surgical_AB_s_Embeds_for_IFF_12312020/30558-IFC_001-123120.zip!/30558-IFC_001-123120-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/39bb4b63c6916e846a30045d64f6e28c9eb7b4b2d0a085f99a2ee94f9fbafa6e.stp"
+ },
+ {
+  "sha": "3ea806fbb9d8a8b5880fa593879e22dd18bde87ed4d65ce7d4f4477026a1c967",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   90971.122,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/OFA_IFF/30558_Sub_35_Bend_Surgical_Seq_8_Rail_Shop_and_Revised_Field_use_Drawing_12212021_Void/30558_Sub_35_Bend_Surgical_Seq_8_Rail_Shop_Revised_Field_use_Drawing_12212021.zip!/30558_Sub_35_Bend_Surgical_Seq_8_Rail_Shop_Revised_Field_use_Drawing_12212021/30558-035-REV_122121-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/3ea806fbb9d8a8b5880fa593879e22dd18bde87ed4d65ce7d4f4477026a1c967.stp"
+ },
+ {
+  "sha": "3f2ce0d7f48d56842cbc8544f76e5d9f30dc981bb1502a0f0be27233e6323fd1",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/12._Model_Back-up/30558_Bend_Surgical_Before_Grid_Change/30558_Bend_Surgical_Before_Grid_Change_.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/3f2ce0d7f48d56842cbc8544f76e5d9f30dc981bb1502a0f0be27233e6323fd1.stp"
+ },
+ {
+  "sha": "41b82534d64a0b9b7ac96ced5f966da6ad6350d68ec588b42a177a3f5ea8ff6d",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/12._Model_Back-up/30558_Bend_Surgical_Before_Grid_Change/SF_EPM_Export/30558-REV_003-020521.zip!/30558-REV_003-020521-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/41b82534d64a0b9b7ac96ced5f966da6ad6350d68ec588b42a177a3f5ea8ff6d.stp"
+ },
+ {
+  "sha": "476fde490901a072103cf001cd012922d163e84d5084d7e083363f78389fd10e",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/OFA_IFF/30558_Sub_13_Bend_Surgical_Revised_AB_Embed_plans_for_IFF_02092021/30558-REV_004-020921.zip!/30558-REV_004-020921-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/476fde490901a072103cf001cd012922d163e84d5084d7e083363f78389fd10e.stp"
+ },
+ {
+  "sha": "4ce45bcf2795ac3734ff9fd7c90318266e952f82d988ed51d2c6be0a13acfa4f",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/12._Model_Back-up/30558_Bend_Surgical_Before_Grid_Change/SF_EPM_Export/30558-ABM_004-021721.zip!/30558-ABM_004-021721-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/4ce45bcf2795ac3734ff9fd7c90318266e952f82d988ed51d2c6be0a13acfa4f.stp"
+ },
+ {
+  "sha": "5b1d41171d45af2ccde1d121bc610cb156b39ee30f42256ee00854261f833c30",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   44248.497,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/12._Model_Back-up/30558_Bend_Surgical_Before_Grid_Change/SF_EPM_Export/Old_Fiels/30558-REV_001-012521.zip!/30558-REV_001-012521-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/5b1d41171d45af2ccde1d121bc610cb156b39ee30f42256ee00854261f833c30.stp"
+ },
+ {
+  "sha": "5ca83e475eec5278acb44d14b391892a6bfbc5305dcdb950e9eeef94459ac5dd",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/12._Model_Back-up/30558_Bend_Surgical_Before_Grid_Change/SF_EPM_Export/30558-IFC_011-022521.zip!/30558-IFC_011-022521-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/5ca83e475eec5278acb44d14b391892a6bfbc5305dcdb950e9eeef94459ac5dd.stp"
+ },
+ {
+  "sha": "5f7a2bd35db0422a6d89d68a53cf2965ad1a64c7566aca843665b34cf21bb905",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/OFA_IFF/30558_Sub_26_Bend_Surgical_Seq_2A_Revised_IFF_06252021/30558-026-REV_062521-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/5f7a2bd35db0422a6d89d68a53cf2965ad1a64c7566aca843665b34cf21bb905.stp"
+ },
+ {
+  "sha": "5ebc04a6bdef00e6b022ddf80586bf404189f2a9a93ab88f9950bb080c754759",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   90971.122,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2023-2024_N_Drive_BackUp_Steel_Fab_30558_Bend_Surgical.7z/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/5ebc04a6bdef00e6b022ddf80586bf404189f2a9a93ab88f9950bb080c754759.stp"
+ },
+ {
+  "sha": "6bc2e83636fef73885b45c990dc0a2cd71b680d6070386b2b1baa3ac263da422",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/OFA_IFF/30558_Sub_28_Bend_Surgical_HOLD_Release_ABs_IFF_06252021/30558-028-IFC_062521-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/6bc2e83636fef73885b45c990dc0a2cd71b680d6070386b2b1baa3ac263da422.stp"
+ },
+ {
+  "sha": "69aa3ead861bbb9de808812400e0ef0bb5acb2fac91c189e87d03ee01946b857",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   44248.497,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/OFA_IFF/30558_Sub_6_Bend_Surgical_Seq_04_for_IFF_01252021/30558-IFC_006-012521.zip!/30558-IFC_006-012521-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/69aa3ead861bbb9de808812400e0ef0bb5acb2fac91c189e87d03ee01946b857.stp"
+ },
+ {
+  "sha": "6c332a50027013af3876df85ed74a8c729e99a612f1c1a3afbdca50a5a63ed7c",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   90971.122,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_CIVES_5._San_Dieago.7z/5._San_Dieago/6._Production/Raghu/to_venkat_sir/New_folder/30558_Bend_Surgical/SF_EPM_Export/New_folder/30558-040-REV_061022-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/6c332a50027013af3876df85ed74a8c729e99a612f1c1a3afbdca50a5a63ed7c.stp"
+ },
+ {
+  "sha": "6eb62c6802cdeb7ddf385a0efba396519e4e9b984f2a716e27cd5bdca110e69a",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/12._Model_Back-up/30558_Bend_Surgical_Before_Grid_Change/SF_EPM_Export/30558-IFA_004-022221.zip!/30558-IFA_004-022221-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/6eb62c6802cdeb7ddf385a0efba396519e4e9b984f2a716e27cd5bdca110e69a.stp"
+ },
+ {
+  "sha": "704c80c195030e5cf36749a5f4a0506607f5d84b38f9c2dd94f7c2d464265d83",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   44248.497,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/ABM/30558_02012021_ABM003/30558-ABM_003-020121.zip!/30558-ABM_003-020121-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/704c80c195030e5cf36749a5f4a0506607f5d84b38f9c2dd94f7c2d464265d83.stp"
+ },
+ {
+  "sha": "754e8a6916b46d186b9241e3d24aea33c5cb89549299f52edce1db6cd5a3da13",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/12._Model_Back-up/01132021/30558_Bend_Surgical_01/30558_Bend_Surgical_01.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/754e8a6916b46d186b9241e3d24aea33c5cb89549299f52edce1db6cd5a3da13.stp"
+ },
+ {
+  "sha": "780e8b50c49df022d3ae062d344ebbdd0dc3e0e5c75745f88d9cefec57dfe399",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   90971.174,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/12._Model_Back-up/trash_enclosure_ABM_Model/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/780e8b50c49df022d3ae062d344ebbdd0dc3e0e5c75745f88d9cefec57dfe399.stp"
+ },
+ {
+  "sha": "82809b15d736e5bc95f4b56196c99a2c404fe7f0b69196a51c1cd7b25041eb52",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   90971.174,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/ABM/30558_12142021_ABM006/30558-ABM_006-121421-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/82809b15d736e5bc95f4b56196c99a2c404fe7f0b69196a51c1cd7b25041eb52.stp"
+ },
+ {
+  "sha": "82c16743c4b6886f80c88e24542d3192baf5f26606bbc4164759e631e5901342",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   90971.122,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/OFA_IFF/30558_Sub_41_Bend_Surgical_Seq_2.A_Drawings_IFF_06132022/30558-041-REV_061322-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/82c16743c4b6886f80c88e24542d3192baf5f26606bbc4164759e631e5901342.stp"
+ },
+ {
+  "sha": "8af7e9b9ef2a909623146721e6835faaf7a1bb301865f48961ab5c00e9b41fcd",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/12._Model_Back-up/01132021/30558_Bend_Surgical_01/SF_EPM_Export/New_folder/30558-IFC_001-010421-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/8af7e9b9ef2a909623146721e6835faaf7a1bb301865f48961ab5c00e9b41fcd.stp"
+ },
+ {
+  "sha": "8d47dc87124d8656177c4671f55035c462b34033c96ba70c0889c75c2578dd59",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/OFA_IFF/30558_Sub_11_Bend_Surgical_Seq_2_to_5_for_IFF_02052021/30558-IFC_009-020521.zip!/30558-IFC_009-020521-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/8d47dc87124d8656177c4671f55035c462b34033c96ba70c0889c75c2578dd59.stp"
+ },
+ {
+  "sha": "a44714de83e29cdee53d154c04a1f67735e3cf120cc2a18fda12bf42a805db1f",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/12._Model_Back-up/30558_Bend_Surgical_Before_Grid_Change/SF_EPM_Export/30558-IFC_010-022221.zip!/30558-IFC_010-022221-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/a44714de83e29cdee53d154c04a1f67735e3cf120cc2a18fda12bf42a805db1f.stp"
+ },
+ {
+  "sha": "b28ffa5fa24862ceaa7de44163987b2f0359f3dec12f31e6c1d2d0de35c6a649",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/OFA_IFF/30558_Sub_30_Bend_Surgical_Seq_2.A_6_Erection_drawings_IFF_06292021/30558_Sub_30_Bend_Surgical_Seq_2A_6_Erection_drawings_IFF_06292021.zip!/30558-030-IFC_062921-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/b28ffa5fa24862ceaa7de44163987b2f0359f3dec12f31e6c1d2d0de35c6a649.stp"
+ },
+ {
+  "sha": "b266f2e7cc911fcd6cbdd781d00236428ad77add2e29e3a845c383585f423972",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   90971.174,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/ABM/30558_12082021_ABM005/30558-ABM_005-120821-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/b266f2e7cc911fcd6cbdd781d00236428ad77add2e29e3a845c383585f423972.stp"
+ },
+ {
+  "sha": "bb4d623027d184b29b00deceb5c06f57fd1c20fea866102627e14ab1484b806d",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/12._Model_Back-up/30558_Bend_Surgical_Before_Grid_Change/SF_EPM_Export/Old_Fiels/30558-IFA_003-112720.zip!/30558-IFA_003-112720-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/bb4d623027d184b29b00deceb5c06f57fd1c20fea866102627e14ab1484b806d.stp"
+ },
+ {
+  "sha": "bdff16e978e16c98ce06623d5e19f8b25b32f5dff0ba72d8db79b8839970e359",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   90971.122,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/OFA_IFF/30558_Sub_39_Bend_Surgical_Seq_2_Revised_IFF_04032022/30558_Sub_39_Bend_Surgical_Seq_2_Revised_IFF_04032022.zip!/30558_Sub_39_Bend_Surgical_Seq_2_Revised_IFF_04032022/30558-039-IFC_030422-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/bdff16e978e16c98ce06623d5e19f8b25b32f5dff0ba72d8db79b8839970e359.stp"
+ },
+ {
+  "sha": "ca67dc55e65cabe96b9ae43a1dbc7f4290700225d5a0c34cade50690a10b0084",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/12._Model_Back-up/30558_Bend_Surgical_Before_Grid_Change/SF_EPM_Export/Old_Fiels/30558-REV_002-020421.zip!/30558-REV_002-020421-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/ca67dc55e65cabe96b9ae43a1dbc7f4290700225d5a0c34cade50690a10b0084.stp"
+ },
+ {
+  "sha": "dcdedefb40ebdc7e1fb1de90a8e39236247f2f7f0e15f64055907700cba40808",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/ABM/30558_01072021_ABM002/30558-ABM_002-010721.zip!/30558-ABM_002-010721-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/dcdedefb40ebdc7e1fb1de90a8e39236247f2f7f0e15f64055907700cba40808.stp"
+ },
+ {
+  "sha": "e7304d7906d28f21b1fb48602cb8392bff0cc075ad90cefe2fa40a567a930d11",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/OFA_IFF/30558_Sub_34_Bend_Surgical_Seq_7_Drawings_for_IFF_12172021/30558_Sub_31_Bend_Surgical_Seq_2A_Revised_IFF_06292021/30558-031-REV_062921-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/e7304d7906d28f21b1fb48602cb8392bff0cc075ad90cefe2fa40a567a930d11.stp"
+ },
+ {
+  "sha": "e932aeed09ebf6baa3ab519c8d3b77da5a925f9b5d6158a89dfef392c5f2e470",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/12._Model_Back-up/30558_Bend_Surgical_Before_Grid_Change/SF_EPM_Export/30558-IFA_004-021921.zip!/30558-IFA_004-021921-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/e932aeed09ebf6baa3ab519c8d3b77da5a925f9b5d6158a89dfef392c5f2e470.stp"
+ },
+ {
+  "sha": "ea26cae8e1b0a50596f3394eddcd3bd97d44121be9149896629d8e69fde70ac4",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   90971.122,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2023-2024_N_Drive_BackUp_Steel_Fab_30558_Bend_Surgical.7z/30558_Bend_Surgical/SF_EPM_Export/30558-040-REV_061022-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/ea26cae8e1b0a50596f3394eddcd3bd97d44121be9149896629d8e69fde70ac4.stp"
+ },
+ {
+  "sha": "ea78e609c75efdf17910d4b5a9f7d5f15934022d1946a4bd52d3ffad3ede03e4",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -609.6,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/12._Model_Back-up/18-01/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/ea78e609c75efdf17910d4b5a9f7d5f15934022d1946a4bd52d3ffad3ede03e4.stp"
+ },
+ {
+  "sha": "eae32162a84fbff8787a2fde55e4ca8fd7e9e0c67f110692f9c781a812e98552",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   90971.122,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/OFA_IFF/30558_Sub_34_Bend_Surgical_Seq_7_Drawings_for_IFF_12172021/30558-034-IFC_121721-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/eae32162a84fbff8787a2fde55e4ca8fd7e9e0c67f110692f9c781a812e98552.stp"
+ },
+ {
+  "sha": "ed2e9958bfbabcc8e09079e3635418cf692ff03a5f8832d9bdd51df673d7e26a",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/OFA_IFF/30558_Sub_29_Bend_Surgical_Revised_AB_Plan_IFF_06252021/30558_Sub_29_Bend_Surgical_Revised_AB_Plan_IFF_06252021.zip!/30558-029-REV_062521-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/ed2e9958bfbabcc8e09079e3635418cf692ff03a5f8832d9bdd51df673d7e26a.stp"
+ },
+ {
+  "sha": "eed764af9cbd2c8e4fc2c0d6cd074cf98ddbe9c46bcab8d6139229a0b4739b84",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   44248.497,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/OFA_IFF/30558_Sub_9_Bend_Surgical_AB_Embed_plans_for_IFF_01292021/30558-IFC_008-012921.zip!/30558-IFC_008-012921-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/eed764af9cbd2c8e4fc2c0d6cd074cf98ddbe9c46bcab8d6139229a0b4739b84.stp"
+ },
+ {
+  "sha": "f3178039606270fc4973debd56ce623143e42033dbbf0c21f95b796362108f2d",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   90971.122,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_CIVES_5._San_Dieago.7z/5._San_Dieago/6._Production/Raghu/to_venkat_sir/New_folder/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/f3178039606270fc4973debd56ce623143e42033dbbf0c21f95b796362108f2d.stp"
+ },
+ {
+  "sha": "f5387d13d851a7268f6fdb81cb0af2cca7fd2ff0f8dda53eef971774628a79de",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/12._Model_Back-up/31.12.2020-7.20_pm/31.12.2020-7.20_pm.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/f5387d13d851a7268f6fdb81cb0af2cca7fd2ff0f8dda53eef971774628a79de.stp"
+ },
+ {
+  "sha": "f6a0a6be0241e020c2545cfdf96bf37bebb30a68e09eaa2946c1b7c5dc0576fe",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/OFA_IFF/30558_Sub_16_Bend_Surgical_Seq_2to5_Revised_IFF_02222021/30558-REV_005-022221.zip!/30558-REV_005-022221-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/f6a0a6be0241e020c2545cfdf96bf37bebb30a68e09eaa2946c1b7c5dc0576fe.stp"
+ },
+ {
+  "sha": "fa09ea161fc2a8c306d1e8e31059dc0d996b8c475baa55ddeaecdaf0ae24c5c5",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   90971.122,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/OFA_IFF/30558_Sub_38_Bend_Surgical_Seq_8_Wall_Return_Rail_and_Revised_Field_use_Drawing_02102022/30558-038-REV_021022-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/fa09ea161fc2a8c306d1e8e31059dc0d996b8c475baa55ddeaecdaf0ae24c5c5.stp"
+ },
+ {
+  "sha": "faca7e55b2f9eef775239a8cae762990bedc417ced321e511d998c41674a03a4",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   90971.122,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/OFA_IFF/30558_Sub_36_Bend_Surgical_Seq_6_Revised_IFF_12212021/30558_Sub_36_Bend_Surgical_Seq_6_Revised_IFF_12212021.zip!/30558_Sub_36_Bend_Surgical_Seq_6_Revised_IFF_12212021/30558-036-REV_122121-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/faca7e55b2f9eef775239a8cae762990bedc417ced321e511d998c41674a03a4.stp"
+ },
+ {
+  "sha": "fc7619677950ed7af65ff90a1b9b97b9726505831176b7c4cf558925d2411b15",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   28515.748,
+   90971.174,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/OFA_IFF/30558_Sub_33_Bend_Surgical_Seq_7_Drawings_for_IFA_11162021/30558-IFA_033-111621-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/fc7619677950ed7af65ff90a1b9b97b9726505831176b7c4cf558925d2411b15.stp"
+ },
+ {
+  "sha": "fc1f279c076413dd1da95360c1204a663be33f8ed66bd418d351a84ff29de70a",
+  "max": 78772692.975,
+  "bbox": [
+   -78772692.975,
+   -62921381.65,
+   -406.4,
+   44248.497,
+   68400.612,
+   47150.052
+  ],
+  "engine": "8.85",
+  "key": "cad-disk-extract/Disk-1/TEKLA-HYD_PROJECT_DATA-2021-2022_Steel_Fab_11._30558_Bend_Surgical.7z/11._30558_Bend_Surgical/7._Submittals/OFA_IFF/30558_Sub_5_Bend_Surgical_Seq_02_03_05_for_IFF_01222021/30558-IFC_002-012221.zip!/30558-IFC_002-012221-Model.zip!/30558_Bend_Surgical/30558_Bend_Surgical.db1",
+  "out_key": "cad-disk-extract/conversions/db1-step/fc1f279c076413dd1da95360c1204a663be33f8ed66bd418d351a84ff29de70a.stp"
+ }
+]

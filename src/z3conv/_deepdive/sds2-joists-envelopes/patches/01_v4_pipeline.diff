@@ -1,0 +1,198 @@
+--- a/sds2-step-pipeline/decode/sds2job.py
++++ b/sds2-step-pipeline/decode/sds2job.py
+@@ -338,6 +338,34 @@
+         if sec not in shapes:
+             return None
+     return L if typed else None
++
++
++_JOIST_SEC = re.compile(r"^\d+(?:\.\d+)?(?:KCS|K|LH|DLH|SLH)", re.I)
++
++
++def _type_shift(idx, slot, toff, recs, fw):
++    """Slot holding member n's type string: n (7.2+ f64 families) or n + 1 (f32 families: 1280-B 6.3xx/7.0xx and 1416-B
++    7.1xx slots store the type at the start of the NEXT slot). Reading slot n there mislabels ~9 % of members
++    (BAHAMAR 7.135: 406 of 4,471 - JOISTs typed BEAM/COLUMN/MISC, beams typed JOIST/COLUMN). Chosen by consistency:
++    JOIST <-> joist designation, COLUMN -> vertical, BEAM -> not vertical. Contradictions slot n / n+1 (structural
++    members): BAHAMAR 194 / 0, ANUSHA 7.135 14 / 2, AMOL 7.135 6 / 1, CHOWNS 6.336 58 / 0, defaultAdapt 6.322 7 / 0;
++    f64 jobs keep slot n (WLCSC 7.331 0 / 10, Greenwood 7.312 0 / 182, 50_Binney 7.243 11 / 154)."""
++    def bad(shift):
++        k = 0
++        for n, p1, p2, sh, _ in recs:
++            o = (n + shift) * slot + toff
++            t = _ascii(idx[o:o + 32])
++            if sh is None or t not in ("BEAM", "COLUMN", "JOIST", "VERTICAL BRACE", "HORIZONTAL BRACE"):
++                continue
++            d = np.subtract(p2, p1); L = float(np.linalg.norm(d))
++            if not np.isfinite(L) or L < 1e-6:
++                continue
++            vert = abs(d[2]) / L > 0.99
++            k += ((t == "JOIST") != bool(_JOIST_SEC.match(sh.name))) or (t == "COLUMN" and not vert) or (t == "BEAM" and vert)
++        return k
++    default = 1 if fw == 4 else 0
++    b_def, b_alt = bad(default), bad(1 - default)
++    return (1 - default) if (b_def >= 3 and b_alt * 2 < b_def) else default
+ 
+ 
+ def read_members(job, layout=None):
+@@ -355,7 +383,7 @@
+     idx = open(os.path.join(md, "mem_idx"), "rb").read()
+     ids = sorted(int(n) for n in os.listdir(md) if n.isdigit())
+     fmt, pl = (">3d", 24) if L.get("fw", 8) == 8 else (">3f", 12)
+-    out = []
++    out = []; recs = []
+     for n in ids:
+         s = idx[n * L["slot"]:(n + 1) * L["slot"]]
+         if len(s) < L["slot"]:
+@@ -371,5 +399,13 @@
+             roll = struct.unpack(">f", s[L["roll"]:L["roll"] + 4])[0]
+         if roll != roll or abs(roll) > 7:
+             roll = 0.0
+-        out.append(Member(n, _ascii(s[L["type"]:L["type"] + 32]), p1, p2, shapes.get(sec), roll))
++        recs.append((n, p1, p2, shapes.get(sec), roll))
++    shift = L.get("type_shift")
++    if shift is None:
++        with np.errstate(all="ignore"):
++            shift = _type_shift(idx, L["slot"], L["type"], recs, L.get("fw", 8))
++        L = dict(L, type_shift=shift)
++    for n, p1, p2, sh, roll in recs:
++        o = (n + shift) * L["slot"] + L["type"]
++        out.append(Member(n, _ascii(idx[o:o + 32]), p1, p2, sh, roll))
+     return out, L
+--- a/sds2-step-pipeline/decode/to_step2.py
++++ b/sds2-step-pipeline/decode/to_step2.py
+@@ -21,6 +21,7 @@
+ from sds2job import read_shapes, read_version, read_members
+ import to_step as T
+ import brep
++import joist_catalog as JC
+ 
+ from OCP.gp import gp_Pnt, gp_Vec
+ from OCP.BRepBuilderAPI import BRepBuilderAPI_MakePolygon, BRepBuilderAPI_MakeFace
+@@ -657,6 +658,7 @@
+     mems, _ = read_members(job)
+     mtype = {m.id: m.type for m in mems}
+     mem_by_id = {m.id: m for m in mems}
++    joist_seats = JC.support_seats(mems)                # seat depth per joist end, measured from its supports
+     doc = TDocStd_Document(TCollection_ExtendedString("XmlOcaf"))
+     st = XCAFDoc_DocumentTool.ShapeTool_s(doc.Main())
+     rows = []; skipped_rows = []
+@@ -708,21 +710,53 @@
+         for sid_, M_, o_ in inst:
+             if sid_ == main_sid:
+                 frames[n] = (M_, o_); break
+-        if not inst and mtype[n] in T.STRUCTURAL:
+-            # no fabricated pieces (e.g. joists are vendor-supplied): keep the stage-1 member solid
+-            m = mem_by_id[n]
++        m = mem_by_id[n]
++        if JC.is_joist_member(m) and not any(JC.is_joist_designation(pieces.get(s_, {}).get("name")) for s_, _, _ in inst):
++            # joist without its own joist piece: SDS2 7.0-7.6 keep only the designation (no chord / web data), and may
++            # still give the member attachment pieces (NY Bridge 7.425: 24 of 67 joists carry only PL3/8 bearing plates
++            # and were dropped entirely). Write an open-web joist derived from the designation (joist_catalog.py),
++            # then the attachments below as usual.
++            jp = JC.joist_part(m, T.frame, read_version(job), joist_seats.get(n))
++            if jp is not None:
++                key, local, (Mj, oj), jspec, jinfo = jp
++                jlab = JC.label(m, n, jspec, jinfo)
++                trsf = placement(Mj, oj)
++                if SHARED:
++                    add_exact(key, ("shared", local, trsf), jlab)
++                else:
++                    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
++                    add_exact(None, BRepBuilderAPI_Transform(local, trsf, True).Shape(), jlab)
++                stats["member_fallback"] += 1
++                stats["joist_openweb"] = stats.get("joist_openweb", 0) + 1
++                if inst:
++                    stats["joist_openweb_with_attachments"] = stats.get("joist_openweb_with_attachments", 0) + 1
++                stats["joist_openweb_lb"] = stats.get("joist_openweb_lb", 0) + round(jinfo["plf"] * np.linalg.norm(np.subtract(m.p2, m.p1)) / 12)
++                rows.append(dict(member=n, member_type=m.type, piece=0, inst=0, name=m.section.name,
++                                 kind="member", builder="joist_openweb_catalog",
++                                 ox=round(m.p1[0], 4), oy=round(m.p1[1], 4), oz=round(m.p1[2], 4)))
++                if not inst:
++                    continue
++        if not inst and (mtype[n] in T.STRUCTURAL or JC.is_joist_member(m)):
++            # no fabricated pieces and no joist stand-in: the stage-1 member solid = nominal section along the work line
++            # (exact profile for rolled shapes; d x 6 in box for a joist whose stand-in failed)
+             sh = T.solid_for(m, "X", 1)
+             if sh is not None:
++                joist = JC.is_joist_member(m)
++                # member file without any material block (116 / 136 B placement-only file, or a 7.7 component archive
++                # with no placement block): SDS2 never generated this member's material - a source state, not a decode miss
++                undetailed = os.path.getsize(os.path.join(job, "mem", str(n))) <= 200 or main_sid not in pieces
+                 lab = st.AddShape(sh, False)
+-                TDataStd_Name.Set_s(lab, TCollection_ExtendedString(f"{m.type} #{n} / {m.section.name} (member envelope)"))
++                TDataStd_Name.Set_s(lab, TCollection_ExtendedString(
++                    f"{m.type} #{n} / {m.section.name} (member envelope)" + (
++                        " [approx: joist envelope box d x 6 in, no chord data]" if joist else
++                        " [approx: nominal section along the work line; member has no material in the job]" if undetailed else
++                        " [approx: nominal section along the work line; member material not decoded]")))
+                 stats["member_fallback"] += 1
+-                if m.type == "JOIST":
+-                    # Vendor-supplied Greenwood joists have no fabricated pieces. Their job_mtrl
+-                    # weight is a 2.5/5 lb/ft placeholder, not enough to infer chord/web sizes.
+-                    # Keep the erection envelope visible, but never call it an exact joist.
++                if joist:
+                     stats["joist_envelope"] = stats.get("joist_envelope", 0) + 1
+                 rows.append(dict(member=n, member_type=m.type, piece=0, inst=0, name=m.section.name,
+-                                 kind="member", builder="joist_envelope_approx" if m.type == "JOIST" else "member_envelope",
++                                 kind="member", builder="joist_envelope_approx" if joist else
++                                 "member_undetailed_profile" if undetailed else "member_envelope",
+                                  ox=round(m.p1[0], 4), oy=round(m.p1[1], 4), oz=round(m.p1[2], 4)))
+             continue
+         for sid, M, o in inst:
+--- a/sds2-step-pipeline/decode/to_step.py
++++ b/sds2-step-pipeline/decode/to_step.py
+@@ -180,17 +180,31 @@
+     print("layout", {k: hex(v) for k, v in layout.items()})
+     doc = TDocStd_Document(TCollection_ExtendedString("XmlOcaf"))
+     st = XCAFDoc_DocumentTool.ShapeTool_s(doc.Main())
++    import joist_catalog as JC
++    seats = JC.support_seats(mems)
+     rows, n_ok = [], 0
+     for m in mems:
+-        if m.type not in STRUCTURAL:
++        if m.type not in STRUCTURAL and not JC.is_joist_member(m):
+             continue
+-        sh = solid_for(m, up_vertical, beam_tos)
++        name = None
++        jp = JC.joist_part(m, frame, read_version(job), seats.get(m.id)) if JC.is_joist_member(m) else None
++        if jp is not None:
++            # open-web joist derived from the designation instead of a solid d x 6 in block (joist_catalog.py)
++            from OCP.gp import gp_Trsf
++            from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
++            key, local, (M, o), spec, info = jp
++            t = gp_Trsf(); R = M.T
++            t.SetValues(*R[0], o[0] * MM, *R[1], o[1] * MM, *R[2], o[2] * MM)
++            sh = BRepBuilderAPI_Transform(local, t, True).Shape()
++            name = f"{m.type} {m.section.name} #{m.id} " + JC.label(m, m.id, spec, info).split(" (joist stand-in) ", 1)[1]
++        else:
++            sh = solid_for(m, up_vertical, beam_tos)
+         rows.append(dict(id=m.id, type=m.type, section=m.section.name if m.section else "", roll=round(m.roll, 4),
+                          x1=m.p1[0], y1=m.p1[1], z1=m.p1[2], x2=m.p2[0], y2=m.p2[1], z2=m.p2[2], solid=int(sh is not None)))
+         if sh is None:
+             continue
+         lab = st.AddShape(sh, False)
+-        TDataStd_Name.Set_s(lab, TCollection_ExtendedString(f"{m.type} {m.section.name} #{m.id}"))
++        TDataStd_Name.Set_s(lab, TCollection_ExtendedString(name or f"{m.type} {m.section.name} #{m.id}"))
+         n_ok += 1
+     Interface_Static.SetCVal_s("write.step.schema", "AP214IS")
+     Interface_Static.SetCVal_s("write.step.unit", "MM")
+--- a/sds2-step-pipeline/batch/run_batch.py
++++ b/sds2-step-pipeline/batch/run_batch.py
+@@ -269,6 +269,7 @@
+                 bolts=g(r"'bolts': (\d+)", 0, int), skipped=g(r"'skipped': (\d+)", 0, int),
+                 envelopes=g(r"'member_fallback': (\d+)", 0, int),
+                 joist_envelopes=g(r"'joist_envelope': (\d+)", 0, int), holes=g(r"'holes': (\d+)", 0, int),
++                joist_openweb=g(r"'joist_openweb': (\d+)", 0, int),
+                 steel_ratio=g(r"ratio ([\d.]+)", None, float), solids=g(r"(\d+) top-level shapes", None, int),
+                 valid=g(r"BRep valid: (\d+)", None, int), seconds=g(r"converted in (\d+)s", None, int))
+ 
+@@ -324,6 +325,8 @@
+     if npr and (s.get("exact") or 0) < 0.9 * npr: why.append(f"exact geometry for {min(1, s['exact'] / npr):.0%} of plates/rolled")
+     if s.get("joist_envelopes"):
+         why.append(f"{s['joist_envelopes']} joists represented only by approximate member envelopes")
++    if s.get("joist_openweb"):
++        why.append(f"{s['joist_openweb']} joists derived from their designation (open-web stand-ins; no chord/web data in the job)")
+     if not n: why.append("no fabricated pieces (member envelopes only)")
+     return ("warn" if why else "pass"), why
+ 

@@ -1,0 +1,190 @@
+hole-tolerance-residue: old-engine (6.87/7.01/7.24) bolt holes from the group's own tolerance field (any sign / size), no holes in non-plies
+Base: DB1 kit code i == code j for db1bolts.py (md5 0f67b818e002eed7e108a5948a08a5f1) and db1step.py (md5 6039ca91db4ec428884cab6947528d80).
+Apply in the kit dir:  patch -p0 < hole_tolerance_residue.patch   -> db1bolts.py md5 079ffea6d105142ff41e8d2a9340c8aa, db1step.py md5 72029bbf4e7f3b1c0048379843a2e249
+Then bump worker.py CODE (e.g. z3-db1-2026-10-01k) so redo() re-runs every model of older code (best-of keeps the better STEP).
+Changes:
+  * db1bolts.tolerance_status(): field 4 of MM<d>*<L>/<slot x>/<slot y>/<tol>/... used as stored when the string has the 11-field layout:
+      t = 0 -> hole = d, t < 0 -> hole < d, t > 10 -> oversize anchor holes; d + t <= 0 -> no hole (STUD groups); hole > 4d -> still nominal.
+    Codes e-j accepted only 0 < t <= 10, so genuine 0 / negative / > 10 values were cut at d + ISO 273 / AISC clearance (hole_clearance_nominal).
+  * bolts_of(): bolt dicts carry tol_status and slot (slot x, slot y)
+  * catalog_geometry(): skip {'ambiguous': n} head entries of bolt_catalog.json (code i/j raise KeyError 's' -> convert_error on 3 models)
+  * db1step.convert_old(): no cut when the hole diameter <= 0; no cut in a member the bolt is not a ply of: member material over the whole
+    shank +- 2d (bolt running inside a rod / block / beam), or a member parallel to the bolt whose material reaches past an end of that
+    window (rods / bars threaded through the hole). Code i bored ROD48/ROD50 bars along their axis; the true 60/70 mm holes would sever
+    them. Contour plates bolted through their thickness and thin parts along the axis (modelled washers / nuts) are cut as before. bolt_stats gains holes_by_diameter_source, holes_not_cut_zero_diameter, holes_not_cut_bolt_inside_part,
+    bolt_inside_part_why/_profiles, holes_in_slotted_groups_cut_round. holes_nominal_clearance keeps its meaning (build_index.py standin).
+--- db1bolts.py	2026-10-01 16:24:13
++++ db1bolts.py	2026-10-01 16:48:40
+@@ -13,8 +13,9 @@
+   clearance(d) -> mm                                                  ISO 273 normal series
+   db1step.IfcOut.bolt_group(name, bolts) writes the bolts (faceted polyhedra); db1step adds hole cuts to the parts.
+ Holes (z3 addition; the Windows pipeline does not cut holes): every written part whose solid the shank segment passes
+-through gets a cylinder cut of diameter d + nominal clearance (ISO 273 normal series: +1 up to M12, +2 up to M24, +3 above)
+-along the bolt axis, length L. Parts are tested with their exact 2D section outline (RECT, CIRC, CHS, RHS, I, L, U,
++through gets a cylinder cut of diameter stored d + the group's own hole tolerance (field 4 of the bolt string, any sign / size,
++see tolerance_status; d + t <= 0 = no hole), else d + nominal clearance (ISO 273 normal series: +1 up to M12, +2 up to M24, +3
++above) along the bolt axis, length L. Parts are tested with their exact 2D section outline (RECT, CIRC, CHS, RHS, I, L, U,
+ arbitrary polylines / contour plates); sections without an exact outline are not cut (counted).
+ """
+ import math, re, os, json
+@@ -42,14 +43,51 @@
+     return sg['hole_clearance'] if sg else clearance(b['d'])
+ 
+ 
+-def bolt_tolerance(prof):
+-    """old engines: hole tolerance = 4th '/'-field of the bolt profile string MM<d>*<L>/a/b/<tol>/... (data-3 MoldTek models:
+-    M12-M22 -> 2, M27 -> 3 mm, Tekla's usual settings); None when absent or implausible"""
++def tolerance_status(prof):
++    """-> (tolerance mm or None, status) for the old-engine bolt string MM<d>*<L>/<slot x>/<slot y>/<tol>/<f4>/<f5>/<f6>/<f7>/<flags>/<f9>/<f10>.
++    Tekla cuts every hole of a bolt group at bolt size + tolerance, whatever the sign or size (hole-tolerance-residue, proven on data-3):
++      * 0 < t <= 10: as before (codes e-i)
++      * t = 0: hole of exactly the stated size (holes-only anchor holes MM30/MM20/MM10..., US bolts entered at hole size MM24/MM30 for
++        7/8 in / 1-1/8 in bolts in 15/16 in / 1-3/16 in holes); Tekla's own NC files of the same folders carry these sizes (10 mm, 20 mm,
++        30 mm) and never the d + ISO 273 sizes (11 / 22 / 33 mm) the kit used to cut
++      * t < 0: holes smaller than the stated size (MM10 -4 -> 6 mm, MM12.7 -4.76 / MM9.52 -1.59 -> 7.94 mm = 5/16 in)
++      * t > 10: oversize anchor holes (MM22.22 +17.46 -> 39.69 mm = 1-9/16 in, AISC Table 14-2 for a 7/8 in rod; MM30 +40 -> 70 mm, present
++        as 70 mm circles in Tekla's NC inner contours of the same model)
++      * d + t <= 0: Tekla cuts no hole (STUD groups MM15.88 with t = -15.88) -> status 'decoded_no_hole', the caller cuts nothing
++    Values outside these rules (string not in the 11-field layout, hole > 4 d) stay None -> nominal clearance, counted by status."""
++    p = (prof or '').split('/')
++    if len(p) < 4:
++        return None, 'no_tolerance_field'
+     try:
+-        t = float((prof or '').split('/')[3])
++        t = float(p[3])
++    except ValueError:
++        return None, 'tolerance_not_numeric'
++    if 0 < t <= 10:
++        return t, 'decoded'
++    dl = bolt_dims(prof)
++    if dl is None or len(p) != 11 or not math.isfinite(t):
++        return None, 'unexpected_string_layout'
++    d = dl[0]
++    if d + t <= 0:
++        return t, 'decoded_no_hole'
++    if d + t > 4 * d:
++        return None, 'tolerance_implausible'
++    return t, ('decoded_zero' if t == 0 else ('decoded_negative' if t < 0 else 'decoded_over_10'))
++
++
++def bolt_tolerance(prof):
++    """old engines: hole tolerance = 4th '/'-field of the bolt profile string (see tolerance_status); None when absent / not usable"""
++    return tolerance_status(prof)[0]
++
++
++def slot_lengths(prof):
++    """(slot x, slot y) of the old-engine bolt string (fields 1, 2); (0, 0) when absent. Tekla elongates the hole by these in the plies
++    ticked under 'slotted holes in parts' - that ply selection is not decoded, so slotted groups are cut round at d + tol (counted)"""
++    p = (prof or '').split('/')
++    try:
++        return float(p[1]), float(p[2])
+     except (IndexError, ValueError):
+-        return None
+-    return t if 0 < t <= 10 else None
++        return 0.0, 0.0
+ 
+ 
+ def hole_diameter(b):
+@@ -94,6 +132,8 @@
+     e = sz.get(f'{float(d):.1f}') or sz.get(str(d)) or sz.get(f'{float(d):g}')
+     if not e or not e.get('bolt') or not (e.get('nut1') or {}).get('m'):
+         return None
++    if not all(isinstance(e['bolt'].get(k), (int, float)) for k in ('s', 'k')):
++        return None     # catalog entry {'ambiguous': n} (head not resolved): fall back to the standard tables (code i raised KeyError 's')
+     b, n1, w1 = e['bolt'], e['nut1'], e.get('washer1') or {}
+     return {'d': float(d), 'head_af': b['s'], 'head_h': b['k'], 'nut_af': n1.get('s', b['s']), 'nut_h': n1['m'],
+             'washer_t': w1.get('t'), 'washer_od': w1.get('do'), 'washer_id': w1.get('di'), 'hole_clearance': clearance(float(d)),
+@@ -142,8 +182,10 @@
+         c = O + ex * p[0] + ey * p[1] + ez * p[2]
+         sg = catalog_geometry(bolt_standard(m), d) or standard_geometry(bolt_standard(m), d)
+         bf = bolt_fields(m.get('prof'))
++        tol, tst = tolerance_status(m.get('prof'))
+         b = {'c': c, 'ex': ex, 'ey': ey, 'ez': ez, 'd': sg['d'] if sg else d, 'd_stored': d, 'L': L, 'pid': m.get('pid'),
+-             'standard': bolt_standard(m), 'std': sg, 'tol': bolt_tolerance(m.get('prof')), 'holes_only': bf.get('holes_only', False),
++             'standard': bolt_standard(m), 'std': sg, 'tol': tol, 'tol_status': tst, 'slot': slot_lengths(m.get('prof')),
++             'holes_only': bf.get('holes_only', False),
+              'wash_head': bf.get('wash_head', 0), 'wash_nut': bf.get('wash_nut', 0), 'wash_2': bf.get('wash_2', 0), 'nuts': bf.get('nuts', 1),
+              'axial_decoded': False}
+         if 'f6' in bf and bf.get('f10', 0) > 0:
+--- db1step.py	2026-10-01 16:24:13
++++ db1step.py	2026-10-01 17:44:35
+@@ -725,6 +725,8 @@
+     HI = db1bolts.HoleIndex(BL)
+     hole_prof = {}
+     holes_cut = 0; ax_stats = {}; holes_tol_decoded = 0
++    hole_src = collections.Counter(); holes_no_hole = 0; holes_slot_round = 0   # hole-tolerance-residue: diameter source per hole
++    holes_inside = 0; inside_prof = collections.Counter(); inside_why = collections.Counter()
+ 
+     cut_body = {}
+     for m in M:
+@@ -741,6 +743,7 @@
+             continue
+         bodies[id(m)] = body(m)
+     part_bolts = {}; spans = [[] for _ in BL]
++    inside = {}      # (part, bolt) -> why the bolt is not a ply of the part (no hole cut there): it runs along / inside the part
+     if BOLTS_ON and BL:
+         for m in M:
+             b = bodies.get(id(m))
+@@ -752,10 +755,23 @@
+             hit = HI.holes_for(b[0], b[2], reg)
+             if hit:
+                 part_bolts[id(m)] = hit
++                zp_ = np.asarray(b[0][1], float); zp_ = zp_ / (np.linalg.norm(zp_) or 1.0)
+                 for i in hit:
+                     sp = db1bolts.ply_check(b[0], b[2], reg, BL[i])
+                     if sp:
+                         spans[i].append(sp)
++                        # not a ply (no hole cut there): material over the whole shank +- 2d (bolt embedded in / running inside a member), or a
++                        # member parallel to the bolt whose material reaches past an end of that window (rod / bar / beam threaded through the
++                        # hole); contour plates bolted through their thickness and thin parts along the axis (modelled washers / nuts) are cut
++                        w_ = BL[i]['L'] / 2 + 2 * BL[i]['d'] - 1.0
++                        lo_, hi_ = sp[0] <= -w_, sp[1] >= w_
++                        par_ = abs(float(zp_ @ BL[i]['ez'])) > 0.996
++                        if b[3] == 'contour_plate' and par_:
++                            pass                                     # bolted through the plate thickness: a ply, whatever its thickness
++                        elif lo_ and hi_:
++                            inside[(id(m), i)] = 'inside_window'
++                        elif (lo_ or hi_) and b[3] != 'contour_plate' and par_:
++                            inside[(id(m), i)] = 'along_member_axis'
+         # axial fit: shift each bolt along its axis so that its shank covers the plies it passes through (head on -z, as written by
+         # the Windows pipeline); bolts shorter than their grip are centred on the grip and counted
+         shifted = 0; short = 0; inside0 = 0
+@@ -809,8 +825,18 @@
+         cuts = [cut_body[c] for c in cut_rel.get(m['pid'], []) if c in cut_body]
+         applied += len(cuts)
+         for i in part_bolts.get(id(m), []):
++            if (id(m), i) in inside:
++                # not a ply: the bolt runs along the member (ROD48/ROD50 bars threaded through 60 mm holes-only groups) or lies wholly inside a
++                # block; Tekla cuts only the bolted plies, so no hole here (code i bored the rods along their axis, a 60/70 mm hole severed them)
++                holes_inside += 1; inside_prof[m.get('prof') or '?'] += 1; inside_why[inside[(id(m), i)]] += 1
++                continue
+             bb = BL[i]; dh, dec_ = db1bolts.hole_diameter(bb)
++            if dh <= 0:                                          # tolerance <= -d: Tekla cuts no hole (STUD groups)
++                holes_no_hole += 1
++                continue
+             holes_tol_decoded += 1 if dec_ else 0
++            hole_src[bb.get('tol_status') or ('decoded' if dec_ else 'nominal')] += 1
++            holes_slot_round += 1 if any(x != 0 for x in (bb.get('slot') or ())) else 0
+             key = round(dh, 2)
+             if key not in hole_prof:
+                 hole_prof[key] = out.profile('BOLT_HOLE_D%g' % key, 'CIRC', [dh / 2])
+@@ -833,6 +859,10 @@
+         st['bolt_stats'] = {'groups': src.get('bolt_group', 0), 'bolts': len(BL), 'holes_cut': holes_cut,
+                             'bolts_with_holed_part': hit, 'bolts_without_holed_part': len(BL) - hit, **(ax_stats if BL else {}),
+                             'holes_tolerance_decoded': holes_tol_decoded, 'holes_nominal_clearance': holes_cut - holes_tol_decoded,
++                            'holes_by_diameter_source': dict(hole_src), 'holes_not_cut_zero_diameter': holes_no_hole,
++                            'holes_in_slotted_groups_cut_round': holes_slot_round,
++                            'holes_not_cut_bolt_inside_part': holes_inside, 'bolt_inside_part_why': dict(inside_why),
++                            'bolt_inside_part_profiles': dict(inside_prof.most_common(10)),
+                             'bolts_axial_decoded': sum(1 for bb in BL if bb.get('axial_decoded') and not bb.get('holes_only')),
+                             'holes_only_bolts': sum(1 for bb in BL if bb.get('holes_only')),
+                             'washers': sum((bb.get('wash_head') or 0) + (bb.get('wash_nut') or 0) + (bb.get('wash_2') or 0) for bb in BL if not bb.get('holes_only')),
+@@ -840,7 +870,7 @@
+                                                    if not bb.get('holes_only') and not db1bolts.washer_exact(bb)),
+                             'washer_side_inferred': sum(1 for bb in BL if not bb.get('holes_only') and bb.get('wash_2')),
+                             'model_catalog_bolts': sum(1 for bb in BL if (bb.get('std') or {}).get('source') == 'model_catalog'),
+-                            'hole_diameter': 'stored bolt d + decoded tolerance (field 4 of the bolt record); else d + standard clearance (AISC d + 1/16 in for ASTM, ISO 273 otherwise)',
++                            'hole_diameter': 'stored bolt d + the group tolerance (field 4 of the bolt record, as stored: 0 / negative / > 10 included; d + t <= 0 = no hole); else d + standard clearance (AISC d + 1/16 in for ASTM, ISO 273 otherwise)',
+                             'standards': dict(collections.Counter(bb.get('standard') or '?' for bb in BL)),
+                             'standard_table_geometry': sum(1 for bb in BL if bb.get('std')),
+                             'standard_mappings': dict(collections.Counter(f"{bb.get('standard')}: {bb['std']['mapping']} (delta {bb['std']['delta_mm']} mm)" for bb in BL if bb.get('std'))),

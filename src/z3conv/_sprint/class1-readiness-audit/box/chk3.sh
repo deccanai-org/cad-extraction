@@ -1,0 +1,1 @@
+cd /work/agentwork/class1-readiness-audit; ls -la wk/full_k4e/97c7c25d3237/ | head; ps -eo pid,etime,pcpu,rss,args | grep "kit_k4/convert_one\|kit_k4e/\|fullconv" | grep -v grep | sed 's#/work/agentwork/class1-readiness-audit/##g' | cut -c1-150; uptime

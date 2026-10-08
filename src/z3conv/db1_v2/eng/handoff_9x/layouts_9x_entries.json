@@ -1,0 +1,48 @@
+{
+ "9.21": {
+  "layout": {
+   "stride": 73,
+   "xyz": 41,
+   "pts_stride": 41,
+   "pts_k": 17,
+   "p1": 21,
+   "p2": 25,
+   "csys": 33,
+   "csys_key": "after",
+   "csys_stride": 61,
+   "csys_k": 9,
+   "attr": 13,
+   "attr_stride": 381,
+   "prof_off": 125,
+   "rest_ref": 189,
+   "rest_stride": 54,
+   "rest_off": 25
+  },
+  "layout_from": "9.08 geometry + 9.2x attribute record (stride 381, profile @125, name tail ref @189)",
+  "approved": true,
+  "note": "v2 eng 2026-10-01: member geometry fields identical to 9.08 (9.08 vs Tekla IFC: 1,014/1,074 joined members exact, rest = model revision); attribute record found by _semi on 9.21 and confirmed on 9.50; runtime guards unchanged"
+ },
+ "9.50": {
+  "layout": {
+   "stride": 73,
+   "xyz": 41,
+   "pts_stride": 41,
+   "pts_k": 17,
+   "p1": 21,
+   "p2": 25,
+   "csys": 33,
+   "csys_key": "after",
+   "csys_stride": 61,
+   "csys_k": 9,
+   "attr": 13,
+   "attr_stride": 381,
+   "prof_off": 125,
+   "rest_ref": 189,
+   "rest_stride": 54,
+   "rest_off": 25
+  },
+  "layout_from": "9.08 geometry + 9.2x attribute record (stride 381, profile @125, name tail ref @189)",
+  "approved": true,
+  "note": "v2 eng 2026-10-01: member geometry fields identical to 9.08 (9.08 vs Tekla IFC: 1,014/1,074 joined members exact, rest = model revision); attribute record found by _semi on 9.21 and confirmed on 9.50; runtime guards unchanged"
+ }
+}

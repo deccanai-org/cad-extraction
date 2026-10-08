@@ -1,0 +1,13 @@
+# conda-forge (built by setup.sh via micromamba)
+python=3.11
+ifcopenshell=0.9.0        # IFC reader/tessellator + IfcConvert (GLB/OBJ)
+pythonocc-core            # validate_step.py OCC read-back (8.0.1 on the build box)
+numpy
+trimesh                   # GLB/OBJ read-back, scene loading for renders
+pillow
+boto3                     # S3 IO + claims (conditional PutObject IfNoneMatch)
+mesalib                   # llvmpipe software OpenGL over EGL (headless renders)
+pyopengl
+# pip
+pyrender==0.1.45
+PyOpenGL==3.1.7

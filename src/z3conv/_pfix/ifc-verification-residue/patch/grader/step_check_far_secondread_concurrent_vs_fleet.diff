@@ -1,0 +1,138 @@
+--- step_check.py	(fleet ifc kit, md5 3f26ca815923b09eb64b34a73ddb0e0b: whole-file far rule, not applied to files with MAPPED_ITEM)
++++ step_check.py	(far rule, second-read form: solid checks from a translated copy, also for MAPPED_ITEM files)
+@@ -39,7 +39,8 @@
+ 
+ 
+ buf = ''
+-FAR_RE = re.compile(r"[(,]\s*-?\d{8,}")      # a CARTESIAN_POINT coordinate >= 1e7 mm (10 km) from the origin
++FAR_MM = 1e7                                   # 10 km
++FAR_RE = re.compile(r"[(,]\s*-?\d{8,}")      # a coordinate >= 1e7 mm on a CARTESIAN_POINT line
+ CP_RE = re.compile(r"CARTESIAN_POINT\('[^']*',\(([^)]*)\)\)")
+ far_points = 0
+ far_first = None
+@@ -49,12 +50,12 @@
+             if m in line:
+                 mk[m] += line.count(m)
+         if 'CARTESIAN_POINT' in line and FAR_RE.search(line):
+-            far_points += 1
+-            if far_first is None:
+-                for m_ in CP_RE.finditer(line):
+-                    if m_.group(1).count(',') == 2 and FAR_RE.search('(' + m_.group(1)):
+-                        far_first = [float(v_) for v_ in m_.group(1).split(',')]
+-                        break
++            for m_ in CP_RE.finditer(line):
++                v_ = m_.group(1).split(',')
++                if len(v_) == 3 and max(abs(float(x_)) for x_ in v_) >= FAR_MM:
++                    far_points += 1
++                    if far_first is None:
++                        far_first = [float(x_) for x_ in v_]
+         if schema is None and 'FILE_SCHEMA' in line:
+             schema = line.strip()[:200]
+         if not ('PRODUCT' in line or 'SHAPE_DEFINITION_REPRESENTATION' in line or buf):
+@@ -133,48 +134,45 @@
+ except ImportError:
+     from OCC.Core.BRepBndLib import brepbndlib_Add as bnd_add
+ 
+-# Far from the origin (geo-referenced models, 1.5e9 / 3.0e9 mm seen in SDS/2 exports) OpenCASCADE's 1e-7 mm tolerances
+-# are finer than the coordinates' own floating-point resolution (ulp(3e9 mm) = 4.8e-7 mm): the reader's shape healing
+-# throws and BRepCheck fails solids that read back valid 1 km from the origin. Such a file (no MAPPED_ITEM, whose local
+-# frames must not move) is read from a copy whose geometry points (3D CARTESIAN_POINTs other than the context origin
+-# (0,0,0)) are all shifted by the same whole number of km (exact decimal arithmetic: a rigid translation of the
+-# geometry, nothing else changes); bboxes are reported in the file's coordinates.
+-OFF = None
+-read_path = a.step
+-if far_points and far_first is not None and not mk['MAPPED_ITEM(']:
++# Far from the origin (geo-referenced models: 1.5e9 / 3.0e9 mm in SDS/2 exports) OpenCASCADE's 1e-7 mm tolerances are
++# finer than the coordinates' own floating-point resolution (ulp(3e9 mm) = 4.8e-7 mm): the reader's healing throws
++# ('gp_Dir() - input vector has zero norm') and BRepCheck fails solids that read back valid 1 km from the origin. For
++# such a file the solid checks (BRepCheck, volume) are taken from a second read of a copy in which every far point
++# (a coordinate >= 10 km; local frames of shared representations and the context origin stay) is moved by the same
++# whole number of km - exact decimal arithmetic, a rigid translation of the far geometry. Roots, products, faces and
++# bboxes still come from the file itself.
++r2 = None
++if far_points and far_first is not None:
+     from decimal import Decimal
+-    # offset: whole km of the first far point (the model's points lie within its extent of it; the global origin and
+-    # other near-origin placement points must not set it)
++    import tempfile
+     OFF = [int(math.floor(v_ / 1e6) * 1e6) for v_ in far_first]
+     D_ = [Decimal(v_) for v_ in OFF]
+ 
+     def _sh(m_):
+         vals = m_.group(1).split(',')
+-        if len(vals) != 3:
+-            return m_.group(0)              # 2D (parameter-space / profile) points stay
+-        if all(float(v_) == 0.0 for v_ in vals):
+-            return m_.group(0)              # the origin of the representation context placement stays (OCC reads the
+-                                            # AXIS2_PLACEMENT_3D item of a shape representation as its frame)
++        if len(vals) != 3 or max(abs(float(v_)) for v_ in vals) < FAR_MM:
++            return m_.group(0)
+         res_ = []
+         for k_, v_ in enumerate(vals):
+-            x_ = format(Decimal(v_.strip()) - (D_[k_] if k_ < 3 else 0), 'f')
++            x_ = format(Decimal(v_.strip()) - D_[k_], 'f')
+             res_.append(x_ if '.' in x_ else x_ + '.')
+         return m_.group(0)[:m_.start(1) - m_.start(0)] + ','.join(res_) + '))'
+-    import tempfile
+     tf_ = tempfile.NamedTemporaryFile(prefix='farcopy_', suffix='.step', delete=False, dir=os.path.dirname(os.path.abspath(a.out)) or None)
+     with open(a.step, 'r', encoding='latin-1') as f, open(tf_.name, 'w', encoding='latin-1') as g:
+         for line in f:
+             g.write(CP_RE.sub(_sh, line) if 'CARTESIAN_POINT' in line else line)
+-    read_path = tf_.name
+-    out['translated_for_check_mm'] = OFF
+-    out['far_points'] = far_points
+-r = STEPControl_Reader()
+-st = r.ReadFile(read_path)
+-if OFF is not None:
++    r2 = STEPControl_Reader()
++    if r2.ReadFile(tf_.name) != IFSelect_RetDone:
++        r2 = None
+     try:
+-        os.remove(read_path)
++        os.remove(tf_.name)
+     except OSError:
+         pass
++    out['far_check'] = {'offset_mm': OFF, 'far_points': far_points, 'translated_read': r2 is not None, 'roots_checked_translated': 0}
++    out['far_points'] = far_points             # same keys as the fleet's whole-file form (coordinator: far_translated_check)
++    out['translated_for_check_mm'] = OFF
++r = STEPControl_Reader()
++st = r.ReadFile(a.step)
+ out['read_status'] = 'ok' if st == IFSelect_RetDone else f'fail:{st}'
+ if st != IFSelect_RetDone:
+     out['sec'] = round(time.time() - T0, 1)
+@@ -240,13 +238,25 @@
+         if not b.IsVoid():
+             bb = b.Get()
+             if all(math.isfinite(v) and abs(v) < 1e10 for v in bb):
+-                gbox.Add(b); rec['bbox'] = [round(v + (OFF[k % 3] if OFF else 0), 2) for k, v in enumerate(bb)]
++                gbox.Add(b); rec['bbox'] = [round(v, 2) for v in bb]
+             else:
+                 tot['nonfinite'] += 1; rec['nonfinite'] = True
+     except Exception:
+         pass
+     if sols and (check_p >= 1.0 or rng.random() < check_p):
+         vol = 0.0; val = 0
++        if r2 is not None:
++            # same root of the translated copy (same structure, same root order): its solids carry the checks
++            try:
++                if r2.TransferRoot(i):
++                    sh2 = r2.Shape(r2.NbShapes())
++                    ex2 = TopExp_Explorer(sh2, TopAbs_SOLID); sols2 = []
++                    while ex2.More():
++                        sols2.append(ex2.Current()); ex2.Next()
++                    if len(sols2) == len(sols):
++                        sols = sols2; out['far_check']['roots_checked_translated'] += 1
++            except Exception:
++                pass
+         for s in sols:
+             try:
+                 v_ = BRepCheck_Analyzer(s).IsValid()
+@@ -276,7 +286,7 @@
+ out['invalid_examples'] = invalid_names
+ out['roots_mapped_to_products'] = sum(1 for p in parts if p.get('pid') is not None or p.get('name') is not None)
+ if not gbox.IsVoid():
+-    out['bbox'] = [round(v + (OFF[k % 3] if OFF else 0), 3) for k, v in enumerate(gbox.Get())]
++    out['bbox'] = [round(v, 3) for v in gbox.Get()]
+ if a.parts:
+     with gzip.open(a.parts, 'wt') as g:
+         for p in parts:

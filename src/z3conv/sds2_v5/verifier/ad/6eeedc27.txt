@@ -1,0 +1,25 @@
+D1  FAIL  Version / layout gate: jsetup_version=7.243, mem_idx_size=37415244, calibrated_slot=None, slot_family=None, layout=, decode_error=job has only 2 members in mem_idx - empty or placeholder job  layout auto-calibration failed (EC-01/EC-06): cannot decode this job
+D2  PASS  Shape table (job_mtrl) sanity: layout=record=510, base=0x100, byte_order=big, dims_at=0x1a, weight_at=0x42, votes=weight=300, dims=12, w_records=316, records=2051, aisc_checked=12, aisc_mismatch=[], w_plausible_share=1  
+D3  FAIL  Section field sanity:   no structural members decoded (EC-08: wrong type offset)
+D4  FAIL  Work-line / roll field sanity:   no structural members decoded (EC-08)
+D5  NA    Stray members (spatial outliers):   too few members
+D6  NA    Section index vs main-piece name: agreement=None, section_source=None, piece_name_path=None  piece-name path not available for this job
+C1  PASS  Completeness vs the SDS2 job (independent): expected_pieces=164, present=164, missing=0, unexpected=0, shared_recorded_once=0, approximate_solids=0, member_envelopes=0, missing_by_kind=  
+S1  PASS  Solid count vs manifest: step_solids=164, manifest_solids=164  
+S2  PASS  B-rep validity: valid_share=1, closed_share=1, positive_volume_share=1, single_solid_share=1  
+S3  PASS  Solid names parse and are unique: parsed_share=1, duplicate_names=0, repeated_instance_names=0  
+S4  NA    Units and model extent: file_unit=MM, span_in=[1205, 566.4, 590.2], decoded_span_in=[1, 1, 1], span_ratio=[1205, 566.4, 590.2], centre_shift_in=[1232, 825.3, 137.1]  no reference extent: no decoded piece boxes and no decoded members (adapter)
+M1  PASS  Mass vs SDS2 recorded weight (rolled/plate steel): compared=164, median_ratio=1, within_tol_share=1, tol=0.15, p05=1, p95=1, by_family=HSS=[164, 1], not_compared=  
+M2  NA    Open-web joists represented plausibly:   no joists in this model
+G1  NA    Solid vs work line (length, top-of-steel, column axis):   stage-2 pieces are cut to fabricated length; see E-checks
+G2  FAIL  Connectivity (solids touch neighbours): solids=164, touching_share=0.0732, isolated=152  many solids float free of the structure (EC-24 placement / EC-15 stray)
+G3  FAIL  Connection pieces sit on their parent member: pieces_checked=162, on_parent_share=0.0617, off_parent=152, off_parent_touching_other_member=0, off_parent_confirmed_by_ifc=None, resolved_share=0.0617, basis=touching other member  pieces placed away from their member and not confirmed elsewhere (EC-25 M vs M.T / EC-26 hole block read as material)
+G4  FAIL  Duplicate solids: duplicates=2, already_in_sds2_job=0, introduced_by_converter=2, share=0.0122  identical solids written more than once (EC-27 header block + material block / EC-28 duplicate job copies)
+G5  NA    Piece solids match decoded placement (independent rebuild): solids=164, rebuilt=0, no_decoded_counterpart=164, within_0_1in=0, within_3in=0, over_12in=0, median_err_in=None, p99_err_in=None  
+E1  NA    SDS2 IFC export (aligned bbox IoU):   no IFC for this job
+E2  NA    KISS bill of materials:   no KISS file
+E3  NA    DSTV NC1 parts:   no NC1 files
+OVERALL FAIL (evidence: mass); report -> ad/6eeedc27_verify.md
+VERDICT INCORRECT
+TIER EXCLUDED   (checks failed: G2 G3)
+ADAPTER {"name": "verify_v55", "for_converter": "sds2-step-pipeline v5.5.x", "verifier": "sds2_step_verifier v1.3.3", "decoder_fix": true, "names_reparsed": 0, "joist_standins": 0, "reference_parts": 0, "phantom_placements_dropped": 54, "s4_no_reference_extent": true, "unparsed_after_adapter": 0}

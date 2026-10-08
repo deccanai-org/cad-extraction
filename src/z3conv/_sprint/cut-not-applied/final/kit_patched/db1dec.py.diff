@@ -1,0 +1,114 @@
+--- /Users/dhiren/Downloads/Deccan/z3conv/db1/db1dec.py	2026-10-01 17:59:56
++++ rebase/kitn2/db1dec.py	2026-10-01 20:53:51
+@@ -109,6 +109,53 @@
+             d3 = (s[0]-r[0])*(p[1]-r[1]) - (s[1]-r[1])*(p[0]-r[0]); d4 = (s[0]-r[0])*(q[1]-r[1]) - (s[1]-r[1])*(q[0]-r[0])
+             if d3 * d4 < 0: return True
+     return False
++
++
++REPAIR_OK = [False]      # cut-not-applied P14: set by Db.polygon for cut parts only (contour plates keep the refusal)
++LAST_REPAIR = [None]     # cut-not-applied P14: (dropped sliver area mm2, outline area mm2) of the last repaired outline
++
++
++def _selfx_pair(P):
++    """first pair of properly crossing edges (i, j) of the closed polygon P, or None"""
++    n = len(P); A = np.asarray(P)
++    for i in range(n):
++        p, q = A[i], A[(i + 1) % n]
++        for j in range(i + 2, n):
++            if i == 0 and j == n - 1: continue
++            r, s = A[j], A[(j + 1) % n]
++            d1 = (q[0]-p[0])*(r[1]-p[1]) - (q[1]-p[1])*(r[0]-p[0]); d2 = (q[0]-p[0])*(s[1]-p[1]) - (q[1]-p[1])*(s[0]-p[0])
++            if d1 * d2 >= 0: continue
++            d3 = (s[0]-r[0])*(p[1]-r[1]) - (s[1]-r[1])*(p[0]-r[0]); d4 = (s[0]-r[0])*(q[1]-r[1]) - (s[1]-r[1])*(q[0]-r[0])
++            if d3 * d4 < 0: return i, j
++    return None
++
++
++def _area2(Q):
++    return sum(Q[i][0] * Q[(i + 1) % len(Q)][1] - Q[(i + 1) % len(Q)][0] * Q[i][1] for i in range(len(Q))) / 2.0
++
++
++def _repair_slivers(res, protect, tol=0.25):
++    """cut-not-applied P14: an arc through a contour's arc point (type 40) can poke a hair across the neighbouring straight edges
++    (a944 HRH_MASTER 7.64: 68 'BL25' cutters, the arc A-B-C rises 0.11 mm above edge D-A and dips 0.1 mm under C-D) -> the outline
++    crosses itself and the cut was refused. At each crossing the outline is split into its two loops and the thin one is dropped,
++    only while every dropped loop is a sliver (width = 2 x area / its longest edge <= tol mm, area <= 1 % of the outline).
++    -> (outline, total dropped area mm2) or (None, None)"""
++    Q = [(float(q[0]), float(q[1])) for q in res]; A0 = abs(_area2(Q)); dropped = 0.0
++    for _ in range(32):
++        pr = _selfx_pair(Q)
++        if pr is None: return Q, dropped
++        i, j = pr; n = len(Q)
++        p, q, r, s_ = (np.array(Q[k % n]) for k in (i, i + 1, j, j + 1))
++        d = q - p; e = s_ - r; den = d[0] * e[1] - d[1] * e[0]
++        if abs(den) < 1e-15: return None, None
++        t = ((r[0] - p[0]) * e[1] - (r[1] - p[1]) * e[0]) / den; X = (float(p[0] + t * d[0]), float(p[1] + t * d[1]))
++        L1 = [X] + Q[i + 1:j + 1]; L2 = [X] + Q[j + 1:] + Q[:i + 1]
++        a1, a2 = abs(_area2(L1)), abs(_area2(L2))
++        keep, drop, ad = (L1, L2, a2) if a1 >= a2 else (L2, L1, a1)
++        lmax = max(float(np.hypot(drop[k][0] - drop[k - 1][0], drop[k][1] - drop[k - 1][1])) for k in range(len(drop)))
++        if ad > 0.01 * A0 or (lmax > 0 and 2.0 * ad / lmax > tol) or len(keep) < 3: return None, None
++        dropped += ad; Q = keep
++    return None, None
+ 
+ 
+ def _circ(a, b, c):
+@@ -246,6 +293,11 @@
+     # refuse only a crossing that the corner/arc treatment itself created; a contour that Tekla stored
+     # already crossing itself (e.g. a closing point a hair past the first point) is passed through as stored
+     if (len(corner) or any(t == 40 for t in T)) and _selfx(res) and not _selfx([(float(p[0]), float(p[1])) for p in P]):
++        if REPAIR_OK[0]:                                   # cut-not-applied P14: cut parts only
++            rep, dev = _repair_slivers(res, {(float(p[0]), float(p[1])) for p in P})
++            if rep is not None:
++                ARC_STATS["selfx_repaired"] = ARC_STATS.get("selfx_repaired", 0) + 1; LAST_REPAIR[0] = (dev, abs(_area2(rep)))
++                return rep
+         ARC_STATS["refused_selfx"] += 1
+         return None
+     return res
+@@ -837,7 +889,12 @@
+     def polygon(self, lay, m):
+         pts = self.outline_points(lay, m)
+         if not pts: return None
+-        P = apply_chamfers(pts) if lay.get('poly_ch') else [p[:2] for p in pts]
++        REPAIR_OK[0] = bool(m.get('cut')); LAST_REPAIR[0] = None          # cut-not-applied P14
++        try:
++            P = apply_chamfers(pts) if lay.get('poly_ch') else [p[:2] for p in pts]
++        finally:
++            REPAIR_OK[0] = False
++        if LAST_REPAIR[0] is not None and P: self.__dict__.setdefault('repaired', {})[m.get('seq')] = LAST_REPAIR[0]
+         return P if P and len(P) >= 3 else None      # None: refused (self-intersecting) or degenerate
+ 
+     # Part cuts: Tekla stores each cutting body as a member with material ANTIMATERIAL and
+@@ -870,7 +927,30 @@
+             c = self.I(recs + fc); p = self.I(recs + fp)
+             ok = inkeys(ck, c) & inkeys(pk, p)
+             for a, b in zip(p[ok], c[ok]): links[int(a)].append(int(b))
+-        self.cut_layout = dict(stride=s, cut=fc, parent=fp, linked=int(sum(len(v) for v in links.values())), cuts=len(cuts))
++        # cut-not-applied P5: isolated relation records. Objects edited after the last full save are written one by one at the end of
++        # the file, outside the fixed-stride runs, so the run scan above misses their relation record (1d8972fb: 18 of 21 unlinked cut
++        # parts). Same field layout (header flag byte 1/4/5 at +8, ids > 0 at +0/+4, cut key at fc, decoded non-cut part key at fp);
++        # taken only when every such record naming the cut names the same parent.
++        linked = {c for v in links.values() for c in v}
++        K = np.array(sorted({int(c) for c in ck if int(c) not in linked}), np.int64)
++        salv = 0
++        if len(K):
++            pks = set(int(x) for x in pk); found = collections.defaultdict(set); u8 = self.u8
++            for a in range(4):
++                n = (self.L - a) // 4
++                for c0 in range(0, n, 16_000_000):
++                    v = np.frombuffer(self.b, '<i4', count=min(16_000_000, n - c0), offset=a + 4 * c0)
++                    i = np.searchsorted(K, v); i[i >= len(K)] = 0
++                    for j in np.nonzero(K[i] == v)[0]:
++                        st = a + 4 * (c0 + int(j)) - fc
++                        if st < 0 or st + max(fp, fc) + 4 > self.L or int(u8[st + 8]) not in self.FLAGS: continue
++                        if int(self.I([st])[0]) <= 0 or int(self.I([st + 4])[0]) <= 0: continue
++                        par = int(self.I([st + fp])[0])
++                        if par in pks: found[int(v[j])].add(par)
++            for c, ps in found.items():
++                if len(ps) == 1:
++                    links[ps.pop()].append(c); salv += 1
++        self.cut_layout = dict(stride=s, cut=fc, parent=fp, linked=int(sum(len(v) for v in links.values())), cuts=len(cuts), linked_isolated=salv)
+         return {k: sorted(set(v)) for k, v in links.items()}
+ 
+     def attr_strings(self, lay, pa_seq):

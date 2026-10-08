@@ -1,0 +1,1 @@
+until [ "$(python3 /tmp/z3c/canary_cmp.py 2>/dev/null | grep -c '"class"')" -ge 16 ]; do sleep 120; [ "$(date -u +%H%M)" -ge "2300" ] && break; done; python3 /tmp/z3c/canary_cmp.py 2>&1 | grep -v -i warn

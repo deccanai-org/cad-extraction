@@ -1,0 +1,118 @@
+{
+ "done_at": "2026-10-06T14:44:10Z",
+ "conversion_open": {
+  "data-3|db1_not_on_v": 0,
+  "data-3|ifc|redo.json": 0,
+  "data-3|ifc|jobs_reconvert.json": 0,
+  "data-3|db1|jobs_reconvert.json": 0,
+  "data-3|sds2|redo.json": 0,
+  "data-3|sds2|jobs_reconvert.json": 0,
+  "data-4|db1_still_converting_not_waited": 0,
+  "data-4|db1_not_on_v": 0,
+  "data-4|ifc|redo.json": 0,
+  "data-4|ifc|jobs_reconvert.json": 0,
+  "data-4|db1|jobs_reconvert.json": 0,
+  "data-4|sds2|redo.json": 0,
+  "data-4|sds2|jobs_reconvert.json": 0
+ },
+ "last_deltas": {
+  "partial-3": [
+   "14:36:21",
+   0,
+   0,
+   0
+  ],
+  "partial-4": [
+   "14:36:09",
+   0,
+   0,
+   0
+  ],
+  "perfect-3": [
+   "14:43:11",
+   1,
+   0,
+   0
+  ],
+  "perfect-4": [
+   "14:44:05",
+   0,
+   0,
+   0
+  ]
+ },
+ "still_converting_not_waited": {
+  "data-4": [
+   "2a7c0357cd2cf339926c7becf24f324730c3c6b2711c34f605e0e7f4c8a73cf1"
+  ]
+ },
+ "partial_orphans_queued": 0,
+ "verify_perfect": {
+  "projects": 779,
+  "ok": 761,
+  "checks": {
+   "step_not_shipped": 38
+  },
+  "only_step_not_shipped (awaiting owner-approved removal)": 18
+ },
+ "verify_partial": {
+  "projects": 2418,
+  "ok": 2418,
+  "checks": {},
+  "only_step_not_shipped (awaiting owner-approved removal)": 0
+ },
+ "stats_f1": {
+  "projects": 779,
+  "at": "2026-10-06T14:48:05Z"
+ },
+ "stats_p1": {
+  "projects": 2418,
+  "at": "2026-10-06T14:47:25Z"
+ },
+ "class": {
+  "data-3": {
+   "1": 2509,
+   "2": 5743,
+   "3": 367
+  },
+  "data-4": {
+   "1": 11309,
+   "3": 1217,
+   "2": 21568,
+   "None": 19
+  },
+  "disk-2": {
+   "1": 1620,
+   "2": 4807,
+   "3": 280
+  },
+  "data-3-only": {
+   "2": 936,
+   "1": 889,
+   "3": 87
+  },
+  "disk-1": {
+   "2": 16490,
+   "1": 4490,
+   "3": 1081,
+   "None": 19
+  },
+  "data-4-only": {
+   "1": 6819,
+   "3": 136,
+   "2": 5078
+  }
+ },
+ "removals_pending_perfect": {
+  "left shipped set": 131,
+  "dedup_non_primary (primary": 647,
+  "dedup_non_primary_project": 28,
+  "dup_step_content": 6,
+  "orphan_unlisted": 1,
+  "left_shipped_set_project": 8,
+  "sha_mismatch_orphan": 113
+ },
+ "removals_pending_partial": {
+  "sha_mismatch_orphan": 4
+ }
+}

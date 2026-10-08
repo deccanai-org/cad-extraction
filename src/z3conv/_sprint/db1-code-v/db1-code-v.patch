@@ -1,0 +1,255 @@
+--- u/db1step.py	2026-10-05 13:24:26
++++ v/db1step.py	2026-10-05 14:49:17
+@@ -77,6 +77,9 @@
+ P_NOSIZE = re.compile(r'^(?:R\.B|RB|F\.B|FB|FL|PL|D|ROD|PIPE|TUBE|L|U|C|I|\[)\s*\.?\s*$')
+ 
+ 
++_PANEL_AXB_EXACT = [False]          # code v: set per model by _convert from the engine banner (DB1_PANEL_AXB_ENGINES)
++
++
+ def _section_for_raw(name, cat):
+     """-> (kind, params, source) or (None, reason, None)"""
+     if not name: return None, 'no_profile', None
+@@ -158,7 +161,17 @@
+         d, tw = (x * k for x in raw)
+         return 'CHS', [d / 2, tw], 'parametric_hss_round'
+     m = P_RECT.match(n)
+-    if m: return 'RECT', [float(m.group(2)), float(m.group(1))], 'parametric_panel'
++    if m:
++        # code v: a square A*A section has no orientation to assume (both axes carry A): exact, not a stand-in. A*B (A != B) keeps the
++        # 'orientation assumed' tag (Tekla IFC truth: too few GUID-joined panels to validate A = height along the part y)
++        if abs(float(m.group(1)) - float(m.group(2))) < 1e-9 and os.environ.get('DB1_PANEL_SQUARE_EXACT', '1') == '1':
++            return 'RECT', [float(m.group(2)), float(m.group(1))], 'parametric_rect_square'
++        # code v: A*B = Tekla's concrete 'h*b' (A = height along the part y). Tekla IFC truth (GUID join, mesh extents in the writer frame):
++        # 140 / 140 non-square A*B parts with A along y, 0 rotated (7 models, 7.64 / 7.82 / 8.07 / 8.53), writer y axis = Tekla's on catalog
++        # I sections 7,642 / 7,643 on the same engines -> exact on those engines; other engines keep the tag (no GUID-joined truth)
++        if _PANEL_AXB_EXACT[0]:
++            return 'RECT', [float(m.group(2)), float(m.group(1))], 'parametric_rect_hb'
++        return 'RECT', [float(m.group(2)), float(m.group(1))], 'parametric_panel'
+     # cut-not-applied P9: 'R.B \xd820' (R.B + Latin-1 O-slash + 20) / 'R.B 20' / 'R.BD20' (Latin-1 names kept by db1prof) is a round bar of the stated diameter (the name
+     # carries the full section). Unresolved before: steel round bars dropped, and the 7.01 operative rung-hole cutters 'R.B \xd820'
+     # (obj_type 11, P4) left cut_body_unbuilt (4fa8f263: 30, cc9bf730: 47).
+@@ -715,6 +728,7 @@
+         except EOFError:
+             import zlib; data = zlib.decompressobj(16 + zlib.MAX_WBITS).decompress(data); truncated = True
+     ban = re.search(rb'(\d+\.\d+)', data[:16]); engine = float(ban.group(1)) if ban else 0.0
++    _PANEL_AXB_EXACT[0] = bool(ban) and ban.group(1).decode() in os.environ.get('DB1_PANEL_AXB_ENGINES', '7.64,7.82,8.07,8.53').split(',')   # code v
+     if 0 < engine < 7.5:
+         return convert_old(data, out_ifc, cat, engine, t0)
+     small = len(data) < 20_000_000          # full discovery is cheap on small files
+@@ -915,8 +929,12 @@
+     # tekla-slots: which bolted parts Tekla slots (selection bits, bit k = k-th ply from the bolt head); Tekla NC 7.64: 1246 / 1249 parts (5 models), 8.53: 96 / 96 (2 models)
+     _m2 = re.search(r'(\d+\.\d+)', db.b[:16].decode('latin1')); _eng2 = _m2.group(1) if _m2 else ''
+     _bl2 = locals().get('blinks') or {}
++    # code v: engines unchanged (7.64, 8.53). Tekla NC1 per-part selection on 193 archives (v decode, all engines forced on): 8.85 1706/1806
++    # (94.5 %), 8.07 5943/6067 (98.0 %), 8.44 1970/2019, 7.82 5851/5988, 8.62 286/328, 9.08 283/283 (1 model) -> none reaches 99 % on a
++    # multi-model sample; disagreements are whole groups slotted in the DB1 but round in the NC (stale NC or undecoded rule)
+     V2_SLOTS_ON = BOLTS2 and os.environ.get('DB1_SLOTS', '1') == '1' and str(_eng2) in os.environ.get('DB1_V2_SLOT_ENGINES', '7.64,8.53').split(',')
+     V2SLOT = {}; v2slot_why = collections.Counter(); v2_slot_holes = 0
++    V2ROT = {}; v2_rotated = 0; V2_ROT_ON = os.environ.get('DB1_SLOT_ROTATE', '1') == '1'     # code v: Tekla 'rotate slots' (0 / 1 even / 2 odd plies)
+     for g in (bgroups if BOLTS2 else []):
+         sx_, sy_ = abs(g.get('slot_x') or 0), abs(g.get('slot_y') or 0)
+         if not (sx_ or sy_): continue
+@@ -925,11 +943,16 @@
+             V2SLOT[g['seq']] = None if (mk_ is None or mk_) else {}; continue
+         if mk_ is None or not parts_:
+             V2SLOT[g['seq']] = None; v2slot_why['no_selection_or_part_list'] += 1; continue
++        rot_ = (g.get('slot_rot') or 0) if V2_ROT_ON else 0
++        if rot_ not in (0, 1, 2):                                   # code v: unknown 'rotate slots' value -> undecided (cut round, tagged)
++            V2SLOT[g['seq']] = None; v2slot_why['rotate_slots_value_unknown'] += 1; continue
+         n_ = len(parts_); full_ = (1 << min(n_, 5)) - 1
+         if mk_ & full_ == 0:
+             V2SLOT[g['seq']] = {p_: False for p_ in parts_}; v2slot_why['no_part_slotted'] += 1; continue
+-        if n_ <= 5 and mk_ & full_ == full_:
+-            V2SLOT[g['seq']] = {p_: True for p_ in parts_}; v2slot_why['every_part_slotted'] += 1; continue
++        if n_ <= 5 and mk_ & full_ == full_ and (rot_ == 0 or n_ == 1):
++            V2SLOT[g['seq']] = {p_: True for p_ in parts_}; v2slot_why['every_part_slotted'] += 1
++            if rot_ == 2: V2ROT[g['seq']] = {p_: True for p_ in parts_}     # code v: the single ply is ply 1 (odd)
++            continue
+         iv_ = {}
+         for p_ in parts_:
+             v_ = [(t0_, t1_) for (bb_, t0_, t1_) in HP.get(p_, []) if bb_.get('pid') == g['seq']]
+@@ -940,6 +963,8 @@
+         if any(iv_[od_[k + 1]][1] > iv_[od_[k]][0] + 1.0 for k in range(n_ - 1)):
+             V2SLOT[g['seq']] = None; v2slot_why['overlapping_plies'] += 1; continue
+         V2SLOT[g['seq']] = {p_: bool(k < 5 and (mk_ >> k) & 1) for k, p_ in enumerate(od_)}; v2slot_why['ranked_head_first'] += 1
++        if rot_:                                                    # code v: k = 0 is ply 1 (odd)
++            V2ROT[g['seq']] = {p_: (rot_ == 1 and k % 2 == 1) or (rot_ == 2 and k % 2 == 0) for k, p_ in enumerate(od_)}
+     # pass 2: write
+     for m in M:
+         if m.get('cut'):
+@@ -964,6 +989,8 @@
+             ss_ = V2SLOT.get(bb.get('pid'))
+             if ss_ and ss_.get(m['seq']):                        # tekla-slots: slotted hole, long side along the group x / y
+                 g_ = bseq.get(bb.get('pid')) or {}; sx_, sy_ = abs(g_.get('slot_x') or 0), abs(g_.get('slot_y') or 0)
++                if (V2ROT.get(bb.get('pid')) or {}).get(m['seq']):      # code v: Tekla 'rotate slots' in this ply
++                    sx_, sy_ = sy_, sx_; v2_rotated += 1
+                 key = ('S', round(dh, 3), round(sx_, 3), round(sy_, 3)); v2_slot_holes += 1
+                 if key not in hole_prof:
+                     hole_prof[key] = out.profile('BOLT_SLOT_D%g_X%g_Y%g' % key[1:], 'RRECT', [dh + sx_, dh + sy_, dh / 2])
+@@ -1040,7 +1067,7 @@
+                                 writer='db1bolts2 v2 (7.5x-9.x records) + db1bolts.bolt_group')
+         st['bolt_stats'].update(_c1_v2_stats(bgroups, BG, holes_cut, holes_tol, db1bolts))   # c1audit-stats
+         st['bolt_stats']['slotted_bolts_cut_round'] = sum(len(BG.get(s_) or []) for s_, v_ in V2SLOT.items() if v_ is None)   # tekla-slots
+-        st['bolt_stats'].update(slotted_holes_cut=v2_slot_holes, slot_groups=dict(v2slot_why), v2_slots_on=V2_SLOTS_ON,
++        st['bolt_stats'].update(slotted_holes_cut=v2_slot_holes, slot_groups=dict(v2slot_why), v2_slots_on=V2_SLOTS_ON, slots_rotated=v2_rotated,
+                                 rect_plates_thin_side_to_z=sum(v2_rect.values()), rect_plate_names_reordered=dict(v2_rect.most_common(10)))
+     st['parts_list'] = plist
+     st['cuts_applied'] = applied
+@@ -1278,8 +1305,13 @@
+     PLY = {}                                                 # tekla-slots: (bolt index, part pid) -> ply span along the bolt axis
+     # engines whose slot direction is validated vs Tekla NC (6.87 = the 7.01 record layout; 7.24: parts 116 / 116 but 8 / 92 slots
+     # rotated 90 deg vs NC -> off until Tekla's 'rotate slots' field is found)
++    # code v: engines unchanged (6.87, 7.01). Tekla NC1 per part (v decode forced on, same-revision NC): 7.24 2370/2496 (95 %, 8 models; the
++    # misses are whole groups the DB1 marks slotted that Tekla's NC drills round - no stored field separates them), 7.30 546/546 (1 model)
+     SLOTS_ON = os.environ.get('DB1_SLOTS', '1') == '1' and eng_s in os.environ.get('DB1_SLOT_ENGINES', '6.87,7.01').split(',')
+     SLOT_SET = {}; slot_why = collections.Counter(); slot_holes = [0]
++    # code v: Tekla 'rotate slots' (part-attr byte @368: 0 no, 1 even plies, 2 odd plies, ply 1 = first from the bolt head) turns the slot
++    # 90 deg in those plies; NC1 truth: every rotated slot of 6.87 / 7.24 / 7.30 had this byte set, every unrotated one 0
++    SLOT_ROT_ON = os.environ.get('DB1_SLOT_ROTATE', '1') == '1'; ROTP = {}; slots_rotated = [0]
+     inside = {}      # (part, bolt) -> why the bolt is not a ply of the part (no hole cut there): it runs along / inside the part
+     if BOLTS_ON and BL:
+         # code q (verifier 06:30Z on audit P4): pass A collects every part a bolt meets; a group whose type-10 bolted list names none
+@@ -1358,13 +1390,18 @@
+                 b0_ = BL[idx_[0]]
+                 if not any(abs(float(x)) > 1e-9 for x in (b0_.get('slot') or (0.0, 0.0))): continue
+                 parts_ = REL10L.get(g_) or []; n_ = len(parts_); mk_ = int(b0_.get('slot_mask') or 0)
++                rot_ = (b0_.get('slot_rot') or 0) if SLOT_ROT_ON else 0
+                 if b0_.get('slot_mask') is None or not n_:
+                     SLOT_SET[g_] = None; slot_why['no_selection_or_part_list'] += 1; continue
++                if rot_ not in (0, 1, 2):                          # code v: unknown 'rotate slots' value -> undecided (cut round, tagged)
++                    SLOT_SET[g_] = None; slot_why['rotate_slots_value_unknown'] += 1; continue
+                 full_ = (1 << min(n_, 5)) - 1
+                 if mk_ & full_ == 0:
+                     SLOT_SET[g_] = {p_: False for p_ in parts_}; slot_why['no_part_slotted'] += 1; continue
+-                if n_ <= 5 and mk_ & full_ == full_:
+-                    SLOT_SET[g_] = {p_: True for p_ in parts_}; slot_why['every_part_slotted'] += 1; continue
++                if n_ <= 5 and mk_ & full_ == full_ and (rot_ == 0 or n_ == 1):
++                    SLOT_SET[g_] = {p_: True for p_ in parts_}; slot_why['every_part_slotted'] += 1
++                    if rot_ == 2: ROTP[g_] = {p_: True for p_ in parts_}      # code v: the single ply is ply 1 (odd)
++                    continue
+                 win_ = []                                          # the recorded grip window of each bolt (old-engine bolt string)
+                 for i in idx_:
+                     bb = BL[i]
+@@ -1416,6 +1453,8 @@
+                         SLOT_SET[g_] = None; slot_why['overlapping_plies'] += 1; continue
+                     od_ = fl_; how_ = 'ranked_head_first_grip_window_flush_ply'
+                 SLOT_SET[g_] = {p_: bool(k < 5 and (mk_ >> k) & 1) for k, p_ in enumerate(od_)}; slot_why[how_] += 1
++                if rot_:                                           # code v: k = 0 is ply 1 (odd)
++                    ROTP[g_] = {p_: (rot_ == 1 and k % 2 == 1) or (rot_ == 2 and k % 2 == 0) for k, p_ in enumerate(od_)}
+             for bb in BL:
+                 if bb.get('pid') in SLOT_SET:
+                     bb['slot_state'] = 'unresolved' if SLOT_SET[bb.get('pid')] is None else 'decoded'
+@@ -1496,6 +1535,8 @@
+                 holes_slot_round += 1 if any(x != 0 for x in (bb.get('slot') or ())) else 0
+             elif sset_ and sset_.get(m.get('pid')):
+                 sl_ = tuple(abs(float(x)) for x in bb['slot']); slot_holes[0] += 1
++                if (ROTP.get(bb.get('pid')) or {}).get(m.get('pid')):          # code v: Tekla 'rotate slots' in this ply
++                    sl_ = (sl_[1], sl_[0]); slots_rotated[0] += 1
+             ext = bb['L'] / 2 + 2 * bb['d']                      # through the whole grip (hole longer than the shank)
+             c_ = np.asarray(bb['c'], float); ez_ = np.asarray(bb['ez'], float); mg_ = False; ex_ = np.asarray(bb['ex'], float)
+             if HOLE_DEDUP:                                       # audit P6: a coaxial (< 1 mm) second hole is the same hole
+@@ -1592,7 +1633,7 @@
+                             'nominal_head_nut_bolts': sum(1 for bb in BL if not bb.get('std')),
+                             'nominal_head_nut_written': sum(1 for bb in BL if not bb.get('std') and not bb.get('holes_only')),   # c1audit-stats
+                             'slotted_bolts_cut_round': sum(1 for bb in BL if _c1_slot(bb) and bb.get('slot_state') != 'decoded'),
+-                            'slotted_holes_cut': slot_holes[0], 'slot_groups': dict(slot_why),
++                            'slotted_holes_cut': slot_holes[0], 'slot_groups': dict(slot_why), 'slots_rotated': slots_rotated[0],   # code v
+                             'slot_rule': "attribute int @16 = Tekla 'slotted holes in part 1..5'; parts numbered by ply from the bolt head (Tekla NC validated); slot = rounded rectangle (d+tol+slot x) x (d+tol+slot y) along the group x / y axes" if SLOTS_ON else 'off',
+                             'bolts_axial_unknown': sum(1 for bb in BL if not bb.get('holes_only') and not bb.get('axial_decoded') and not bb.get('shift')),
+                             'writer': 'db1bolts (port of tekla-step-pipeline BuildBolt, positions identical) + axial fit to plies + clearance holes'}
+--- u/db1old.py	2026-10-05 13:24:26
++++ v/db1old.py	2026-10-05 13:24:37
+@@ -104,7 +104,8 @@
+     for q in at_off:
+         attrs[int(I[q])] = dict(obj_type=int(I[q + 4]), form=int(I[q + 8]), npoints=int(I[q + 72]),
+                                 ben=o.cstr(q + 102, 22), prof=o.cstr(q + 124, 62), mat=o.cstr(q + 270, 22),
+-                                smask=int(I[q + 16]) if int(I[q + 4]) == 10 else None)   # tekla-slots: 'slotted holes in part 1..5' bits
++                                smask=int(I[q + 16]) if int(I[q + 4]) == 10 else None,   # tekla-slots: 'slotted holes in part 1..5' bits
++                                srot=int(o.u8[q + 368]) if int(I[q + 4]) == 10 else None)  # code v: Tekla 'rotate slots' (0 no, 1 even plies, 2 odd plies; NC-validated)
+     # ---- partpolygon (stride 333): id@0 no@4 x[10]@12 y[10]@52 z[10]@92 (float32)
+     gv = np.zeros(N, bool); M = N - 340
+     gv[:M] = (I[:M] > 0) & (I[4:M + 4] >= 0) & (I[4:M + 4] <= 64)
+@@ -208,7 +209,8 @@
+         if not o.cstr(q + 124, 62): continue
+         attrs[a_] = dict(obj_type=int(I[q + 4]), form=int(I[q + 8]), npoints=int(I[q + 72]),
+                          ben=o.cstr(q + 102, 22), prof=o.cstr(q + 124, 62), mat=o.cstr(q + 270, 22),
+-                         smask=int(I[q + 16]) if int(I[q + 4]) == 10 else None)   # tekla-slots A: selection bits of salvaged records
++                         smask=int(I[q + 16]) if int(I[q + 4]) == 10 else None,   # tekla-slots A: selection bits of salvaged records
++                         srot=int(o.u8[q + 368]) if int(I[q + 4]) == 10 else None)  # code v: 'rotate slots'
+         attr_salvaged += 1
+     # salvage isolated part records whose references all resolve (as the C# reader did)
+     extra = []
+@@ -247,7 +249,7 @@
+                         prof=a['prof'] or None, cut=(a['mat'] == 'ANTIMATERIAL' or (a['obj_type'] == 11 and pid in cut_children)),
+                         bolt=(a['obj_type'] == 10), obj_type=a['obj_type'],
+                         form=a['form'], old_poly=poly, old_poly_ch=poly_ch, attr=int(I[q + P['attr']]), pid=pid, axis_ok=axis_ok,
+-                        slot_mask=a.get('smask')))
++                        slot_mask=a.get('smask'), slot_rot=a.get('srot')))
+     ax = [m['axis_ok'] for m in out if m['axis_ok'] is not None]
+     info = dict(points=len(pts), csys=len(csa), part_attr=len(attrs), polygons=len(polys), parts=len(out), salvaged=len(extra),
+                 axis_agreement=round(float(np.mean(ax)), 4) if len(ax) >= 10 else None,
+--- u/db1bolts.py	2026-10-05 13:24:26
++++ v/db1bolts.py	2026-10-05 13:24:33
+@@ -218,7 +218,7 @@
+         bf = bolt_fields(m.get('prof'))
+         tol, tst = tolerance_status(m.get('prof'))
+         b = {'c': c, 'ex': ex, 'ey': ey, 'ez': ez, 'd': sg['d'] if sg else d, 'd_stored': d, 'L': L, 'pid': m.get('pid'),
+-             'standard': bolt_standard(m), 'std': sg, 'tol': tol, 'tol_status': tst, 'slot': slot_lengths(m.get('prof')), 'slot_mask': m.get('slot_mask'),
++             'standard': bolt_standard(m), 'std': sg, 'tol': tol, 'tol_status': tst, 'slot': slot_lengths(m.get('prof')), 'slot_mask': m.get('slot_mask'), 'slot_rot': m.get('slot_rot'),
+              'holes_only': bf.get('holes_only', False),
+              'wash_head': bf.get('wash_head', 0), 'wash_nut': bf.get('wash_nut', 0), 'wash_2': bf.get('wash_2', 0), 'nuts': bf.get('nuts', 1),
+              'axial_decoded': False}
+--- u/db1bolts2.py	2026-10-05 13:24:26
++++ v/db1bolts2.py	2026-10-05 14:14:00
+@@ -18,7 +18,7 @@
+ washers = d4 + d3 + d2 (d4 = head side), nuts = d1 + d0.
+ The parts a group connects: relation records (type 10) bolt @17 -> part @21 (same table as part cuts, 8.x).
+ """
+-import math, re, collections
++import math, os, re, collections
+ import numpy as np
+ 
+ SENT = 2147483647
+@@ -145,6 +145,7 @@
+                 std = self._std(o, S, 285 if S == 389 else None)
+                 a['standard'] = std
+                 a['slot_parts'] = int(db.I([o + 25])[0]) if S == 389 else None     # tekla-slots: selection bits (7.64)
++                a['slot_rot'] = int(db.b[o + 385]) if S == 389 else None          # code v: 'rotate slots' (NC1: 7.64 3346/3346, 7.82 2009/2009)
+                 return a
+         # 8.x / 9.x: own table. Fields sit at fixed offsets after a variable block: 8.53 / 8.85 (stride 317) and 9.08 (321) shift 0,
+         # 8.07 (365) shift 48; the shift is read from the record's own 'SCREW' type string (at 59 + shift)
+@@ -153,8 +154,12 @@
+             sh = (pos - 59) if 0 <= pos - 59 <= S - 317 else (48 if S == 365 else 0)
+             F = lambda k: float(db.F([o + k + sh])[0])
+             a = dict(d=F(269), slot_x=F(273), slot_y=F(277), tol=F(281), search=F(289), zc=F(293), flags=int(db.I([o + 301 + sh])[0]),
+-                     L=F(305), count=int(db.I([o + 29 + sh])[0]), grip=None, src='attr%d' % S, slot_parts=int(db.I([o + 21 + sh])[0]))
++                     L=F(305), count=int(db.I([o + 29 + sh])[0]), grip=None, src='attr%d' % S,
++                     slot_parts=int(db.I([o + (21 if os.environ.get('DB1_SLOTPARTS_NOSHIFT', '1') == '1' else 21 + sh)])[0]))
++            # code v: the slot ply selection sits at +21 BEFORE the variable block (no shift): 8.07 (stride 365, shift 48) vs Tekla NC1,
++            # +21 equals the NC slot mask in 688 / 688 groups (292 with slotted plies); +21+48 matched only the 396 all-round groups
+             a['standard'] = self._std(o, S, 165 + sh)
++            a['slot_rot'] = int(db.b[o + 265 + sh])        # code v: 'rotate slots' (NC1: stride 317 8.44 1936/1936; 8.07 not validated)
+             if not (3 <= a['d'] <= 120 and 0 < a['L'] < 3000 and 0 <= a['tol'] < 50): return None
+             return a
+         return None
+--- u/worker.py	2026-10-05 13:24:26
++++ v/worker.py	2026-10-05 14:49:17
+@@ -22,7 +22,16 @@
+ import convfleet as cf
+ os.environ.setdefault('V6_FAR_VERIFY', '0')    # (verifier 10:10Z) far mode OFF: its far-origin L0 solids read invalid in place (15,060 of 38,646)
+ 
+-CODE = 'z3-db1-2026-10-01u'
++CODE = 'z3-db1-2026-10-01v'
++# z3 v: u + Tekla slots checked part by part against Tekla's own NC1 files in the same archives (193 models):
++#       (1) 'rotate slots' decoded (old part-attr byte @368; 7.x stride-389 @385; stride-317 @265: 0 no / 1 even plies / 2 odd plies);
++#           slot direction vs NC 4,742 / 4,745 on 6.87-7.30, 3,346 / 3,346 on 7.64 (u cut those slots 90 deg off);
++#       (2) 8.x slot ply selection read at +21 without the variable-block shift (8.07: 688 / 688 groups; u read +69);
++#       (3) slot engines unchanged (6.87 / 7.01 / 7.64 / 8.53): no further engine reaches 99 % per part vs NC on a multi-model sample
++#           (7.24 95 %, 8.85 94 %, 8.44 98 %, 7.82 98 %; 8.07 100 % on same-revision NC but 94.7 % on direction in one model);
++#       (4) panels: square A*A names exact ('parametric_rect_square'); A*B exact ('parametric_rect_hb', A = height along y) on
++#           7.64 / 7.82 / 8.07 / 8.53 only (Tekla IFC truth 140 / 140, 0 rotated); other engines keep 'orientation assumed';
++#       (5) headed studs unchanged: Tekla's own geometry has a catalog head the DB1 does not store, so it stays a stand-in
+ # z3 o: n + tekla-slots (6.87 / 7.01 slotted holes from the group's 'slotted holes in part 1..5' mask, parts by ply from the head,
+ #       validated on Tekla NC 374/374 + 116/116; old-engine PL / F.B a*b plates with a > b: thickness = the smaller value along z)
+ #       + ifc2step6 6.1.4 STEP stage
