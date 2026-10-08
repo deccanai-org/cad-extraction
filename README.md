@@ -8,6 +8,14 @@ format, in two tiers (perfect and partial). A follow-on phase turns perfect mode
 
 This repo is meant to be read cold, by a teammate or their Claude, and to be enough to continue the work.
 
+## First hour after cloning
+
+1. Read `docs/CONTEXT.md` (the whole story), then `docs/CLASSIFICATION.md` and `docs/AWS_MAP.md` (section 6 = every location as a clickable link).
+2. Get AWS access from the owner: SSO profile `annotationprod-publish` (EC2 / SSM / control writes) and read access to `bim-proprietary-data` (see AWS_MAP section 4). `aws sso login --profile annotationprod-publish --use-device-code`.
+3. Browse a perfect-tier package: `aws s3 ls "s3://bim-proprietary-data/cad-disk-extract/dataset/packages/3d/" | head` and one package's `project.json` + `manifest.jsonl` (format in `docs/PACKAGING.md`).
+4. To run or extend a pipeline, follow `docs/RUNBOOK.md`; component entry points are in each `src/<component>/README.md`. Fleet rules that cost us hours are in `docs/LESSONS.md` - read them before launching anything.
+5. The parametric (build123d) phase lives in https://github.com/deccanai-org/parametric-cad (start with its `docs/CONTEXT.md`).
+
 ## Start here
 
 | Read | For |
